@@ -171,4 +171,37 @@ Resultado: **22 libros con texto verificado (≈ 10.6 MB)** y 2 pendientes de re
 | tarot | Cartas Tarot De Las Brujas Modernas |  |  | 94 KB | baja |
 | tarot | (hajo Banzhaf) El Tarot ( Una Guia De Ayuda Para La Toma De De |  |  | 74 KB | baja |
 
-**Notas de calidad pendientes:** estos textos son OCR y habrá que pasar la limpieza (páginas marcadas, cabeceras, numeración). Para astrología psicológica (Huber, Le Grice) y divulgativa (Rae Orion, Morpurgo) el estilo es muy útil para aprender a *explicar* posiciones; los de Tito Macià y Blaquier son de astrología tradicional/predictiva. No hay ningún libro de **baraja española** descargable: ese hueco solo se cubre con sitios web, YouTube y obras que aportes.
+**Notas de calidad pendientes:** estos textos son OCR y habrá que pasar la limpieza (páginas marcadas, cabeceras, numeración). Para astrología psicológica (Huber, Le Grice) y divulgativa (Rae Orion, Morpurgo) el estilo es muy útil para aprender a *explicar* posiciones; los de Tito Macià y Blaquier son de astrología tradicional/predictiva. Los libros en español de **baraja española** siguen sin ser descargables, pero la 3.ª pasada (abajo) aporta manuales clásicos de **cartomancia con naipes** que sí cubren el hueco (mazo francés/inglés, equivalente a la baraja).
+
+## 3.ª pasada: cartomancia con naipes, numerología y astrología (2026-10-18)
+
+Búsqueda por temas (inglés, español) en archive.org de 227 candidatos; se conservan solo los de texto libre ≥ 80 KB cuya descarga se comprobó. **18 obras nuevas (≈ 6.1 MB).** Datos en `finetune/knowledge/fuentes_libros_tema.jsonl`.
+
+**Hueco de la baraja: cubierto en parte.** Hay manuales clásicos de cartomancia con la baraja de naipes (Grand Orient 1891 y 1909, Platt 1920, Pahlavi 1904, Le Normand 1825) y dos libros de **lecturas resueltas** (Minetta 1899 y 1918), justo el tipo de material que falta. El mazo de 52 naipes se corresponde con la baraja española de 40 (oros ↔ diamantes, copas ↔ corazones, espadas ↔ picas, bastos ↔ tréboles; la baraja española no tiene 8 ni 9). **Hay que construir esa correspondencia con cuidado** y mantener la separación de ambos sistemas en la KB, porque los significados no coinciden carta a carta.
+
+**Astrología:** el curso completo de McEvers y March (*The Only Way to Learn Astrology*) en portugués, en tres volúmenes (≈ 1,6 MB), más *A Students' Text-Book of Astrology* de Robson (1922). Los volúmenes en portugués hay que traducirlos (la pista T2 ya valida la traducción).
+
+**Numerología:** *Cheiro's Book of Numbers* y *Four Basic Principles of Numerology* (Householder, 1921) son nuevas; el resto de resultados eran conspiranoia, boletines técnicos y otros idiomas, y se descartaron.
+
+| Familia | Obra | Autor | Año | Idioma | Texto | Prioridad |
+|---|---|---|---|---|---|---|
+| astrologia | Curso Básico De Astrologia Vol 3 Joan Mc Evers E Marion D. M |  |  | pt | 559 KB | alta |
+| astrologia | Curso Básico De Astrologia Volume 2 Técnicas De Cálculos ( P |  |  | pt | 550 KB | alta |
+| astrologia | curso_básico_de_astrologia_-_vol._1 |  |  | pt | 506 KB | alta |
+| astrologia | A Students' Text-Book of Astrology | Vivian E. Robson | 1922 | en | 357 KB | alta |
+| astrologia | Curso Básico De Astrologia Vol 3 Análise Do Horóscopo |  |  | pt | 559 KB | media |
+| baraja | A manual of cartomancy, fortune-telling and occult divinatio | Grand Orient, pseud | 1909 | en | 495 KB | alta |
+| baraja | Card fortune telling; a lucid treatise dealing with all the  | Platt, Charles, 1865- | 1920 | en | 277 KB | alta |
+| baraja | Card-Reading: A Practical Guide | Minetta | 1918 | en | 121 KB | alta |
+| baraja | What The Cards Tell | Minetta | 1899 | en | 83 KB | alta |
+| baraja | Les cartes à jouer, et la cartomancie | Boiteau d'Ambly, Paul, 1 | 1854 | fr | 585 KB | media |
+| baraja | A Handbook Of Cartomancy | Grand Orient | 1891 | en | 197 KB | media |
+| baraja | Pahlavi cartomalcy or card reading; a new and complete metho | [Mounton, Sarah Adelaide | 1904 | en | 91 KB | media |
+| baraja | The oracle of human destiny: or, the unerring foreteller of  | Le Normand, M. A. (Marie | 1825 | en | 89 KB | media |
+| baraja | L'art de tirer les cartes : révélations complètes sur les de | Trismégiste, Johannes. n | 1843 | fr | 134 KB | baja |
+| numerologia | Cheiro's Book Of Numbers |  |  | en | 311 KB | alta |
+| numerologia | Four basic principles of numerology | Householder, Frank. [fro | 1921 | en | 321 KB | media |
+| tarot | Tarot Cards and Wisdom |  |  | en | 715 KB | media |
+| tarot | Interpretation of The Tarot of Metamorphosis | Marley R. Sexton | 2016 | en | 278 KB | baja |
+
+**Descartado en esta pasada:** más de 90 resultados fuera de tema (boletines militares, conspiranoia, textos en ruso, árabe o persa, grimorios) para no contaminar el corpus.
