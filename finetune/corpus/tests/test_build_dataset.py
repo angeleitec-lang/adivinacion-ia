@@ -235,6 +235,52 @@ class BotonesComerciales(unittest.TestCase):
         texto = "La carta del Sol anuncia claridad y éxito."
         self.assertEqual(bd.clean_body(texto), texto)
 
+    def test_elimina_oferta_con_posesivo(self):
+        texto = ("El arcano invita a mirar dentro. Compra nuestro pack de tarot "
+                 "por solo 19,99 euros hoy.")
+        self.assertEqual(
+            bd.clean_body(texto),
+            "El arcano invita a mirar dentro.")
+
+    def test_elimina_oferta_con_precio(self):
+        casos = [
+            "Compra tu mazo de Rider-Waite por 12 €.",
+            "Adquiere un amuleto por 9,95 euros.",
+            "Consigue tu vela por 8 USD.",
+            "Pide tu tirada por 5 $.",
+        ]
+        for texto in casos:
+            with self.subTest(texto=texto):
+                self.assertEqual(bd.clean_body(texto), "")
+
+    def test_elimina_titular_lee_tambien(self):
+        texto = "Texto útil sobre la tirada. Lee también: Cómo leer el tarot en pareja."
+        self.assertEqual(bd.clean_body(texto), "Texto útil sobre la tirada.")
+
+    def test_elimina_titulares_enlazados(self):
+        for titular in ("Lee más", "Te puede interesar", "Artículos relacionados"):
+            with self.subTest(titular=titular):
+                texto = "Texto útil. " + titular + ": Otra lectura recomendada."
+                self.assertEqual(bd.clean_body(texto), "Texto útil.")
+
+    def test_conserva_compra_y_venta(self):
+        texto = "Compra y venta de bienes: la casa 2 rige las posesiones."
+        self.assertEqual(bd.clean_body(texto), texto)
+
+    def test_conserva_comprar_con_prudencia(self):
+        texto = ("Comprar con prudencia es un consejo de Saturno. "
+                 "La carta pide paciencia.")
+        self.assertEqual(bd.clean_body(texto), texto)
+
+    def test_conserva_precio_sin_verbo_de_compra(self):
+        texto = ("La carta del Diablo cuesta 5 euros de tributo en la leyenda. "
+                 "Es un símbolo de apego.")
+        self.assertEqual(bd.clean_body(texto), texto)
+
+    def test_conserva_lee_tambien_sin_dos_puntos(self):
+        texto = "Lee también sin dos puntos ni texto detrás."
+        self.assertEqual(bd.clean_body(texto), texto)
+
 
 class Introduccion(unittest.TestCase):
     """T3.4: se conserva el texto previo al primer encabezado."""
