@@ -149,5 +149,40 @@ class TestGrounding(unittest.TestCase):
         self.assertFalse(vs.grounding(ASTRO, "Aries marca el ritmo de esta consulta."))
 
 
+class TestOrientacion(unittest.TestCase):
+    def test_invertida_reconocida(self):
+        prompt = "Carta: La Torre (invertida).\nContexto: amor."
+        respuesta = "La Torre aparece invertida y bloquea tu progreso sentimental."
+        self.assertTrue(vs.orientacion_ok(prompt, respuesta))
+
+    def test_invertida_sin_mencion(self):
+        prompt = "Carta: La Torre (invertida).\nContexto: amor."
+        respuesta = "La Torre anuncia cambios profundos y necesarios en tu vida."
+        self.assertFalse(vs.orientacion_ok(prompt, respuesta))
+
+    def test_invertida_con_al_reves(self):
+        prompt = "Carta: La Torre (invertida).\nContexto: amor."
+        respuesta = "La Torre, al revés, te pide soltar lo que se agrieta."
+        self.assertTrue(vs.orientacion_ok(prompt, respuesta))
+
+    def test_al_derecho_llamada_invertida(self):
+        prompt = "Carta: El Sol (al derecho).\nContexto: trabajo."
+        respuesta = "El Sol invertido oscurece tu camino profesional."
+        self.assertFalse(vs.orientacion_ok(prompt, respuesta))
+
+    def test_al_derecho_sin_afirmar_inversion(self):
+        prompt = "Carta: El Sol (al derecho).\nContexto: trabajo."
+        respuesta = "El Sol al derecho ilumina tu etapa profesional con claridad."
+        self.assertTrue(vs.orientacion_ok(prompt, respuesta))
+
+    def test_mixta_orientaciones(self):
+        respuesta = ("El Sol brilla con fuerza en tu presente, mientras La Torre "
+                     "invertida anuncia el quiebre necesario.")
+        self.assertTrue(vs.orientacion_ok(TIRADA3, respuesta))
+
+    def test_prompt_sin_cartas(self):
+        self.assertTrue(vs.orientacion_ok("Háblame del amor.", "El amor es complejo."))
+
+
 if __name__ == "__main__":
     unittest.main()

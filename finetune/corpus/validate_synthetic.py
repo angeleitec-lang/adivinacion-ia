@@ -112,6 +112,36 @@ def human_of(row: dict) -> str:
     return ""
 
 
+# Marcas que reconocen una carta invertida en la respuesta (texto normalizado).
+INVERT_RECONOC = (
+    "invertid", "al reves", "bloque", "sombra", "resist", "retraso", "interior",
+)
+# Marcas que afirman inversión (para contradecir una carta al derecho).
+INVERT_AFIRMA = ("invertid", "al reves")
+
+
+def orientacion_ok(prompt: str, answer: str) -> bool:
+    """Si el prompt dice (invertida) la respuesta debe reconocerlo; si dice
+    (al derecho) no debe afirmar inversión junto al nombre de la carta."""
+    cartas = extraer_cartas(prompt)
+    if not cartas:
+        return True
+    na = norm(answer)
+    for nombre, orient in cartas:
+        token = _sin_articulo(norm(nombre))
+        if not token:
+            continue
+        if orient == "invertida":
+            if not any(marca in na for marca in INVERT_RECONOC):
+                return False
+        else:
+            for m in re.finditer(r"\b" + re.escape(token) + r"\b", na):
+                ventana = na[max(0, m.start() - 30): m.end() + 30]
+                if any(f in ventana for f in INVERT_AFIRMA):
+                    return False
+    return True
+
+
 def _menciona(na: str, token_norm: str) -> bool:
     return bool(token_norm) and re.search(r"\b" + re.escape(token_norm) + r"\b", na) is not None
 
@@ -164,6 +194,8 @@ def validate(row: dict, args) -> tuple[bool, str]:
             return False, "eco_pregunta"
     if not grounding(prompt, answer):
         return False, "sin_datos_del_prompt"
+    if not orientacion_ok(prompt, answer):
+        return False, "orientacion"
     return True, "ok"
 
 
