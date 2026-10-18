@@ -1,0 +1,53 @@
+{
+  "descripcion": "Configuración de sitios índice para rastreo dirigido (tarot y numerología). Cada sitio tiene una página índice y una regex para filtrar enlaces. Verificado con ≤ 3 URLs de prueba por sitio.",
+  "sitios": [
+    {
+      "nombre": "biddytarot.com",
+      "indice": "https://biddytarot.com/tarot-card-meanings/",
+      "regex": "/tarot-card-meanings/(major|minor)-arcana/",
+      "dominio": "biddytarot.com",
+      "familia": "tarot",
+      "prioridad": "alta"
+    },
+    {
+      "nombre": "labyrinthos.co",
+      "indice": "https://labyrinthos.co/blogs/tarot-card-meanings-list",
+      "regex": "/blogs/tarot-card-meanings-list/.+-tarot-card-meaning",
+      "dominio": "labyrinthos.co",
+      "familia": "tarot",
+      "prioridad": "alta"
+    },
+    {
+      "nombre": "tarot.com",
+      "indice": "https://www.tarot.com/tarot/cards",
+      "regex": "/tarot/cards/",
+      "dominio": "tarot.com",
+      "familia": "tarot",
+      "prioridad": "media"
+    },
+    {
+      "nombre": "aeclectic.net",
+      "indice": "https://www.aeclectic.net/tarot/tarot-card-meanings/",
+      "regex": "/tarot/tarot-card-meanings/(major|minor)-arcana/",
+      "dominio": "aeclectic.net",
+      "familia": "tarot",
+      "prioridad": "media"
+    },
+    {
+      "nombre": "numerology.com",
+      "indice": "https://www.numerology.com/articles/about-numerology/",
+      "regex": "/(single-digit-number-\\d+-meaning|life-path-number-\\d+)",
+      "dominio": "numerology.com",
+      "familia": "numerologia",
+      "prioridad": "alta"
+    },
+    {
+      "nombre": "tarotrossana.com",
+      "indice": "https://tarotrossana.com/cartas/",
+      "regex": "/cartas/[^/]+/",
+      "dominio": "tarotrossana.com",
+      "familia": "tarot",
+      "prioridad": "media"
+    }
+  ]
+}
