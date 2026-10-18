@@ -222,6 +222,19 @@ class BotonesComerciales(unittest.TestCase):
         texto = "La verde luna ilumina el tarot."
         self.assertEqual(bd.clean_body(texto), texto)
 
+    def test_elimina_frases_comerciales_completas(self):
+        texto = ("Esta carta habla de transformación y renacimiento. "
+                 "_Ver productos →_](https://bindi-online.com/"
+                 "etiqueta-producto/despertar) Añadir al carrito. "
+                 "Suscríbete a nuestra newsletter. Leer más »")
+        self.assertEqual(
+            bd.clean_body(texto),
+            "Esta carta habla de transformación y renacimiento.")
+
+    def test_frase_sin_reclamos_no_cambia(self):
+        texto = "La carta del Sol anuncia claridad y éxito."
+        self.assertEqual(bd.clean_body(texto), texto)
+
 
 class Introduccion(unittest.TestCase):
     """T3.4: se conserva el texto previo al primer encabezado."""
