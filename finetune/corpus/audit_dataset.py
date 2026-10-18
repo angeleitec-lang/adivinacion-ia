@@ -27,7 +27,7 @@ from pathlib import Path
 PESOS = {
     "prompt_generico": 0.35,
     "residuos": 0.45,
-    "dominio": 0.30,
+    "dominio": 0.45,
     "idioma": 0.35,
     "longitud": 0.25,
     "repeticion": 0.30,
