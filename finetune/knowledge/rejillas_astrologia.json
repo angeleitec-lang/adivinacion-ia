@@ -1,0 +1,31 @@
+{
+  "descripcion": "Sitios con una página por cada combinación de la matriz de astrología occidental. Comprobado el 2026-10-18 con descargas reales (páginas con ≥ 1.200 caracteres de texto extraíble). Para rastrear: sustituir {p}, {s}, {h} por los slugs indicados.",
+  "slugs": {
+    "es": {
+      "planetas": ["sol","luna","mercurio","venus","marte","jupiter","saturno","urano","neptuno","pluton"],
+      "signos": ["aries","tauro","geminis","cancer","leo","virgo","libra","escorpio","sagitario","capricornio","acuario","piscis"],
+      "casas": [1,2,3,4,5,6,7,8,9,10,11,12]
+    },
+    "en": {
+      "planetas": ["sun","moon","mercury","venus","mars","jupiter","saturn","uranus","neptune","pluto"],
+      "signos": ["aries","taurus","gemini","cancer","leo","virgo","libra","scorpio","sagittarius","capricorn","aquarius","pisces"],
+      "casas": ["1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th","11th","12th"]
+    }
+  },
+  "rejillas": [
+    {"sitio":"astrolink.com","faceta":"planeta_en_signo","patron":"https://www.astrolink.com/es/interpretacion/{p}-en-{s}","slugs":"es","cobertura":"120/120","chars_medios":3918,"nota":"Límite de peticiones (HTTP 429) al ir rápido: ≤ 1 petición/s. Patrón de casas sin resolver (404/429)"},
+    {"sitio":"escuelamaia.com","faceta":"planeta_en_signo","patron":"https://escuelamaia.com/{p}-en-{s}/","slugs":"es","cobertura":"120/120","chars_medios":10043,"nota":"Texto largo; prioridad alta"},
+    {"sitio":"escuelamaia.com","faceta":"planeta_en_casa","patron":"https://escuelamaia.com/{p}-en-casa-{h}/","slugs":"es","cobertura":"119/120","chars_medios":9137,"nota":"Prioridad alta"},
+    {"sitio":"yourastrallife.com","faceta":"planeta_en_signo","patron":"https://www.yourastrallife.com/es/astrologia/guia/{p}-en-{s}","slugs":"es","cobertura":"120/120","chars_medios":9704,"nota":"Prioridad alta"},
+    {"sitio":"grancosmos.com","faceta":"planeta_en_signo","patron":"https://grancosmos.com/guia/{p}-en-{s}","slugs":"es","cobertura":"108/120","chars_medios":7279,"nota":"12 combinaciones dan 404"},
+    {"sitio":"mercurioretrogrado.com","faceta":"planeta_en_casa","patron":"https://www.mercurioretrogrado.com/planeta-en-casa/{p}-en-casa-{h}","slugs":"es","cobertura":"120/120","chars_medios":4205,"nota":""},
+    {"sitio":"my-zodiac-ai.com","faceta":"planeta_en_signo","patron":"https://my-zodiac-ai.com/es/astrology/{p}-in-{s}","slugs":"en","cobertura":"120/120","chars_medios":5202,"nota":"POSIBLE TEXTO GENERADO POR IA: decidir con el juez de calidad; no contar como fuente independiente hasta entonces"},
+    {"sitio":"my-zodiac-ai.com","faceta":"planeta_en_casa","patron":"https://my-zodiac-ai.com/es/house/{p}-in-{h}-house","slugs":"en","cobertura":"120/120","chars_medios":7612,"nota":"POSIBLE TEXTO GENERADO POR IA (ver arriba)"}
+  ],
+  "conteo_fuentes_por_celda": {
+    "planeta_en_signo": "5 sitios (4 si se excluye my-zodiac-ai): astrolink, escuelamaia, yourastrallife, grancosmos, my-zodiac-ai",
+    "planeta_en_casa": "3 sitios (2 si se excluye my-zodiac-ai): mercurioretrogrado, escuelamaia, my-zodiac-ai; faltan al menos 2 para el mínimo de 5",
+    "aspectos": "sin rejilla encontrada todavía",
+    "numerologia_por_numero": "solo 2 sitios con página dedicada por número en la muestra; sin rejilla verificada"
+  }
+}
