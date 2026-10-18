@@ -300,5 +300,58 @@ class LoadBlocked(unittest.TestCase):
         self.assertEqual(rc, 2)
 
 
+class TemasLegibles(unittest.TestCase):
+    """T3.6: tema_legible y plantillas de pregunta."""
+
+    def test_usa_ultimo_segmento(self):
+        t = bd.tema_legible("Tarot > Cartas del tarot de Marsella", "x")
+        self.assertNotIn(" > ", t)
+        self.assertEqual(t, "Cartas del tarot de Marsella")
+
+    def test_corto_anade_primero(self):
+        t = bd.tema_legible("Tarot > Sí", "x")
+        self.assertEqual(t, "Sí (Tarot)")
+
+    def test_generico_anade_primero(self):
+        t = bd.tema_legible("Numerología > Inicio", "x")
+        self.assertEqual(t, "Inicio (Numerología)")
+
+    def test_igualmente_primo_y_ultimo_no_repite(self):
+        t = bd.tema_legible("Tarot > Tarot", "x")
+        self.assertEqual(t, "Tarot")
+
+    def test_sin_puntuacion_final(self):
+        t = bd.tema_legible("Guía > ¿Qué es el tarot?", "x")
+        self.assertNotIn("?", t)
+        self.assertEqual(t, "Qué es el tarot")
+
+    def test_al_menos_doce_plantillas(self):
+        self.assertGreaterEqual(len(bd.INSTRUCTION_TEMPLATES), 12)
+
+    def test_todas_las_plantillas_tienen_topic(self):
+        for tpl in bd.INSTRUCTION_TEMPLATES:
+            self.assertIn("{topic}", tpl)
+
+    def test_prompt_final_sin_ruta_ni_doble_puntuacion(self):
+        md = ("# Tarot\n\n## Los arcanos mayores\n"
+              "El tarot de Marsella contiene veintidos arcanos mayores que se "
+              "usan en la adivinacion y la lectura del futuro con las cartas.")
+        rng = __import__("random").Random(7)
+        pairs = bd.build_pairs("guia_tarot", md, rng, 10, 4000, 0)
+        self.assertGreaterEqual(len(pairs), 1)
+        for p in pairs:
+            human = p["conversations"][1]["value"]
+            self.assertNotIn(" > ", human)
+            self.assertNotIn("..", human)
+            self.assertNotIn("?.", human)
+
+    def test_reproducible_con_semilla(self):
+        tpl_a = [__import__("random").Random(1).choice(bd.INSTRUCTION_TEMPLATES)
+                for _ in range(3)]
+        tpl_b = [__import__("random").Random(1).choice(bd.INSTRUCTION_TEMPLATES)
+                for _ in range(3)]
+        self.assertEqual(tpl_a, tpl_b)
+
+
 if __name__ == "__main__":
     unittest.main()

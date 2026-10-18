@@ -36,6 +36,14 @@ INSTRUCTION_TEMPLATES = [
     "¿Qué significa {topic}?",
     "Como experta en adivinación, desarróllame {topic}.",
     "Explícame {topic} de forma clara y completa.",
+    "Háblame de {topic}.",
+    "¿Puedes contarme más sobre {topic}?",
+    "¿Qué hay que saber sobre {topic}?",
+    "Dame una explicación completa de {topic}.",
+    "Quiero entender mejor {topic}, ¿me lo explicas?",
+    "¿Qué es {topic} y por qué importa?",
+    "Profundiza en {topic} para mí.",
+    "Cuéntame todo lo posible sobre {topic}.",
 ]
 
 BOILERPLATE_HEADINGS = {
@@ -263,6 +271,29 @@ def humanize(slug: str) -> str:
     return slug or "este tema"
 
 
+GENERIC_TOPICS = {
+    "inicio", "home", "pagina", "página", "introduccion", "introducción",
+    "tema", "seccion", "sección", "indice", "índice", "otros", "otras",
+    "general", "generales", "informacion", "información", "varios",
+}
+
+
+def tema_legible(topic: str, doc: str) -> str:
+    """Devuelve un tema legible sin la ruta ``A > B > C`` ni puntuación duplicada."""
+    segs = [s.strip() for s in topic.split(">")] if ">" in topic else [topic.strip()]
+    segs = [s for s in segs if s]
+    if not segs:
+        return humanize(doc)
+    ultimo = re.sub(r"[?.:]+$", "", re.sub(r"^[¿¡]+", "", segs[-1])).strip()
+    primero = re.sub(r"[?.:]+$", "", re.sub(r"^[¿¡]+", "", segs[0])).strip()
+    if not ultimo:
+        return primero or humanize(doc)
+    if len(ultimo) < 12 or ultimo.lower() in GENERIC_TOPICS:
+        if primero and primero.lower() != ultimo.lower():
+            return f"{ultimo} ({primero})"
+    return ultimo
+
+
 def split_sections(md: str, doc: str = "") -> list[tuple[str, str]]:
     """Trocea markdown en (tema, cuerpo) usando los encabezados ATX.
     El texto previo al primer encabezado se conserva como sección con título
@@ -415,7 +446,7 @@ def build_pairs(doc: str, md: str, rng: random.Random,
         if not es_puro(body):
             continue
         template = rng.choice(INSTRUCTION_TEMPLATES)
-        human = template.format(topic=topic)
+        human = template.format(topic=tema_legible(topic, doc))
         pairs.append({
             "conversations": [
                 {"from": "system", "value": SYSTEM},
