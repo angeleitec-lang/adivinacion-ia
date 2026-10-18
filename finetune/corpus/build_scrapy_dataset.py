@@ -37,6 +37,39 @@ def text_hash(text: str) -> str:
     return hashlib.sha256(normalize(text).encode("utf-8")).hexdigest()
 
 
+def pair_prompt(pair: dict) -> str:
+    return next((t.get("value", "") for t in pair["conversations"]
+                if t.get("from") == "human"), "")
+
+
+def pair_answer(pair: dict) -> str:
+    return next((t.get("value", "") for t in pair["conversations"]
+                if t.get("from") == "gpt"), "")
+
+
+def is_foreign_short(doc_lang: str, answer: str, min_len: int = 1200) -> bool:
+    """Un par de documento no español con respuesta corta no aporta valor."""
+    return doc_lang != "es" and len(answer) < min_len
+
+
+def dedupe_new(pairs: list[dict], existing: set[str]) -> tuple[list[dict], int]:
+    """Descarta pares por huella de respuesta o de prompt ya vistos."""
+    kept: list[dict] = []
+    seen_answers: set[str] = set()
+    seen_prompts: set[str] = set()
+    dup = 0
+    for pair in pairs:
+        ah = text_hash(pair_answer(pair))
+        ph = text_hash(pair_prompt(pair))
+        if ah in existing or ah in seen_answers or ph in seen_prompts:
+            dup += 1
+            continue
+        seen_answers.add(ah)
+        seen_prompts.add(ph)
+        kept.append(pair)
+    return kept, dup
+
+
 def load_hashes(paths) -> set[str]:
     hashes: set[str] = set()
     for path in paths:
@@ -118,13 +151,15 @@ def main(argv=None) -> int:
     files = sorted(Path(args.raw).rglob("*.md"))
     print(f"[info] documentos en {args.raw}: {len(files)}")
 
-    docs, seen = [], set()
+    docs = []
+    existing_all = set(existing)
     stats = {
         "docs_con_pares": 0,
         "pares": 0,
         "duplicados": 0,
         "inyectados": 0,
         "docs_en_cortos": 0,
+        "pares_extranjeros_cortos": 0,
     }
     for path in files:
         raw = path.read_text(encoding="utf-8", errors="ignore")
@@ -136,27 +171,28 @@ def main(argv=None) -> int:
         if args.inject_chars > 0 and needs_sections(md):
             md = inject_sections(md, args.inject_chars)
             stats["inyectados"] += 1
-        pairs = []
+        candidates = []
         for pair in bd.build_pairs(path.stem, md, rng, args.min_chars,
                                    args.max_chars, args.min_domain_terms):
-            answer = next(
-                (t["value"] for t in pair["conversations"] if t["from"] == "gpt"), ""
-            )
-            h = text_hash(answer)
-            if h in existing or h in seen:
-                stats["duplicados"] += 1
+            if is_foreign_short(doc_lang, pair_answer(pair)):
+                stats["pares_extranjeros_cortos"] += 1
                 continue
-            seen.add(h)
-            pairs.append(pair)
-        if pairs:
+            candidates.append(pair)
+        kept, dup = dedupe_new(candidates, existing_all)
+        stats["duplicados"] += dup
+        for pair in kept:
+            existing_all.add(text_hash(pair_answer(pair)))
+            existing_all.add(text_hash(pair_prompt(pair)))
+        if kept:
             stats["docs_con_pares"] += 1
-            stats["pares"] += len(pairs)
-            docs.append(pairs)
+            stats["pares"] += len(kept)
+            docs.append(kept)
 
     print(f"[info] documentos con pares: {stats['docs_con_pares']}")
     print(
         f"[info] pares nuevos: {stats['pares']} "
         f"(duplicados descartados: {stats['duplicados']}, "
+        f"pares extranjeros cortos: {stats['pares_extranjeros_cortos']}, "
         f"docs con secciones inyectadas: {stats['inyectados']}, "
         f"docs no-ES cortos descartados: {stats['docs_en_cortos']})"
     )
