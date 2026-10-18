@@ -688,7 +688,7 @@ MENORES_ESPADAS = [
                    "salud": "Agotamiento extremo; toca reconstruirse."}},
     {"nombre": "Sota de Espadas", "palo": "Espadas", "elemento": "aire", "rango": "Sota", "numero": 11,
      "palabras_clave": ["vigilancia", "curiosidad", "astucia", "escepticismo"],
-     "significado": "Figura agazapada que observa todo con desconfianza: mente alerta, preguntas incómodas y también chismes.",
+     "significado": "De pie y alerta, con la espada en alto, observa todo con cautela: mente vigilante, preguntas incómodas y también chismes.",
      "invertida": "La vigilancia se vuelve paranoia: mentiras, espionaje o palabras que hieren.",
      "contextos": {"amor": "Celos infundados o vigilancia en la pareja.",
                    "trabajo": "Compañero astuto que observa y reporta.",

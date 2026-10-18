@@ -82,6 +82,13 @@ class TestMayoresConContextos(unittest.TestCase):
         self.assertEqual(justicia["numero"], 11)
 
 
+class TestSotaDeEspadas(unittest.TestCase):
+    def test_de_pie_y_alerta(self):
+        sota = next(c for c in build_kb.MENORES if c["nombre"] == "Sota de Espadas")
+        self.assertNotIn("agazapada", sota["significado"])
+        self.assertIn("De pie y alerta", sota["significado"])
+
+
 class TestAstroCoherencia(unittest.TestCase):
     def test_orbes_aspectos(self):
         esperado = {"Conjunción": 6, "Sextil": 5, "Cuadratura": 6, "Trígono": 6, "Oposición": 7}
