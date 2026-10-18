@@ -99,7 +99,6 @@ Los 76 sitios de prioridad media están en el JSONL; muchos son blogs o aplicaci
 
 - **Nivel D (lecturas trabajadas):** foros (Aeclectic Tarot Forum, r/tarotreadings) y canales de YouTube de tarotistas en español (hace falta instalar `yt-dlp`).
 - **Libros en español del propio usuario:** si tienes PDFs o EPUB de Jodorowsky, Pollack en español, manuales de baraja española o astrología psicológica, son la mejor fuente que falta.
-- Verificar el texto real de los EPUB ya descargados en `docs_epub` que sí son útiles (unos 25).
 
 ## Hugging Face: ¿existe algo parecido? (revisión del 2026-10-18)
 
@@ -118,3 +117,21 @@ Búsquedas con el CLI `hf` de modelos y datasets de tarot, astrología, horósco
 **Datasets que sirven de contraejemplo** (confirman el hueco): `Dendory/tarot` (5.770 lecturas de un párrafo generadas con ChatGPT a partir de 3 cartas al azar), `11-47/The_Prophet_Tarot_Zodiac_50K` (respuestas de plantilla, con textos como «placeholder for brevity»), `AmareshHebbar/numerology_pythagorean-sft` (más de 100.000 filas de numerología con hechos calculados y reglas recuperadas, pero respuestas cortas de regla y marcadas `rule_matched`). Lo valioso de este último es el **diseño** (hechos calculados + reglas recuperadas + citas), que coincide con nuestro enfoque.
 
 No existen datasets de quiromancia ni de Lenormand/cartomancia española utilizables.
+
+## EPUB ya descargados en `docs_epub` (evaluados el 2026-10-18)
+
+Se extrajo el texto de los 155 EPUB (solo lectura) y se midió: texto real, idioma, densidad de términos del dominio, páginas con OCR marcado como poco fiable («the text on this page is estimated to be only X % accurate»). Detalle por obra en `finetune/knowledge/epubs_locales.jsonl`.
+
+| Decisión | Obras | Significado |
+|---|---|---|
+| **usar** | 15 | Texto limpio y dentro del alcance |
+| **usar con limpieza** | 4 | Texto útil, pero con muchas páginas de OCR pobre que hay que descartar |
+| aplazado | 47 | Buen texto pero fuera del alcance actual (quiromancia, I Ching, runas, astrología védica…) |
+| descartar | 89 | Fuera de tema, duplicados, otro idioma o sin texto |
+
+**Hallazgo corregido:** casi todos los EPUB sí traen texto (los tamaños de hasta 200 MB son imágenes, no ausencia de texto). El ruido está en la selección: de 155 solo 19 sirven para el alcance (≈ 10,4 MB de texto).
+
+**A usar** — tarot: Waite *Pictorial Key*, Wang *Qabalistic Tarot*, Wirth *Tarot of the Magicians*, Cicero *New Golden Dawn Ritual Tarot*, Pollack *78 Degrees of Wisdom*, **Nichols *Jung y el Tarot* (español)**, Case *BOTA*, Tomberg *Meditations on the Tarot*; numerología: Goodwin *Complete Guide* vol. 1 y 2, *Chaldean Numerology for Beginners*, *The Secret Science of Numerology*, Sepharial *Kabala of Numbers*, Taylor *Numerology Made Plain*; baraja española: *Tiradas de cartas españolas* (breve, 19 k caracteres, pero directa).
+**Con limpieza** (descartar páginas marcadas): Case *Tarot Fundamentals* (259 págs. marcadas), DuQuette *Thoth* (329), Papus *Tarot of the Bohemians* (218), Curtiss *Key to the Universe* (190). Para Case, Papus y Taylor existe además texto mejor en archive.org (ver tabla de libros verificados).
+
+**Lo que sigue sin cubrirse con los EPUB locales:** **astrología occidental** (no hay ninguna obra occidental entre los 155; todo es védico) y **baraja española en español** (solo el breve *Tiradas de cartas españolas*). La astrología occidental se cubre con los libros de archive.org verificados (Alan Leo, Raphael, Carter, Adams, Heindel) y con los sitios web.
