@@ -74,7 +74,7 @@ KB de consenso (+ RAG sobre las unidades buenas) → generación sintética de l
 | Fase | Contenido | Entregable | Criterio |
 |---|---|---|---|
 | **F0.0** | Herramientas: corregir el scraper (bug «cart», pista T6), traducción (T2), instalar `yt-dlp`; arrancar si hace falta Firecrawl solo para páginas con JavaScript | scraper y traductor corregidos con tests | `check.sh` verde |
-| **F0.1** | Inventario curado de fuentes **por familia**: libros (nivel A/B) con identificador y comprobación de texto limpio; sitios (nivel C) con muestra evaluada; foros y canales (nivel D) | `knowledge/fuentes.jsonl` con nivel, familia, URL, idioma, tamaño, nota de calidad | ≥ 70 libros verificados y ≥ 25 sitios evaluados; cada celda del alcance con candidatas suficientes |
+| **F0.1** | Inventario curado de fuentes **por familia**: libros (nivel A/B) con identificador y comprobación de texto limpio; sitios (nivel C) con muestra evaluada; foros y canales (nivel D) | `finetune/knowledge/fuentes_libros.jsonl y fuentes_sitios.jsonl` con nivel, familia, URL, idioma, tamaño, nota de calidad | ≥ 70 libros verificados y ≥ 25 sitios evaluados; cada celda del alcance con candidatas suficientes |
 | **F0.2** | Descarga y extracción limpia de nivel A/B + C | `knowledge/raw/<nivel>/…` + manifiesto con hash | tasa de OCR roto < 3 % por libro |
 | **F0.3** | Segmentación, juez LLM, etiquetado de entidades | `cobertura.json/md` | informe con las celdas bajo el mínimo |
 | **F0.4** | Recuperación dirigida a los huecos (búsquedas específicas por entidad faltante) | huecos < 10 % de las celdas | repetir hasta cumplir |
