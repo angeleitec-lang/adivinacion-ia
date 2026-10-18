@@ -1,6 +1,7 @@
 """Tests de translate_dataset: detección, validación y gestión de fallos."""
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -241,6 +242,29 @@ class TraducirPrompts(unittest.TestCase):
             self.dst.read_text(encoding="utf-8").splitlines()[0])
         self.assertEqual(fila_out["conversations"][0]["value"],
                         "Explica en detalle: The Lily Meaning and Combinations.")
+
+
+class RebuildWhenDone(unittest.TestCase):
+    def test_aborta_si_un_paso_falla(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        bin_dir = root / ".venv" / "bin"
+        bin_dir.mkdir(parents=True)
+        fake = bin_dir / "python"
+        fake.write_text("#!/bin/sh\nexit 3\n", encoding="utf-8")
+        fake.chmod(0o755)
+        log = root / "rebuild.log"
+        script = str(Path(__file__).resolve().parent.parent
+                     / "rebuild_when_done.sh")
+        env = dict(os.environ, ROOT=str(root), LOG=str(log))
+        for k in ("ENDPOINT1", "ENDPOINT2"):
+            env.pop(k, None)
+        rc = subprocess.run(["bash", script], env=env, capture_output=True)
+        self.assertEqual(rc.returncode, 1)
+        contenido = log.read_text(encoding="utf-8")
+        self.assertIn("FALLO", contenido)
+        self.assertIn("rc=3", contenido)
 
 
 if __name__ == "__main__":
