@@ -27,14 +27,30 @@ RUTA_SALTAR = frozenset({
     "suscripcion", "suscripciones",
 })
 
-# Palabras completas (\b) que descartan un título: «cart» no coincide con
-# «carta» ni «legal» con «ilegal», pero sí con los títulos comerciales.
+# Frases comerciales completas (\b) que descartan un título: se exige la
+# frase entera («términos y condiciones») en lugar de palabras sueltas
+# ambiguas («términos», «legal», «política»), que aparecían en títulos
+# legítimos como «Glosario de términos astrológicos».
 TITULO_SALTAR_RE = re.compile(
-    r"\b(?:t[ée]rminos|terms|privacy|privacidad|cookies?|legal|"
-    r"aviso legal|env[íi]o|shipping|devoluci[óo]n|refund|contacto|contact|"
-    r"login|carrito|cart|checkout|suscripci[óo]n|newsletter|pol[íi]tica)\b",
+    r"\b(?:t[ée]rminos y condiciones"
+    r"|terms (?:of (?:use|service)|and conditions)"
+    r"|pol[íi]tica de (?:privacidad|cookies|devoluciones|env[íi]os|reembolso)"
+    r"|privacy policy|cookie policy"
+    r"|aviso legal|legal notice"
+    r"|carrito(?: de compra)?|shopping cart"
+    r"|checkout|iniciar sesi[óo]n|login|cart"
+    r"|privacy|privacidad|cookies?"
+    r"|env[íi]o|shipping|devoluci[óo]n|refund"
+    r"|suscripci[óo]n|newsletter)\b",
     re.IGNORECASE,
 )
+
+# «Contacto» solo descarta si el título completo (sin el sufijo del sitio)
+# es esa palabra; «Contacto con las cartas» es contenido legítimo.
+TITULO_CONTACTO_EXACTO = frozenset({"contacto", "contact", "contact us"})
+
+# Extensiones que puede llevar el último segmento de una ruta comercial.
+EXTENSIONES_RUTA = (".html", ".htm", ".php")
 
 
 def read_seeds(path):
@@ -55,8 +71,14 @@ def domain_of(url):
 
 
 def titulo_descartable(titulo):
-    """True si el título contiene una palabra comercial a descartar."""
-    return bool(TITULO_SALTAR_RE.search(titulo or ""))
+    """True si el título es una página comercial o de aviso legal."""
+    texto = titulo or ""
+    if TITULO_SALTAR_RE.search(texto):
+        return True
+    for segmento in re.split(r"[|–—-]", texto):
+        if segmento.strip().lower() in TITULO_CONTACTO_EXACTO:
+            return True
+    return False
 
 
 def ruta_crawleable(url):
@@ -66,6 +88,12 @@ def ruta_crawleable(url):
         return False
     path = urlparse(low).path
     segmentos = [s for s in path.strip("/").split("/") if s]
+    if segmentos:
+        ultimo = segmentos[-1]
+        for ext in EXTENSIONES_RUTA:
+            if ultimo.endswith(ext):
+                segmentos[-1] = ultimo[: -len(ext)]
+                break
     return not any(seg in RUTA_SALTAR for seg in segmentos)
 
 

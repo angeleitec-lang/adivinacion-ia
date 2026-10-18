@@ -69,6 +69,37 @@ class TestTituloDescartable(unittest.TestCase):
         self.assertFalse(deep.titulo_descartable(""))
 
 
+class TestMarcadoresComercialesAfinados(unittest.TestCase):
+    def test_titulos_legitimos_con_palabras_ambiguas_no_se_descartan(self):
+        for titulo in (
+            "Glosario de términos astrológicos",
+            "Astrological terms and definitions",
+            "La política y las cartas astrales",
+            "Cartomancia y tarot legal en España",
+        ):
+            self.assertFalse(deep.titulo_descartable(titulo), titulo)
+
+    def test_frases_comerciales_completas_se_descartan(self):
+        for titulo in (
+            "Términos y condiciones",
+            "Política de privacidad",
+            "Terms of Service",
+            "Aviso legal",
+            "Carrito de compra",
+        ):
+            self.assertTrue(deep.titulo_descartable(titulo), titulo)
+
+    def test_contacto_solo_si_el_titulo_completo_es_la_palabra(self):
+        self.assertTrue(deep.titulo_descartable("Contacto"))
+        self.assertTrue(deep.titulo_descartable("Contacto | Tarot Mágico"))
+        self.assertFalse(deep.titulo_descartable("Contacto con las cartas del tarot"))
+
+    def test_extensiones_de_ruta_comercial_se_saltan(self):
+        self.assertFalse(deep.ruta_crawleable("https://ejemplo.com/cart.html"))
+        self.assertFalse(deep.ruta_crawleable("https://ejemplo.com/checkout/"))
+        self.assertTrue(deep.ruta_crawleable("https://ejemplo.com/carta-astral.html"))
+
+
 class TestRutaCrawleable(unittest.TestCase):
     def test_rutas_de_contenido_son_crawleables(self):
         for url in (
