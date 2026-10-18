@@ -82,6 +82,13 @@ class EpubATexto(unittest.TestCase):
         self.assertNotIn("color:red", texto)
         self.assertNotIn("INDICE FALSO", texto)
 
+    def test_marca_una_pagina_por_fichero(self):
+        self._escribir()
+        texto, m = epub_a_texto(self.ruta)
+        for numero in range(1, m["n_html"] + 1):
+            self.assertIn("Page %d" % numero, texto)
+        self.assertEqual(m["n_html"], 3)
+
     def test_metricas_basicas(self):
         self._escribir()
         texto, m = epub_a_texto(self.ruta)

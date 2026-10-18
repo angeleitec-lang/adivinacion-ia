@@ -169,7 +169,10 @@ def epub_a_texto(ruta):
                     bloques.append(t)
             if bloques:
                 metricas["n_html"] += 1
-                partes.append("\n\n".join(bloques))
+                # Marca de página: cada fichero HTML es una página del EPUB y
+                # permite descartar solo las páginas cuyo OCR es poco fiable.
+                partes.append("Page %d\n\n%s"
+                              % (metricas["n_html"], "\n\n".join(bloques)))
     texto = "\n\n".join(partes)
     metricas["chars"] = len(texto)
     return texto, metricas

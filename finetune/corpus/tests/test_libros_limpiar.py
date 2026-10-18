@@ -24,6 +24,7 @@ class PaginasOcrPocoFiable(unittest.TestCase):
         texto = ("Antes del aviso.\n"
                  "The text on this page is estimated to be only 45% accurate\n"
                  "Mala calidad, fuera.\n"
+                 "Page 5\n"
                  "Despues del bloque descartado.")
         limpio, inf = limpiar(texto, "es")
         self.assertNotIn("Mala calidad", limpio)
@@ -136,3 +137,34 @@ class PortadaEIndice(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeteccionDePaginas(unittest.TestCase):
+    def test_sin_marcas_usa_bloques_de_3000(self):
+        texto = "palabra " * 1000
+        limpio, inf = limpiar(texto, "es")
+        self.assertEqual(inf["paginas_descartadas"], 0)
+        self.assertEqual(inf["paginas_total"], 3)
+
+    def test_marcas_page_delimitan_sin_descartar(self):
+        texto = ("Inicio del libro.\n\nPage 2\n\nContenido de la página dos.\n\n"
+                 "Page 3\n\nFinal del libro.")
+        limpio, inf = limpiar(texto, "es")
+        self.assertEqual(inf["paginas_total"], 3)
+        self.assertEqual(inf["paginas_descartadas"], 0)
+        self.assertIn("Contenido de la página dos", limpio)
+        self.assertIn("Final del libro", limpio)
+
+    def test_mezcla_avisos_y_marcas(self):
+        texto = ("Inicio.\n"
+                 "Page 2 The text on this page is estimated to be only 30% "
+                 "accurate\nMala.\n"
+                 "Page 3\nBuen texto.\n"
+                 "Page 4 The text on this page is estimated to be only 90% "
+                 "accurate\nTexto final.")
+        limpio, inf = limpiar(texto, "es")
+        self.assertEqual(inf["paginas_total"], 4)
+        self.assertEqual(inf["paginas_descartadas"], 1)
+        self.assertNotIn("Mala.", limpio)
+        self.assertIn("Buen texto", limpio)
+        self.assertIn("Texto final", limpio)

@@ -68,40 +68,48 @@ def _normalizar_palabra(palabra):
     return "".join(c for c in base if not unicodedata.combining(c))
 
 
-def _fin_de_pagina_sin_numero(texto, inicio):
-    """Fin de la página marcada por un aviso sin «Page N»: aviso y línea siguiente."""
-    salto = texto.find("\n", inicio)
-    if salto < 0:
-        return len(texto)
-    salto = texto.find("\n", salto + 1)
-    return len(texto) if salto < 0 else salto + 1
+def _marcas_de_pagina(texto):
+    """Marcas de página: avisos de OCR (con su precisión) y líneas «Page N».
+
+    Devuelve [(posición, precisión)] ordenado; la precisión es None cuando la
+    marca solo delimita la página y no informa de la calidad.
+    """
+    marcas = []
+    for match in AVISO_RE.finditer(texto):
+        try:
+            precision = float(match.group(1).replace(",", "."))
+        except ValueError:
+            precision = None
+        marcas.append((match.start(), match.end(), precision))
+    for match in re.finditer(r"^[ \t]*Page\s+\d+[ \t]*$", texto,
+                             re.IGNORECASE | re.MULTILINE):
+        marcas.append((match.start(), match.end(), None))
+    marcas.sort()
+    return marcas
 
 
 def _quitar_paginas(texto):
     """Elimina las páginas con OCR por debajo del 60 % de fiabilidad.
 
-    Devuelve (texto_restante, paginas_total, paginas_descartadas). Un aviso con
-    «Page N» abarca hasta el siguiente aviso; sin número, abarca su línea y la
-    siguiente (las páginas OCR suelen venir marcadas así).
+    Una página es el bloque entre dos marcas consecutivas (avisos de OCR o
+    líneas «Page N»). Si el libro no tiene marcas, se cuentan bloques de unos
+    3.000 caracteres, pero no se descarta ninguno. Devuelve
+    (texto_restante, paginas_total, paginas_descartadas).
     """
-    marcas = list(AVISO_RE.finditer(texto))
+    marcas = _marcas_de_pagina(texto)
     if not marcas:
-        return texto, (1 if texto.strip() else 0), 0
+        if not texto.strip():
+            return texto, 0, 0
+        total = (len(texto.strip()) + 2999) // 3000
+        return texto, max(1, total), 0
 
-    total = len(marcas) + (1 if texto[:marcas[0].start()].strip() else 0)
+    total = len(marcas) + (1 if texto[:marcas[0][0]].strip() else 0)
     rangos = []
-    for i, marca in enumerate(marcas):
-        try:
-            precision = float(marca.group(1).replace(",", "."))
-        except ValueError:
+    for i, (inicio, fin_marca, precision) in enumerate(marcas):
+        if precision is None or precision >= 60:
             continue
-        if precision >= 60:
-            continue
-        if re.match(r"Page\s+\d+", marca.group(0), re.IGNORECASE):
-            fin = marcas[i + 1].start() if i + 1 < len(marcas) else len(texto)
-        else:
-            fin = _fin_de_pagina_sin_numero(texto, marca.end())
-        rangos.append((marca.start(), fin))
+        fin = marcas[i + 1][0] if i + 1 < len(marcas) else len(texto)
+        rangos.append((inicio, fin))
 
     descartadas = len(rangos)
     # Fusiona rangos solapados antes de recortar.
