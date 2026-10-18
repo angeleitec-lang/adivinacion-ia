@@ -515,13 +515,13 @@
         "triunfo",
         "orgullo"
       ],
-      "significado": "Vuelves vencedor y la multitud te aclama: reconocimiento público a tu esfuerzo.",
+      "significado": "Vuelves con la victoria y la multitud te aclama: reconocimiento público a tu esfuerzo.",
       "invertida": "El reconocimiento no llega, el orgullo se hiere o triunfas con vanidad.",
       "contextos": {
         "amor": "La pareja te admira y te apoya.",
         "trabajo": "Ascenso, premio o elogio público.",
         "dinero": "Ganancias ligadas a tu reputación.",
-        "salud": "Vitalidad alta y confianza en ti mismo."
+        "salud": "Vitalidad alta y confianza en ti."
       }
     },
     {
@@ -578,7 +578,7 @@
         "fortaleza",
         "experiencia"
       ],
-      "significado": "Herido pero en pie, aguantas la última embestida: la experiencia se vuelve escudo.",
+      "significado": "Con heridas, pero en pie, aguantas la última embestida: la experiencia se vuelve escudo.",
       "invertida": "El cansancio puede más: desconfianza excesiva o rendirse justo antes del final.",
       "contextos": {
         "amor": "Vínculo tocado que resiste con cicatrices.",
@@ -1083,7 +1083,7 @@
         "orgullo"
       ],
       "significado": "Uno recoge las espadas mientras los demás se alejan: victoria vacía ganada a costa de todos.",
-      "invertida": "Se cierra la disputa: reconciliación, perdón o abandono del orgullo herido.",
+      "invertida": "Se cierra la disputa: reconciliación, perdón o se deja atrás el orgullo.",
       "contextos": {
         "amor": "Discusión en la que nadie gana de verdad.",
         "trabajo": "Ambiente tóxico y luchas desleales.",
@@ -1208,7 +1208,7 @@
         "astucia",
         "escepticismo"
       ],
-      "significado": "Figura agazapada que observa todo con desconfianza: mente alerta, preguntas incómodas y también chismes.",
+      "significado": "De pie y alerta, con la espada en alto, observa todo con cautela: mente vigilante, preguntas incómodas y también chismes.",
       "invertida": "La vigilancia se vuelve paranoia: mentiras, espionaje o palabras que hieren.",
       "contextos": {
         "amor": "Celos infundados o vigilancia en la pareja.",
