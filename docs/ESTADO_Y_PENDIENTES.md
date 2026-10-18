@@ -60,8 +60,8 @@
 | 16 | `multiturno` no es multi-turno real | T1 | Redacción corregida; **multi-turno real sigue pendiente** (requiere generación en dos fases) |
 | 17 | Índice RAG con basura (página anti-bot) y embeddings lentos | T8 | **Integrado** |
 | 18 | Prompts del generador sin tildes | T1 | **Corregido** (T1.2, verificado en 1.052 prompts) |
-| 19 | Aspectos recortados por orden de planeta | T1 | Pendiente (T1.6) |
-| 20 | Tabla de trabajos no idempotente | T1 | Pendiente (T1.5) |
+| 19 | Aspectos recortados por orden de planeta | T1 | **Corregido e integrado** (T1.6: los 14 de menor orbe, verificado) |
+| 20 | Tabla de trabajos no idempotente | T1 | **Corregido e integrado** (T1.5: `--replace-pending` solo toca `pending`; los `done`/`running` se conservan, verificado con BD temporal) |
 
 ## 6. Procesos y recursos vivos (¡cuidado!)
 
@@ -83,38 +83,37 @@
 | Catálogo de prueba YouTube | scratchpad (`yt/catalogo_prueba.json`) | 429 vídeos, 225 canales, 95 % con subtítulos |
 | Dataset actual (antiguo) | `finetune/corpus/final/` | 4.249 train; tras el auditor sobreviven ≈ 1.991 (42,8 %) |
 
-## 8. Estado final de cada pista (2026-10-19 00:05)
+## 8. Estado final de cada pista (2026-10-19 00:50)
 
-`main` está en `4005707`+ (todo lo integrado pasa `check.sh`). Las cifras de tests: 41+ del validador, 63 de `build_dataset`, 31 de licencias, etc.
+**Todas las pistas están integradas en `main`** (último merge `03f5c82`; `check.sh` OK, 560+ tests). No queda ninguna rama sin fusionar. Los worktrees de `.worktrees/` se pueden conservar o borrar (`git worktree remove`).
 
-| Pista | Qué hace | Estado | Pendiente concreto |
-|---|---|---|---|
-| T2 traducción y workers | `translate_dataset.py`, `generate_synthetic.py`, `rebuild_when_done.sh` | **Integrada** | nada |
-| T3 limpieza del dataset | `build_dataset.py`, `build_scrapy_dataset.py` | **Integrada** | Recorte de botones comerciales deja restos (`.a nuestra newsletter.`): eliminar la frase entera. Opcional: exigir densidad de términos fuertes (hay temas fuera de alcance como «Mundo musulmán») |
-| T4 validador | `validate_synthetic.py` | **Integrada** | Rechazar bloques `<think>…</think>` (la comprobación debe hacerse sobre el texto bruto, antes de `norm`) |
-| T5 fusión y licencias | `merge_final.py`, `merge_datasets.py`, `license_filter.py` | **Integrada** (incluye CC0) | nada |
-| T6 recolección | scraper Scrapy, `collect_corpus.py`, `expand_wikipedia.py` | **Integrada** | nada |
-| T7 KB | `build_kb.py` + `kb/*.json` | **Integrada** | Sota de Espadas («agazapada» → de pie y alerta) y lenguaje neutro (`vencedor`, `herido`, `mismo`) + test; regenerar JSON |
-| T8 auditoría y RAG | `audit_dataset.py`, `rag_index.py` | **Integrada** | nada (el índice RAG real NO se ha reconstruido) |
-| A4 YouTube | cartas, descubrimiento, subtítulos, clasificación, extracción validada, normalización, QA | **Integrada** (validaciones verificadas con 9 casos adversos) | **Prueba de punta a punta con ≤ 5 vídeos sin hacer**, corregir `ESTADO.md` (horas `00:00`, prefijo `T4.x`), borrar `yt_discover.py.bak` |
-| T1 generador | `generate_tasks.py` | **En rama, sin integrar** (7 commits: T1.1–T1.6 y T1.8; anotó `NUCLEO T1 LISTO`; 2 ficheros sin commitear = T1.7 en curso) | Verificar T1.5 (idempotencia) y T1.6 (aspectos) con casos propios y **integrar**; después T1.7 (Referencia de la KB en los prompts). Hacer `git merge main` en su worktree antes de T1.7 para que use la KB definitiva |
-| A2 libros | descarga, extracción, limpieza de OCR, segmentación de libros | En rama (3 commits), en curso | Terminar, revisar con un libro real y integrar |
-| A3 rastreo dirigido | cliente educado, expansión de rejillas, índices, informe | En rama (1 commit: A3.1), en curso | Terminar A3.2–A3.5 e integrar; el rastreo real de las ~600 páginas de rejillas **aún no se ha lanzado** |
-| C1 calculadoras | tránsitos, revolución solar, sinastría, numerología completa, biorritmos | **Preparada, NO lanzada** (worktree `c1-calculos`, 103 líneas de `SIGUIENTE.md`) | Dar el prompt a una IA libre (ver sección 9) |
+| Pista | Qué hace | Estado |
+|---|---|---|
+| T1 generador | `generate_tasks.py`: UT/zoneinfo, tildes, ética ≥ 40, multiturno, idempotencia, 14 aspectos de menor orbe, año personal/camino de vida corregidos, «Referencia» de la KB en los prompts, sin doble punto | **Integrada** (dry-run: 11 bloques, 10.636 trabajos) |
+| T2, T5, T6, T8 | traducción/workers, fusión y licencias, recolección, auditoría y RAG | **Integradas** (el índice RAG real NO se ha reconstruido) |
+| T3 limpieza del dataset | `build_dataset.py`, `build_scrapy_dataset.py` | **Integrada** con ajustes: elimina frases comerciales completas, ofertas con precio y «Lee también». Opcional pendiente: exigir densidad de términos fuertes (temas fuera de alcance como «Mundo musulmán») |
+| T4 validador | `validate_synthetic.py` | **Integrada** (rechaza `<think>`/`</think>`/`<thinking>` sobre texto bruto) |
+| T7 KB | `build_kb.py` + `kb/*.json` | **Integrada** (Sota de Espadas corregida, lenguaje neutro) |
+| A2 libros | inventario, descarga, extracción EPUB, limpieza OCR, segmentación, informe | **Integrada** (rama `a2b-segmentar`). Probada con 3 EPUB reales: *Tarot Fundamentals* 718 págs/259 descartadas, 22 arcanos como título; *78 Degrees* 105 secciones; *Jung y el Tarot* 21 arcanos. Defecto menor: la primera sección lleva el título «Sección 1 — <portada>» |
+| A3 rastreo dirigido | cliente educado, expansión de rejillas, extracción, índices, informe | **Integrada** (ramas `a3-rastreo` y `a3b-rastreo`). **La prueba real de 25 URLs NO se ha hecho** (la de punta a punta fue simulada) y los patrones de `sitios_indice.json` no están comprobados contra internet |
+| A4 YouTube | cartas, descubrimiento, subtítulos, clasificación, extracción validada | **Integrada**. Prueba de punta a punta con ≤ 5 vídeos: IA-9 hizo 1 vídeo; pendiente revisarla con calma y repetir con 5; borrar `yt_discover.py.bak`; corregir `ESTADO.md` de A4 |
+| C1 calculadoras | carta natal, tránsitos, revolución solar, sinastría, numerología, biorritmos | **Integrada** (verificada: Ascendente Lima Virgo 20°, Mercurio retrógrado 2024, revolución solar 0,0002°). Pendiente: renombrar la reexportación `biorritmos` que oculta al módulo (ajuste ya escrito, no urgente) |
+
+**Aviso:** las horas que anotan IA-9 e IA-10 en sus `ESTADO.md` son inventadas (p. ej. `01:15`, `02:45` cuando eran las 00:36). No usarlas como registro.
 
 ## 9. Pendientes para mañana (en este orden)
 
-0. **Orientarse (5 min):** leer este documento; `git -C /Users/angelgonzalez/adivinacion-ia log --oneline | head`; `./finetune/scripts/check.sh`; mirar en cada worktree si llegaron commits durante la noche (`for w in .worktrees/*/; do echo $w; git -C $w log --oneline main..HEAD | wc -l; done`) y qué terminales siguen activas.
-1. **Dar los ajustes a las IAs** (pegando en su terminal el prompt «Relee SIGUIENTE.md: al final hay secciones AJUSTE… aplica en orden con su commit y anótalo en ESTADO.md»). Destinatarios: **T3** (botones), **T4** (`<think>`), **T7** (Sota + neutro), **A4** (seguimiento: punta a punta), **T1** (T1.7 y lo que quede).
-2. **Revisar e integrar T1** (lo más urgente porque bloquea la regeneración): comprobar con una BD temporal que `--replace-pending` borra solo `pending` y no duplica; que los 14 aspectos devueltos son los de menor orbe; `python corpus/generate_tasks.py --dry-run` con 11 bloques sin excepción; luego `git merge --no-ff track/t1-generador`. Si el IA aún trabaja en T1.7, integrar primero lo que está commiteado.
-3. **Lanzar C1** (calculadoras) en la IA-9 (o la que quede libre) tras su seguimiento de A4. Prompt: `cd /Users/angelgonzalez/adivinacion-ia/.worktrees/c1-calculos y lee SIGUIENTE.md. Eres la IA-9 del track C1: implementa SOLO los tasks C1.1 a C1.6 que ahí se indican, con TDD y un commit convencional por task. Reporta progreso y errores en ESTADO.md. Nunca toques main ni otros worktrees.`
-4. **Seguir A2 y A3**; revisar y integrar cuando anoten `TRACK COMPLETO` (verificar con casos propios, comprobar `git status` y que haya prueba de punta a punta).
-5. **Decisiones del usuario que desbloquean cosas** (preguntar en cuanto empiece):
+0. **Orientarse (5 min):** leer este documento; `git log --oneline | head`; `./finetune/scripts/check.sh`.
+1. **Unificar `generate_tasks.py` con `calculos/`:** T1 conserva sus propias `calcular_carta`, `camino_de_vida`, `anio_personal`; C1 tiene versiones independientes. Las dos están verificadas, pero hay que elegir una (la de `calculos/`) y que el generador la importe, con test de equivalencia. Pista pequeña para una IA.
+2. **Pruebas reales con internet (las lanzo yo, con cortesía):** A3 con 25 URLs reales (5 sitios × 5) para validar `sitios_indice.json`; A4 con ≤ 5 vídeos; A2 con 1–2 libros de archive.org (pausa ≥ 2,5 s).
+3. **Ejecución real de la fase 0:** A2 sobre el inventario completo → `knowledge/libros/`; A3 sobre las rejillas → `knowledge/web/`; A4 sobre el catálogo → `knowledge/youtube/`. Ritmo cortés. Revisar los informes de calidad antes de pasar a la matriz.
+4. **Decisiones del usuario que desbloquean cosas** (preguntar en cuanto empiece):
    - ¿Solicitó acceso a `Pepere45/spanish-esotericism-corpus` en Hugging Face (cuenta `Serono22`)? Es el único corpus en español.
    - ¿Tiene PDFs/EPUB propios de libros de **baraja española** o de astrología/tarot en español? Es el hueco más serio (los de préstamo digital no son descargables).
-   - ¿Se compra algún libro? Lista corta por prioridad: *El arte de echar las cartas* (Emilio Salas, baraja española); Beltrame *Tarot con cartas españolas*; Banzhaf *El gran libro del tarot* (solo si no se consigue la copia libre, que da error 500 intermitente); Greer *Tarot for Your Self* (en inglés, el menos urgente). Presupuesto muy limitado: no comprar sin avisar.
+   - ¿Se compra algún libro? Lista corta: *El arte de echar las cartas* (Emilio Salas, baraja española); Beltrame *Tarot con cartas españolas*; Banzhaf *El gran libro del tarot*; Greer *Tarot for Your Self* (el menos urgente). Presupuesto muy limitado: no comprar sin avisar.
    - ¿Aplicar el filtro de licencias estricto (`--license-filter strict`)? En el build sobre `raw/` baja de 1.077 a 381 pares. Decisión legal que el usuario aplazó.
-6. **Diseños que faltan por escribir** (yo, la coordinadora): A5 (segmentador + juez LLM + matriz de cobertura), A6 (consenso de KB), pista de **multi-turno real** (generación en dos fases), pista de astrología adicional (nodos lunares, ascendente por signo), y rastreo de `forotarot.net` (secciones Interpretaciones, Consultas, Baraja española…).
+5. **Diseños que faltan por escribir** (coordinadora): A5 (segmentador + juez LLM + matriz de cobertura), A6 (consenso de KB), pista de **multi-turno real** (generación en dos fases), astrología adicional (nodos lunares), y rastreo de `forotarot.net`.
+6. **Fase 1 (regeneración):** solo después de 1 y de la matriz de cobertura; ver sección 10.
 
 ## 10. Cómo continuar cuando se acaben los pendientes (plan completo)
 
