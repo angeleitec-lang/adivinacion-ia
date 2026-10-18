@@ -219,5 +219,33 @@ class BotonesComerciales(unittest.TestCase):
         self.assertEqual(bd.clean_body(texto), texto)
 
 
+class Introduccion(unittest.TestCase):
+    """T3.4: se conserva el texto previo al primer encabezado."""
+
+    def test_intro_mas_seccion_dos_secciones(self):
+        md = ("Introducción al tarot con suficiente longitud para contar algo.\n\n"
+              "## Sección real\nContenido de la sección real aquí.")
+        secs = bd.split_sections(md, "tarot_guia")
+        self.assertEqual(len(secs), 2)
+        self.assertEqual(secs[0][0], bd.humanize("tarot_guia"))
+        self.assertIn("Introducción", secs[0][1])
+
+    def test_sin_intro_solo_secciones(self):
+        md = "## Una\ncuerpo uno\n\n## Dos\ncuerpo dos"
+        secs = bd.split_sections(md, "x")
+        self.assertEqual(len(secs), 2)
+        self.assertEqual(secs[0][0], "Una")
+
+    def test_sin_encabezados(self):
+        secs = bd.split_sections("solo texto sin encabezados", "doc")
+        self.assertEqual(len(secs), 1)
+        self.assertEqual(secs[0][0], "")
+
+    def test_intro_vacia_no_anade_seccion(self):
+        md = "# Título\ncuerpo bajo el título"
+        secs = bd.split_sections(md, "doc")
+        self.assertEqual(len(secs), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

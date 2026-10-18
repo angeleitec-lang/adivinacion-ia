@@ -262,12 +262,15 @@ def humanize(slug: str) -> str:
     return slug or "este tema"
 
 
-def split_sections(md: str) -> list[tuple[str, str]]:
-    """Trocea markdown en (tema, cuerpo) usando los encabezados ATX."""
+def split_sections(md: str, doc: str = "") -> list[tuple[str, str]]:
+    """Trocea markdown en (tema, cuerpo) usando los encabezados ATX.
+    El texto previo al primer encabezado se conserva como sección con título
+    humanize(doc) en lugar de descartarse."""
     sections: list[tuple[str, str]] = []
     stack: list[tuple[int, str]] = []
     current_topic: str | None = None
     current: list[str] = []
+    intro: list[str] = []
     saw_heading = False
 
     for line in md.splitlines():
@@ -286,12 +289,18 @@ def split_sections(md: str) -> list[tuple[str, str]]:
             current = []
         elif current_topic is not None:
             current.append(line)
+        else:
+            intro.append(line)
 
     if current_topic is not None:
         body = clean_body("\n".join(current))
         sections.append((" > ".join(t for _, t in stack), body))
 
-    if not saw_heading:
+    if saw_heading:
+        intro_body = clean_body("\n".join(intro))
+        if intro_body:
+            sections.insert(0, (humanize(doc), intro_body))
+    else:
         body = clean_body(md)
         if body:
             sections.append(("", body))
@@ -354,7 +363,7 @@ def build_pairs(doc: str, md: str, rng: random.Random,
                 min_domain_terms: int = 2) -> list[dict]:
     """Convierte un documento markdown en pares ShareGPT."""
     pairs = []
-    for topic, body in split_sections(md):
+    for topic, body in split_sections(md, doc):
         topic = clean_inline(topic or humanize(doc))
         if not topic or is_boilerplate(topic) or is_bad_topic(topic):
             continue
