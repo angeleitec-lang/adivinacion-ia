@@ -38,6 +38,7 @@ ES_WORDS = {
     "otras", "otra", "él", "tanto", "esa", "estos", "mucho", "quienes",
     "nada", "muchos", "cual", "poco", "ella", "estar", "estas", "algunas",
     "algo", "nosotros", "tiene", "tienen", "hace", "ser", "cada", "solo",
+    "no",
 }
 
 EN_WORDS = {
@@ -46,9 +47,9 @@ EN_WORDS = {
     "had", "by", "but", "not", "what", "all", "were", "we", "when", "your",
     "can", "said", "there", "use", "an", "each", "which", "she", "do",
     "how", "their", "if", "will", "up", "other", "about", "out", "many",
-    "then", "them", "these", "so", "some", "her", "would", "make", "like",
+    "then", "them", "these", "some", "her", "would", "make", "like",
     "him", "into", "time", "has", "look", "two", "more", "write", "go",
-    "see", "number", "no", "way", "could", "people", "my", "than", "first",
+    "see", "number", "way", "could", "people", "my", "than", "first",
     "been", "call", "who", "its", "now", "find", "long", "down", "day",
     "did", "get", "come", "made", "may", "part", "should", "upon", "must",
     "such", "through", "only", "own", "same", "those", "which", "while",
@@ -78,6 +79,35 @@ def detect_language(text: str) -> str:
     return "mixed"
 
 
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+_PREFIX_TRAD_RE = re.compile(
+    r"^(?:Aqu[ií]\s+est[áa]\s+la\s+traducci[óo]n|Traducci[óo]n)\s*[:：]\s*",
+    re.IGNORECASE,
+)
+
+
+def validar_traduccion(original: str, traducida: str,
+                       finish_reason: str) -> "tuple[str | None, str | None]":
+    """Limpia y valida la respuesta del traductor.
+
+    Devuelve (texto_limpio, None) si es válida, o (None, motivo) si no.
+    """
+    if finish_reason == "length":
+        return None, "respuesta truncada (finish_reason=length)"
+    texto = (traducida or "").strip()
+    texto = _THINK_RE.sub("", texto).strip()
+    texto = _PREFIX_TRAD_RE.sub("", texto, count=1).strip()
+    if not texto:
+        return None, "el resultado quedó vacío"
+    if detect_language(texto) == "en":
+        return None, "la traducción sigue en inglés"
+    if original:
+        ratio = len(texto) / max(1, len(original))
+        if ratio < 0.4 or ratio > 2.5:
+            return None, f"ratio de longitud fuera de rango: {ratio:.2f}"
+    return texto, None
+
+
 def _translate(text: str, base_url: str, model: str, retries: int = 4, timeout: int = 300) -> str:
     payload = {
         "model": model,
@@ -100,7 +130,17 @@ def _translate(text: str, base_url: str, model: str, retries: int = 4, timeout: 
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.load(resp)
-            return data["choices"][0]["message"]["content"].strip()
+            choice = data["choices"][0]
+            limpio, motivo = validar_traduccion(
+                text,
+                choice["message"]["content"],
+                choice.get("finish_reason", ""),
+            )
+            if limpio is None:
+                last_error = motivo
+                time.sleep(2 ** attempt)
+                continue
+            return limpio
         except urllib.error.HTTPError as exc:
             last_error = f"HTTP {exc.code}"
             time.sleep(2 ** attempt)
@@ -118,6 +158,50 @@ def _load(path: Path) -> list[dict]:
             if line:
                 rows.append(json.loads(line))
     return rows
+
+
+PLANTILLAS_PROMPT = [
+    "Explica en detalle: {topic}.",
+    "¿Qué significa {topic}?",
+    "Como experta en adivinación, desarróllame {topic}.",
+    "Explícame {topic} de forma clara y completa.",
+]
+
+
+def extraer_tema(prompt: str):
+    """Reconoce las plantillas españolas de prompt y devuelve (prefijo, tema, sufijo).
+
+    Devuelve None si el prompt no encaja en ninguna plantilla.
+    """
+    texto = (prompt or "").strip()
+    for plantilla in PLANTILLAS_PROMPT:
+        prefijo, sufijo = plantilla.split("{topic}", 1)
+        patron = re.escape(prefijo) + r"(?P<tema>.+?)" + re.escape(sufijo)
+        m = re.fullmatch(patron, texto, re.DOTALL)
+        if m:
+            return prefijo, m.group("tema"), sufijo
+    return None
+
+
+def _tema_es_ingles(tema: str) -> bool:
+    if detect_language(tema) != "en":
+        return False
+    hits = sum(1 for w in _WORD_RE.findall(tema) if w.lower() in EN_WORDS)
+    return hits >= 2
+
+
+def _human_of(row: dict) -> str:
+    for turn in row.get("conversations", []):
+        if turn.get("from") == "human":
+            return turn.get("value", "")
+    return ""
+
+
+def _set_human(row: dict, value: str) -> None:
+    for turn in row.get("conversations", []):
+        if turn.get("from") == "human":
+            turn["value"] = value
+            return
 
 
 def _answer_of(row: dict) -> str:
@@ -169,6 +253,20 @@ def translate_file(src: Path, dst: Path, args) -> dict:
 
     def work(item) -> dict:
         idx, row, (ep_url, ep_model) = item
+        if getattr(args, "translate_prompts", False):
+            partes = extraer_tema(_human_of(row))
+            if partes and _tema_es_ingles(partes[1]):
+                prefijo, tema, sufijo = partes
+                try:
+                    tema_es = _translate(tema, ep_url, ep_model,
+                                        timeout=args.timeout)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"  ! error traduciendo tema: {exc}", file=sys.stderr,
+                          flush=True)
+                    return {"row": row, "lang": detect_language(_answer_of(row)),
+                            "translated": False, "error": True,
+                            "motivo": f"tema: {exc}", "idx": idx}
+                _set_human(row, prefijo + tema_es + sufijo)
         answer = _answer_of(row)
         lang = detect_language(answer)
         if lang in ("en", "mixed"):
@@ -184,7 +282,7 @@ def translate_file(src: Path, dst: Path, args) -> dict:
                 print(f"  ! error traduciendo: {exc}", file=sys.stderr,
                       flush=True)
                 return {"row": row, "lang": lang, "translated": False,
-                        "error": True, "idx": idx}
+                        "error": True, "motivo": str(exc), "idx": idx}
             _set_answer(row, translated)
             return {"row": row, "lang": lang, "translated": True, "idx": idx}
         return {"row": row, "lang": lang, "translated": False, "idx": idx}
@@ -192,32 +290,94 @@ def translate_file(src: Path, dst: Path, args) -> dict:
     pairs = [(done + i, row, endpoints[(done + i) % len(endpoints)])
              for i, row in enumerate(rows)]
 
+    failed_path = Path(str(dst) + ".failed.jsonl")
     stats = {"total": 0, "translated": 0, "kept": 0, "error": 0, "dropped": 0}
     start = time.time()
-    with dst.open(mode, encoding="utf-8") as out, \
-            ThreadPoolExecutor(max_workers=args.workers) as pool:
-        for i, result in enumerate(pool.map(work, pairs), 1):
-            stats["total"] += 1
-            if result.get("skipped"):
-                stats["dropped"] += 1
-            else:
-                if result.get("error"):
+    fail_fh = None
+    try:
+        with dst.open(mode, encoding="utf-8") as out, \
+                ThreadPoolExecutor(max_workers=args.workers) as pool:
+            for i, result in enumerate(pool.map(work, pairs), 1):
+                stats["total"] += 1
+                if result.get("skipped"):
+                    stats["dropped"] += 1
+                elif result.get("error"):
+                    # El fallo no se escribe en el destino: se registra para
+                    # poder reintentarlo con --retry-failed.
                     stats["error"] += 1
-                elif result["translated"]:
-                    stats["translated"] += 1
+                    if fail_fh is None:
+                        fail_fh = failed_path.open("a", encoding="utf-8")
+                    fail_fh.write(json.dumps(
+                        {"idx": result["idx"], "motivo": result.get("motivo", ""),
+                         "row": result["row"]}, ensure_ascii=False) + "\n")
+                    fail_fh.flush()
                 else:
-                    stats["kept"] += 1
+                    if result["translated"]:
+                        stats["translated"] += 1
+                    else:
+                        stats["kept"] += 1
+                    out.write(json.dumps(result["row"], ensure_ascii=False) + "\n")
+                    out.flush()
+                _write_progress(progress, result["idx"] + 1)
+                if i % 20 == 0 or i == len(rows):
+                    elapsed = time.time() - start
+                    rate = i / elapsed if elapsed else 0
+                    eta = (len(rows) - i) / rate if rate else 0
+                    print(f"  {i}/{len(rows)}  trad={stats['translated']} "
+                          f"keep={stats['kept']} drop={stats['dropped']} "
+                          f"err={stats['error']}  "
+                          f"{rate:.2f} filas/s  ETA {eta/60:.1f} min", flush=True)
+    finally:
+        if fail_fh is not None:
+            fail_fh.close()
+    return stats
+
+
+def retry_failed(dst: Path, args) -> dict:
+    """Reprocesa las filas de <dst>.failed.jsonl y reescribe los fallos restantes."""
+    failed_path = Path(str(dst) + ".failed.jsonl")
+    if not failed_path.exists():
+        print(f"! no hay fallos que reintentar en {failed_path}",
+              file=sys.stderr, flush=True)
+        return {"total": 0, "translated": 0, "error": 0}
+    entries = _load(failed_path)
+    endpoints = getattr(args, "endpoints", None) or [
+        (args.base_url, args.model)
+    ]
+
+    def work(item) -> dict:
+        pos, entry = item
+        row = entry.get("row") or {}
+        answer = _answer_of(row)
+        ep_url, ep_model = endpoints[pos % len(endpoints)]
+        try:
+            translated = _translate(answer, ep_url, ep_model, timeout=args.timeout)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "entry": entry, "motivo": str(exc)}
+        nueva = json.loads(json.dumps(row))
+        _set_answer(nueva, translated)
+        return {"ok": True, "row": nueva}
+
+    stats = {"total": len(entries), "translated": 0, "error": 0}
+    restantes = []
+    with dst.open("a", encoding="utf-8") as out, \
+            ThreadPoolExecutor(max_workers=args.workers) as pool:
+        for result in pool.map(work, list(enumerate(entries))):
+            if result["ok"]:
                 out.write(json.dumps(result["row"], ensure_ascii=False) + "\n")
                 out.flush()
-            _write_progress(progress, result["idx"] + 1)
-            if i % 20 == 0 or i == len(rows):
-                elapsed = time.time() - start
-                rate = i / elapsed if elapsed else 0
-                eta = (len(rows) - i) / rate if rate else 0
-                print(f"  {i}/{len(rows)}  trad={stats['translated']} "
-                      f"keep={stats['kept']} drop={stats['dropped']} "
-                      f"err={stats['error']}  "
-                      f"{rate:.2f} filas/s  ETA {eta/60:.1f} min", flush=True)
+                stats["translated"] += 1
+            else:
+                e = result["entry"]
+                restantes.append({"idx": e.get("idx"),
+                                 "motivo": result["motivo"],
+                                 "row": e.get("row")})
+                stats["error"] += 1
+    tmp = Path(str(failed_path) + ".tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        for e in restantes:
+            fh.write(json.dumps(e, ensure_ascii=False) + "\n")
+    tmp.replace(failed_path)
     return stats
 
 
@@ -235,6 +395,10 @@ def main(argv=None) -> int:
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--retry-failed", action="store_true",
+                        help="Reprocesa solo las filas de <dst>.failed.jsonl.")
+    parser.add_argument("--translate-prompts", action="store_true",
+                        help="Traduce tambien el tema del prompt si esta en ingles.")
     parser.add_argument("--min-en-chars", type=int, default=0,
                         help="No traduce respuestas EN/mixed mas cortas que esto.")
     parser.add_argument("--drop-short-en", action="store_true",
@@ -268,6 +432,14 @@ def main(argv=None) -> int:
             for row in rows:
                 counts[detect_language(_answer_of(row))] += 1
             print(f"{src}: {len(rows)} pares  {counts}")
+        return 0
+
+    if args.retry_failed:
+        for _, dst in targets:
+            print(f"\n== reintentando fallos de {dst}")
+            stats = retry_failed(dst, args)
+            print(f"   total={stats['total']} trad={stats['translated']} "
+                  f"err={stats['error']}")
         return 0
 
     for src, dst in targets:
