@@ -15,14 +15,24 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
+import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 RAG_DIR = ROOT / "rag"
-DEFAULT_DIRS = ["corpus/raw", "corpus/raw_scrapy", "corpus/raw/docs"]
+DEFAULT_DIRS = ["corpus/raw", "corpus/raw_scrapy"]
+
+BOILERPLATE = (
+    "whitelist", "enable javascript", "cookies", "suscríbete",
+    "política de privacidad", "all rights reserved", "just a moment",
+    "verifying you are human", "acceso denegado", "introduce tu email",
+)
+_LINK_RE = re.compile(r"https?://\S+|\[[^\]]*\]\([^)]*\)|[|#*_~^<>&=]")
 DEFAULT_URL = "http://10.0.0.1:11434"
 DEFAULT_MODEL = "nomic-embed-text"
 
@@ -68,18 +78,75 @@ def split_chunks(text: str, chunk_size: int = 900, overlap: int = 150) -> list[s
     return [c for c in chunks if len(c.strip()) >= 40]
 
 
-def embed(texts: list[str], url: str, model: str) -> list[list[float]]:
-    out = []
-    for t in texts:
-        req = urllib.request.Request(
-            f"{url.rstrip('/')}/api/embeddings",
-            data=json.dumps({"model": model, "prompt": t}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=120) as r:
-            out.append(json.load(r)["embedding"])
-    return out
+def chunk_util(texto: str) -> bool:
+    """Devuelve True si el chunk es útil; rechaza boilerplate, símbolos y texto insuficiente."""
+    t = texto.strip()
+    if len(t) < 80:
+        return False
+    bajo = t.lower()
+    for frase in BOILERPLATE:
+        if frase in bajo:
+            return False
+    letras = sum(1 for ch in t if ch.isalpha())
+    if letras < 40:
+        return False
+    basura = sum(m.end() - m.start() for m in _LINK_RE.finditer(t))
+    if basura > 0.6 * len(t):
+        return False
+    return True
+
+
+def embed_uno(texto: str, url: str, model: str, reintentos: int = 3) -> list[float]:
+    for intento in range(reintentos):
+        try:
+            req = urllib.request.Request(
+                f"{url.rstrip('/')}/api/embeddings",
+                data=json.dumps({"model": model, "prompt": texto}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return json.load(r)["embedding"]
+        except Exception:
+            if intento == reintentos - 1:
+                raise
+            time.sleep(0.5 * (2 ** intento))
+    raise RuntimeError("no se debería llegar aquí")
+
+
+def embed_paralelo(texts: list[str], fn, workers: int = 4) -> list[list[float]]:
+    """Aplica fn (texto -> vector) a todos los textos conservando el orden de entrada."""
+    if workers <= 1:
+        return [fn(t) for t in texts]
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        return list(ex.map(fn, texts))
+
+
+def embed_con_reudo(items: list[dict], fn, workers: int = 4,
+                    partial_path: "Path | None" = None, resume: bool = False) -> dict:
+    """Embebe items [{id, text}] en paralelo y los guarda en un fichero parcial reanudable."""
+    hecho: dict = {}
+    if resume and partial_path is not None and Path(partial_path).exists():
+        for linea in Path(partial_path).read_text(encoding="utf-8").splitlines():
+            if linea.strip():
+                obj = json.loads(linea)
+                hecho[obj["id"]] = obj["vec"]
+    pendientes = [x for x in items if x["id"] not in hecho]
+    if pendientes and partial_path is not None:
+        Path(partial_path).parent.mkdir(parents=True, exist_ok=True)
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+            futuros = {ex.submit(fn, x["text"]): x["id"] for x in pendientes}
+            with open(partial_path, "a", encoding="utf-8") as fh:
+                for fut in as_completed(futuros):
+                    vec = fut.result()
+                    cid = futuros[fut]
+                    hecho[cid] = vec
+                    fh.write(json.dumps({"id": cid, "vec": vec}) + "\n")
+    return hecho
+
+
+def embed(texts: list[str], url: str, model: str, workers: int = 4) -> list[list[float]]:
+    return embed_paralelo(texts, lambda t: embed_uno(t, url, model), workers)
 
 
 def _norm(mat: "np.ndarray") -> "np.ndarray":
@@ -112,15 +179,27 @@ def build(args) -> int:
         deduped.append(c)
     print(f"[i] {len(deduped)} chunks tras dedupe")
 
-    texts = [c["text"] for c in deduped]
-    vecs = embed(texts, args.url, args.model)
-    mat = _norm(np.asarray(vecs, dtype=np.float32))
+    # filtro de boilerplate antes de embeber
+    utiles = [c for c in deduped if chunk_util(c["text"])]
+    print(f"[i] {len(deduped) - len(utiles)} chunks descartados por boilerplate; "
+          f"{len(utiles)} útiles")
+    if not utiles:
+        print("[!] ningún chunk útil; nada que indexar")
+        return 1
 
     args.out.mkdir(parents=True, exist_ok=True)
+    partial = args.out / "embeddings.partial.jsonl"
+    hecho = embed_con_reudo(utiles, lambda t: embed_uno(t, args.url, args.model),
+                           workers=args.workers, partial_path=partial, resume=args.resume)
+    vecs = [hecho[c["id"]] for c in utiles]
+    mat = _norm(np.asarray(vecs, dtype=np.float32))
+
     (args.out / "chunks.jsonl").write_text(
-        "\n".join(json.dumps(c, ensure_ascii=False) for c in deduped) + "\n", encoding="utf-8")
+        "\n".join(json.dumps(c, ensure_ascii=False) for c in utiles) + "\n", encoding="utf-8")
     np.save(args.out / "embeddings.npy", mat)
-    print(f"[ok] índice: {len(deduped)} chunks, {mat.shape[1]} dims -> {args.out}")
+    if partial.exists():
+        partial.unlink()
+    print(f"[ok] índice: {len(utiles)} chunks, {mat.shape[1]} dims -> {args.out}")
     return 0
 
 
@@ -154,6 +233,8 @@ def main() -> int:
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--query", help="modo búsqueda (requiere índice existente)")
     ap.add_argument("--k", type=int, default=3)
+    ap.add_argument("--workers", type=int, default=4, help="hilos de embeddings en paralelo")
+    ap.add_argument("--resume", action="store_true", help="reanude desde el fichero parcial")
     args = ap.parse_args()
     return search(args) if args.query else build(args)
 
