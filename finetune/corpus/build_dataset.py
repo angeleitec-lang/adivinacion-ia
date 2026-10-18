@@ -122,9 +122,22 @@ def is_relevant(topic: str, body: str, doc: str, min_terms: int = 2) -> bool:
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 EMPTY_LINK_RE = re.compile(r"\[\]\([^)]*\)")
-EDIT_LINK_RE = re.compile(r"\[editar\]\([^)]*\)", re.IGNORECASE)
-REF_RE = re.compile(r"\[\d+\]")
-LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+# Diana de un enlace markdown que tolera paréntesis anidados en la URL y un
+# título entre comillas (p. ej. «...Oros_(naipe)&action=edit "Editar...").»
+_LINK_TARGET = r'(?:[^()\s]|\([^)]*\))*(?:\s+"[^"]*")?'
+# Centinelas para los corchetes escapados de markdown (\[ \]) y tratarlos luego.
+_ESC_OPEN, _ESC_CLOSE = "\uE000", "\uE001"
+CITA_LINK_RE = re.compile(r"\[(?:\uE000\d+\uE001|\d+)\]\(" + _LINK_TARGET + r"\)")
+CITA_BARE_RE = re.compile(r"\[(?:\uE000\d+\uE001|\d+)\]|\uE000\d+\uE001")
+EDIT_LINK_RE = re.compile(
+    r"\[(?:\uE000?editar\uE001?|editar)\]\(" + _LINK_TARGET + r"\)", re.IGNORECASE)
+EDIT_BARE_RE = re.compile(
+    r"\[\uE000?editar\uE001?\]|\uE000editar\uE001", re.IGNORECASE)
+LINK_RE = re.compile(r"\[([^\]]+)\]\(" + _LINK_TARGET + r"\)")
+# Rabo que queda cuando un enlace de edición no cierra bien: «&action=edit...")».
+EDIT_RESIDUE_RE = re.compile(r'&action=edit(?:&section=\d+)?(?:\s*"[^"]*")?\)?')
+# Líneas que tras limpiar solo contienen _ * > sueltos.
+JUNK_LINE_RE = re.compile(r"[_*> \t]+")
 
 
 def clean_inline(text: str) -> str:
@@ -135,13 +148,20 @@ def clean_inline(text: str) -> str:
 
 
 def clean_body(text: str) -> str:
-    """Limpia el cuerpo: quita imágenes, enlaces de edición y citas,
-    convierte enlaces a texto plano y colapsa líneas en blanco."""
+    """Limpia el cuerpo: quita imágenes, enlaces de cita y de edición
+    (también con corchetes escapados y paréntesis en la URL), convierte los
+    enlaces restantes a texto plano, borra restos de «action=edit» y las
+    líneas que quedan solo con _ * > sueltos, y colapsa líneas en blanco."""
     text = IMAGE_RE.sub("", text)
+    text = text.replace("\\[", _ESC_OPEN).replace("\\]", _ESC_CLOSE)
+    text = CITA_LINK_RE.sub("", text)
     text = EDIT_LINK_RE.sub("", text)
     text = EMPTY_LINK_RE.sub("", text)
-    text = REF_RE.sub("", text)
+    text = CITA_BARE_RE.sub("", text)
+    text = EDIT_BARE_RE.sub("", text)
     text = LINK_RE.sub(r"\1", text)
+    text = EDIT_RESIDUE_RE.sub("", text)
+    text = text.replace(_ESC_OPEN, "").replace(_ESC_CLOSE, "")
     lines = [ln.rstrip() for ln in text.splitlines()]
     out = []
     blank = 0
@@ -152,6 +172,8 @@ def clean_body(text: str) -> str:
                 continue
         else:
             blank = 0
+        if ln.strip() and JUNK_LINE_RE.fullmatch(ln):
+            continue
         out.append(ln)
     return "\n".join(out).strip()
 
