@@ -189,8 +189,13 @@ def calcular_carta(fecha, hora, lat, lon, tz):
         "planetas": planetas,
         "ascendente": {"signo": signo_de(ascmc[0]), "grados": fmt_grados(ascmc[0])},
         "mc": {"signo": signo_de(ascmc[1]), "grados": fmt_grados(ascmc[1])},
-        "aspectos": aspectos[:14],
+        "aspectos": mejores_aspectos(aspectos),
     }
+
+
+def mejores_aspectos(aspectos, k=14):
+    """Los k aspectos más exactos: ordenados por orbe ascendente."""
+    return sorted(aspectos, key=lambda x: x["orbe"])[:k]
 
 
 def fmt_carta(c, ciudad, pais):

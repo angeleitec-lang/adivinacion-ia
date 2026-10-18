@@ -69,6 +69,26 @@ class TestOrtografia(unittest.TestCase):
                 self.assertNotIn(mala, texto, f"subcadena sin tilde encontrada: {mala!r}")
 
 
+class TestAspectos(unittest.TestCase):
+    def test_mejores_aspectos_orden_y_corte(self):
+        orbes = [5.5, 0.3, 2.2, 4.1, 1.0, 3.3, 0.7, 6.0, 2.8, 1.5, 4.9, 0.1, 3.9, 2.0, 5.0, 0.5]
+        aspectos = [{"a": f"P{i}", "b": "Q", "aspecto": "trígono", "orbe": o}
+                   for i, o in enumerate(orbes)]
+        top = gt.mejores_aspectos(aspectos, k=14)
+        self.assertEqual(len(top), 14)
+        obtenidos = [x["orbe"] for x in top]
+        self.assertEqual(obtenidos, sorted(obtenidos))
+        self.assertEqual(max(obtenidos), 5.0)
+        self.assertNotIn(5.5, obtenidos)
+        self.assertNotIn(6.0, obtenidos)
+
+    def test_carta_devuelve_aspectos_ordenados_por_orbe(self):
+        c = gt.calcular_carta("1990-06-15", "12:00", -12.0464, -77.0428, "America/Lima")
+        orbes = [a["orbe"] for a in c["aspectos"]]
+        self.assertLessEqual(len(orbes), 14)
+        self.assertEqual(orbes, sorted(orbes))
+
+
 class TestInsercionIdempotente(unittest.TestCase):
     def _filas(self):
         return [
