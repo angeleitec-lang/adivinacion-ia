@@ -61,8 +61,29 @@ def call_llm(base, model, system, user, max_tokens, timeout, retries=2):
     raise RuntimeError(f"fallo tras {retries + 1} intentos: {last}")
 
 
+def resetear_stale(con, tag):
+    """Reabre solo los running de este tag o los abandonados hace >2 horas.
+
+    Así un worker nuevo no resetea los trabajos en curso de otros nodos.
+    """
+    con.execute(
+        "UPDATE jobs SET status='pending' "
+        "WHERE status='running' "
+        "AND (worker LIKE ? OR updated_at < datetime('now','localtime','-2 hours'))",
+        (tag + "%",),
+    )
+    con.commit()
+
+
 def claim(con, worker, only=None):
-    con.execute("BEGIN IMMEDIATE")
+    for intento in range(5):
+        try:
+            con.execute("BEGIN IMMEDIATE")
+            break
+        except sqlite3.OperationalError:
+            if intento == 4:
+                raise
+            time.sleep(1)
     if only:
         row = con.execute(
             "SELECT id, bloque, system, prompt, max_tokens FROM jobs "
@@ -109,7 +130,6 @@ def worker_loop(args, tag, stats, lock):
             with lock:
                 if stats["started"] >= args.limit:
                     break
-                stats["started"] += 1
         row = claim(con, tag, args.only)
         if not row:
             vacios += 1
@@ -117,6 +137,9 @@ def worker_loop(args, tag, stats, lock):
                 break
             time.sleep(2)
             continue
+        if args.limit:
+            with lock:
+                stats["started"] += 1
         vacios = 0
         job_id, bloque, system, prompt, max_tokens = row
         try:
@@ -176,7 +199,7 @@ def main(argv=None):
 
     con = sqlite3.connect(args.db, timeout=60)
     con.execute("PRAGMA journal_mode=WAL")
-    con.execute("UPDATE jobs SET status='pending' WHERE status='running'")
+    resetear_stale(con, tag)
     if args.only:
         total = con.execute("SELECT COUNT(*) FROM jobs WHERE status='pending' AND bloque=?", (args.only,)).fetchone()[0]
     else:
