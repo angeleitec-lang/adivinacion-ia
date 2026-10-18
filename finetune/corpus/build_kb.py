@@ -856,10 +856,21 @@ def validate(data: dict) -> list[str]:
         errs.append(f"menores: {len(t['menores'])} != 56")
     if len(t["mayores"]) + len(t["menores"]) != 78:
         errs.append("total tarot != 78")
-    for c in t["mayores"] + t["menores"]:
+    cartas = t["mayores"] + t["menores"]
+    nombres = [c.get("nombre") for c in cartas]
+    if len(nombres) != len(set(nombres)):
+        errs.append("tarot: nombres duplicados")
+    invertidas = [c.get("invertida") for c in cartas]
+    if len(invertidas) != len(set(invertidas)):
+        errs.append("tarot: invertidas duplicadas")
+    for c in cartas:
         for k in ("nombre", "significado", "invertida"):
             if not c.get(k):
                 errs.append(f"tarot {c.get('nombre')}: falta {k}")
+        ctx = c.get("contextos", {})
+        for k in ("amor", "trabajo", "dinero", "salud"):
+            if not ctx.get(k):
+                errs.append(f"tarot {c.get('nombre')}: falta contexto {k}")
     a = data["astrologia"]
     for key, n in (("signos", 12), ("planetas", 10), ("casas", 12), ("aspectos", 5)):
         if len(a[key]) != n:

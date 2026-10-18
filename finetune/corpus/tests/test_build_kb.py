@@ -113,5 +113,30 @@ class TestAstroCoherencia(unittest.TestCase):
                 self.assertTrue(areas.get(k), f"{n['nombre']}: falta área {k}")
 
 
+class TestValidateAmpliado(unittest.TestCase):
+    def setUp(self):
+        import copy
+        self.data = build_kb.build()
+        self.copy = copy.deepcopy
+
+    def test_validate_sin_errores(self):
+        self.assertEqual(build_kb.validate(self.data), [])
+
+    def test_detecta_nombre_repetido(self):
+        d = self.copy(self.data)
+        d["tarot"]["menores"][0]["nombre"] = d["tarot"]["menores"][1]["nombre"]
+        self.assertTrue(any("duplicado" in e for e in build_kb.validate(d)))
+
+    def test_detecta_invertida_repetida(self):
+        d = self.copy(self.data)
+        d["tarot"]["menores"][0]["invertida"] = d["tarot"]["menores"][1]["invertida"]
+        self.assertTrue(any("invertida" in e for e in build_kb.validate(d)))
+
+    def test_detecta_falta_contextos(self):
+        d = self.copy(self.data)
+        del d["tarot"]["mayores"][0]["contextos"]
+        self.assertTrue(any("contexto" in e for e in build_kb.validate(d)))
+
+
 if __name__ == "__main__":
     unittest.main()
