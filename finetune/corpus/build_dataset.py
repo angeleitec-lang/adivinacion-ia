@@ -163,6 +163,27 @@ def is_relevant(topic: str, body: str, doc: str, min_terms: int = 2) -> bool:
     return fuertes >= min_terms or (fuertes >= 1 and debiles >= min_terms)
 
 
+PT_MARKERS = ("ção", "ções", " não ", " você ", " também ", " são ",
+              " uma ", " pelo ", " pela ", "ê", " muito ", " mais ")
+IT_MARKERS = (" gli ", " della ", " dei ", " sono ", " perché ", " che ",
+              " è ", " il ", "zione")
+ES_MARKERS = (" el ", " los ", " las ", " del ", " que ", "ción", "ñ",
+              " está ", " pero ")
+
+
+def es_puro(texto: str) -> bool:
+    """False si los marcadores portugueses/italianos superan el 40 % de los
+    marcadores idiomáticos en las primeras 3.000 palabras (stdlib, sin red)."""
+    ventana = " ".join((texto or "").split()[:3000]).lower()
+    pt = sum(ventana.count(m) for m in PT_MARKERS)
+    it = sum(ventana.count(m) for m in IT_MARKERS)
+    es = sum(ventana.count(m) for m in ES_MARKERS)
+    total = pt + it + es
+    if total == 0:
+        return True
+    return (pt + it) <= 0.4 * total
+
+
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 EMPTY_LINK_RE = re.compile(r"\[\]\([^)]*\)")
@@ -331,6 +352,8 @@ def build_pairs(doc: str, md: str, rng: random.Random,
         if is_junk_body(body):
             continue
         if not is_relevant(topic, body, doc, min_domain_terms):
+            continue
+        if not es_puro(body):
             continue
         template = rng.choice(INSTRUCTION_TEMPLATES)
         human = template.format(topic=topic)

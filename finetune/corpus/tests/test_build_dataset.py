@@ -148,5 +148,36 @@ class EncabezadosMalos(unittest.TestCase):
         self.assertFalse(bd.is_bad_topic("El Mago"))
 
 
+class Idioma(unittest.TestCase):
+    """T3.8: es_puro descarta portugués e italiano."""
+
+    def test_espanol_normal_es_puro(self):
+        texto = ("El tarot es una herramienta de autoconocimiento que usamos "
+                 "para reflexionar sobre el pasado, el presente y el futuro, "
+                 "pero sin perder de vista las decisiones que tomamos cada día.")
+        self.assertTrue(bd.es_puro(texto))
+
+    def test_portugues_fliptarot_no_es_puro(self):
+        texto = ("Perguntas mais indicadas para esta tiragem. Uma situação "
+                "complexa que precisa de um mapa completo de influências. Cada "
+                "carta deve ser lida pela função da posição em que caiu. A "
+                "mesma carta muda de foco e nuance conforme a casa que ocupa, "
+                "porque a atmosfera geral, a condição central o punto de "
+                "partida que atualmente cobre a pergunta.")
+        self.assertFalse(bd.es_puro(texto))
+
+    def test_italiano_no_es_puro(self):
+        texto = ("I pianeti sono i verbi del cielo e le case sono i "
+                "sostantivi. La carta astrale è una mappa della vita "
+                "quotidiana, dove ogni aspetto racconta una storia.")
+        self.assertFalse(bd.es_puro(texto))
+
+    def test_espanol_con_cita_ingles_latin_es_puro(self):
+        texto = ("El oráculo es un espejo del alma. Como decía el viejo adagio "
+                "«carpe diem», y nosotros añadimos que el momento presente "
+                "guarda la clave de lo que vendrá, pero sin obsesionarse.")
+        self.assertTrue(bd.es_puro(texto))
+
+
 if __name__ == "__main__":
     unittest.main()
