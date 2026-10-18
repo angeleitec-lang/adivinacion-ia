@@ -1,7 +1,10 @@
 """Tests de limpieza y filtros de build_dataset (track T3)."""
+import json
 import os
 import sys
+import tempfile
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -245,6 +248,56 @@ class Introduccion(unittest.TestCase):
         md = "# Título\ncuerpo bajo el título"
         secs = bd.split_sections(md, "doc")
         self.assertEqual(len(secs), 1)
+
+
+class LoadBlocked(unittest.TestCase):
+    """T3.5: load_blocked devuelve rutas reales y filtra por colisión."""
+
+    def _manifest(self, entries):
+        fh = tempfile.NamedTemporaryFile(
+            "w", suffix=".json", delete=False, encoding="utf-8")
+        json.dump(entries, fh)
+        fh.close()
+        self.addCleanup(os.unlink, fh.name)
+        return bd.Path(fh.name)
+
+    def test_bloqueada_se_convierte_en_ruta(self):
+        path = self._manifest([
+            {"url": "https://es.wikipedia.org/wiki/Bastos_(naipe)",
+             "estado": "bloqueado"},
+            {"url": "https://ok.com/guia", "estado": "ok"},
+        ])
+        blocked = bd.load_blocked(path)
+        self.assertIn("es.wikipedia.org/wiki_Bastos_naipe.md", blocked)
+        self.assertNotIn("ok.com/guia.md", blocked)
+
+    def test_is_blocked_rel_coincide(self):
+        blocked = {"es.wikipedia.org/wiki_Bastos_naipe.md"}
+        self.assertTrue(bd.is_blocked_rel(
+            "es.wikipedia.org/wiki_Bastos_naipe.md", blocked))
+
+    def test_is_blocked_rel_con_colision(self):
+        blocked = {"es.wikipedia.org/wiki_Bastos_naipe.md"}
+        self.assertTrue(bd.is_blocked_rel(
+            "es.wikipedia.org/wiki_Bastos_naipe_ab12.md", blocked))
+
+    def test_is_blocked_rel_no_coincide(self):
+        blocked = {"es.wikipedia.org/wiki_Bastos_naipe.md"}
+        self.assertFalse(bd.is_blocked_rel("ok.com/guia.md", blocked))
+
+    def test_estado_fallo_tambien_bloquea(self):
+        path = self._manifest([
+            {"url": "https://x.com/pagina", "estado": "fallo"},
+        ])
+        blocked = bd.load_blocked(path)
+        self.assertIn("x.com/pagina.md", blocked)
+
+    def test_license_filter_strict_sin_modulo_devuelve_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with unittest.mock.patch.dict(sys.modules, {"license_filter": None}):
+                rc = bd.main(["--raw", tmp, "--dry-run",
+                             "--license-filter", "strict"])
+        self.assertEqual(rc, 2)
 
 
 if __name__ == "__main__":

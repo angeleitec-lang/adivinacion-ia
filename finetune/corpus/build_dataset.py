@@ -23,6 +23,7 @@ import json
 import random
 import re
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 SYSTEM = (
     "Eres una experta en adivinación: tarot, astrología, numerología y "
@@ -329,8 +330,43 @@ def is_bad_topic(topic: str) -> bool:
     return False
 
 
+def domain_of(url: str) -> str:
+    """Nombre de dominio saneado para usar como carpeta."""
+    netloc = urlparse(url).netloc
+    return re.sub(r"[^A-Za-z0-9.\-]", "_", netloc) or "desconocido"
+
+
+def slug_of(url: str) -> str:
+    """Slug del path de la URL, apto para nombre de fichero."""
+    path = unquote(urlparse(url).path).strip("/")
+    if not path:
+        return "index"
+    parts = []
+    for seg in path.split("/"):
+        seg = re.sub(r"[^A-Za-z0-9]+", "_", seg).strip("_")
+        if seg:
+            parts.append(seg)
+    return "_".join(parts)[-80:] or "index"
+
+
+def _strip_collision(stem: str) -> str:
+    """Quita el sufijo de colisión ``_ab12`` si lo hay."""
+    m = re.match(r"^(?P<base>.+?)_[0-9a-f]{4}$", stem)
+    return m.group("base") if m else stem
+
+
+def is_blocked_rel(rel: str, blocked: set[str]) -> bool:
+    """True si la ruta relativa coincide con una bloqueada (con o sin colisión)."""
+    parts = rel.split("/")
+    fn = parts[-1]
+    stem = fn[:-3] if fn.endswith(".md") else fn
+    base = _strip_collision(stem)
+    norm = "/".join(parts[:-1] + [base + ".md"])
+    return norm in blocked
+
+
 def load_blocked(manifest_path: Path) -> set[str]:
-    """Devuelve el conjunto de URLs marcadas como bloqueadas/incompatibles."""
+    """Devuelve las rutas relativas esperadas de los documentos bloqueados."""
     if not manifest_path.exists():
         return set()
     try:
@@ -340,8 +376,11 @@ def load_blocked(manifest_path: Path) -> set[str]:
     blocked = set()
     for entry in data:
         estado = str(entry.get("estado", "")).lower()
-        if estado in {"bloqueado", "incompatible", "excluido"}:
-            blocked.add(str(entry.get("url", "")))
+        if estado in {"bloqueado", "incompatible", "excluido", "fallo"}:
+            url = str(entry.get("url", ""))
+            if not url:
+                continue
+            blocked.add(f"{domain_of(url)}/{slug_of(url)}.md")
     return blocked
 
 
@@ -432,7 +471,19 @@ def main(argv=None) -> int:
                              "(0 desactiva el filtro; default: 2)")
     parser.add_argument("--dry-run", action="store_true",
                         help="No escribe ficheros, solo informa de los conteos")
+    parser.add_argument("--license-filter", choices=["off", "strict"],
+                        default="off",
+                        help="strict exige license_filter.py (track T5) para "
+                             "descartar licencias no compatibles (default: off)")
     args = parser.parse_args(argv)
+
+    is_allowed = None
+    if args.license_filter == "strict":
+        try:
+            from license_filter import is_allowed  # type: ignore
+        except ImportError:
+            print("license_filter.py no disponible (track T5)")
+            return 2
 
     raw_dir = Path(args.raw)
     out_dir = Path(args.out)
@@ -446,9 +497,11 @@ def main(argv=None) -> int:
     rng = random.Random(args.seed)
 
     docs = iter_markdown(raw_dir)
+    if is_allowed is not None:
+        docs = [(rel, text) for rel, text in docs if is_allowed(rel)]
     if blocked:
-        docs = [(rel, text) for rel, text in docs if not any(
-            b and b in rel for b in blocked)]
+        docs = [(rel, text) for rel, text in docs
+                if not is_blocked_rel(rel, blocked)]
 
     by_doc: dict[str, list[dict]] = {}
     for rel, text in docs:
