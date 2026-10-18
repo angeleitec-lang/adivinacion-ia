@@ -1,4 +1,5 @@
 import json
+import re
 from urllib.parse import urlparse
 
 import scrapy
@@ -14,23 +15,42 @@ SKIP_EXT = (
     ".epub", ".mobi", ".azw", ".azw3",
 )
 
-SKIP_PARTS = (
-    "/login", "/signin", "/register", "/cart", "/checkout", "/account",
-    "/wp-admin", "/wp-login", "/feed", "/rss", "/tag/", "/category/",
-    "/author/", "/search", "/buscar", "/privacidad", "/privacy",
-    "/cookies", "/aviso-legal", "/terminos", "/contacto", "/contact",
-    "/policies", "/policy", "/legal", "/terms", "/refund", "/shipping",
-    "/devoluciones", "/envios", "/faq", "/sobre-nosotros", "/quienes-somos",
-    "/newsletter", "/suscrip", "/mi-cuenta", "/carrito",
+# Segmentos de ruta exactos que se saltan (comparar segmento a segmento,
+# no por subcadena: «carta-astral» no debe confundirse con «cart»).
+RUTA_SALTAR = frozenset({
+    "login", "signin", "register", "cart", "carrito", "checkout", "account",
+    "mi-cuenta", "wp-admin", "wp-login", "feed", "rss", "tag", "category",
+    "author", "search", "buscar", "privacidad", "privacy", "cookies",
+    "aviso-legal", "terminos", "terms", "contacto", "contact", "policies",
+    "policy", "legal", "refund", "shipping", "devoluciones", "envios",
+    "envio", "faq", "sobre-nosotros", "quienes-somos", "newsletter",
+    "suscripcion", "suscripciones",
+})
+
+# Frases comerciales completas (\b) que descartan un título: se exige la
+# frase entera («términos y condiciones») en lugar de palabras sueltas
+# ambiguas («términos», «legal», «política»), que aparecían en títulos
+# legítimos como «Glosario de términos astrológicos».
+TITULO_SALTAR_RE = re.compile(
+    r"\b(?:t[ée]rminos y condiciones"
+    r"|terms (?:of (?:use|service)|and conditions)"
+    r"|pol[íi]tica de (?:privacidad|cookies|devoluciones|env[íi]os|reembolso)"
+    r"|privacy policy|cookie policy"
+    r"|aviso legal|legal notice"
+    r"|carrito(?: de compra)?|shopping cart"
+    r"|checkout|iniciar sesi[óo]n|login|cart"
+    r"|privacy|privacidad|cookies?"
+    r"|env[íi]o|shipping|devoluci[óo]n|refund"
+    r"|suscripci[óo]n|newsletter)\b",
+    re.IGNORECASE,
 )
 
-TITLE_SKIP = (
-    "términos", "terminos", "terms", "privacy", "privacidad", "cookie",
-    "legal", "aviso legal", "envío", "envio", "shipping", "devolución",
-    "devolucion", "refund", "contacto", "contact", "login", "carrito",
-    "cart", "checkout", "suscripción", "suscripcion", "newsletter",
-    "política", "politica",
-)
+# «Contacto» solo descarta si el título completo (sin el sufijo del sitio)
+# es esa palabra; «Contacto con las cartas» es contenido legítimo.
+TITULO_CONTACTO_EXACTO = frozenset({"contacto", "contact", "contact us"})
+
+# Extensiones que puede llevar el último segmento de una ruta comercial.
+EXTENSIONES_RUTA = (".html", ".htm", ".php")
 
 
 def read_seeds(path):
@@ -50,12 +70,35 @@ def domain_of(url):
     return host
 
 
-def is_crawlable(url):
+def titulo_descartable(titulo):
+    """True si el título es una página comercial o de aviso legal."""
+    texto = titulo or ""
+    if TITULO_SALTAR_RE.search(texto):
+        return True
+    for segmento in re.split(r"[|–—-]", texto):
+        if segmento.strip().lower() in TITULO_CONTACTO_EXACTO:
+            return True
+    return False
+
+
+def ruta_crawleable(url):
+    """True si la ruta no contiene segmentos comerciales exactos."""
     low = url.lower()
     if any(low.endswith(ext) for ext in SKIP_EXT):
         return False
     path = urlparse(low).path
-    return not any(part in path for part in SKIP_PARTS)
+    segmentos = [s for s in path.strip("/").split("/") if s]
+    if segmentos:
+        ultimo = segmentos[-1]
+        for ext in EXTENSIONES_RUTA:
+            if ultimo.endswith(ext):
+                segmentos[-1] = ultimo[: -len(ext)]
+                break
+    return not any(seg in RUTA_SALTAR for seg in segmentos)
+
+
+def is_crawlable(url):
+    return ruta_crawleable(url)
 
 
 def read_urls(path):
@@ -127,6 +170,11 @@ class DeepSpider(scrapy.Spider):
         if "html" not in content_type.lower():
             return
 
+        lang_raw = response.xpath("//html/@lang").get()
+        lang = lang_raw.strip().lower().split("-")[0] if lang_raw else None
+        if lang and lang not in {"es", "en"}:
+            return
+
         is_new = url not in self.prior
         if is_new and self.per_domain.get(domain, 0) >= self.pages_per_domain:
             return
@@ -141,7 +189,7 @@ class DeepSpider(scrapy.Spider):
             html = response.body.decode("utf-8", "ignore")
 
         title = response.css("title::text").get(default="").strip()
-        if any(marker in title.lower() for marker in TITLE_SKIP):
+        if titulo_descartable(title):
             return
 
         if is_new:
@@ -161,6 +209,7 @@ class DeepSpider(scrapy.Spider):
                     "domain": domain,
                     "title": title,
                     "depth": depth,
+                    "lang": lang,
                     "text": text,
                 }
 

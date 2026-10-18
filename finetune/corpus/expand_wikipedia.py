@@ -66,15 +66,32 @@ def _relevant(subcat: str) -> bool:
     return any(key in low for key in RELEVANT_SUBCAT_KEYWORDS)
 
 
+def priorizar(paginas_por_categoria: dict[str, dict], maximo: int) -> list[str]:
+    """Ordena los títulos: primero las categorías raíz en orden de inserción
+    (el de `--categories`), después las subcategorías; dentro de cada
+    categoría, orden alfabético. El dedupe conserva la primera aparición."""
+    seleccion: list[str] = []
+    vistos: set[str] = set()
+    for es_raiz in (True, False):
+        for info in paginas_por_categoria.values():
+            if bool(info.get("raiz")) is not es_raiz:
+                continue
+            for titulo in sorted(info.get("paginas", ())):
+                if titulo not in vistos:
+                    vistos.add(titulo)
+                    seleccion.append(titulo)
+    return seleccion[:maximo]
+
+
 def collect(category: str, depth: int, seen_cats: set[str],
-            pages: set[str], sleep: float) -> None:
+            pages: dict[str, set[str]], sleep: float) -> None:
     if category in seen_cats or depth < 0:
         return
     seen_cats.add(category)
     time.sleep(sleep)
     try:
         for title in _members(category, "page"):
-            pages.add(title)
+            pages.setdefault(category, set()).add(title)
     except Exception as exc:  # noqa: BLE001 - seguir con otras categorías
         print(f"  ! categoría {category}: {exc}")
         return
@@ -118,14 +135,20 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     seen_cats: set[str] = set()
-    pages: set[str] = set()
+    pages: dict[str, set[str]] = {cat: set() for cat in args.categories}
     for category in args.categories:
-        before = len(pages)
         collect(category, args.depth, seen_cats, pages, args.sleep)
-        print(f"  {category}: +{len(pages) - before} (total {len(pages)})")
+        unicas = {t for grupo in pages.values() for t in grupo}
+        print(f"  {category}: +{len(pages.get(category, ()))} (total {len(unicas)})")
 
-    urls = sorted({title_to_url(t) for t in pages})[: args.max]
-    print(f"Artículos únicos: {len(pages)}  URLs: {len(urls)}")
+    raices = set(args.categories)
+    paginas_por_categoria = {
+        cat: {"raiz": cat in raices, "paginas": titulos}
+        for cat, titulos in pages.items()
+    }
+    urls = [title_to_url(t) for t in priorizar(paginas_por_categoria, args.max)]
+    unicas = {t for grupo in pages.values() for t in grupo}
+    print(f"Artículos únicos: {len(unicas)}  URLs: {len(urls)}")
 
     if args.dry_run:
         for url in urls[:10]:
