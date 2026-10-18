@@ -1,3 +1,5 @@
+> **NOTA (2026-10-18, noche) — LEER ANTES:** este plan se redactó antes de la auditoría y **está superado en varios puntos**: (1) los 56 arcanos menores de la KB eran texto genérico y se están reescribiendo; (2) el dataset `final/` no es entrenable (el auditor deja 1.991 de 4.653 pares); (3) el generador tenía 3 bugs graves (zona horaria, tildes, año personal) ya corregidos en rama; (4) el alcance se acotó a tarot, baraja española, astrología occidental y numerología; (5) la generación sintética NO debe empezar hasta cerrar la fase 0 de adquisición. Estado vigente y pasos: `docs/ESTADO_Y_PENDIENTES.md` y `docs/PLAN_ADQUISICION_CALIDAD.md`.
+
 # Fine-tuning del modelo de adivinación (adivinacion-ia)
 
 Espacio de trabajo del track A (fine-tune). Aquí se prepara el corpus, se

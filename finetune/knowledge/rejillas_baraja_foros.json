@@ -1,0 +1,77 @@
+{
+  "descripcion": "Sitios con una página por naipe de la baraja española (40 cartas: oros, copas, espadas, bastos × as, dos, tres, cuatro, cinco, seis, siete, sota, caballo, rey). Comprobado el 2026-10-18 con descargas reales (≥ 800 caracteres).",
+  "slugs": {
+    "rangos": [
+      "as",
+      "dos",
+      "tres",
+      "cuatro",
+      "cinco",
+      "seis",
+      "siete",
+      "sota",
+      "caballo",
+      "rey"
+    ],
+    "palos": [
+      "oros",
+      "copas",
+      "espadas",
+      "bastos"
+    ]
+  },
+  "rejillas": [
+    {
+      "sitio": "tiradadecartas.com.ar",
+      "patron": "https://tiradadecartas.com.ar/carta-espanola/{r}-de-{p}",
+      "cobertura": "40/40",
+      "chars_medios": 1893,
+      "nota": "páginas cortas"
+    },
+    {
+      "sitio": "tarotdeabsalon.com",
+      "patron": "https://tarotdeabsalon.com/significado-cartas/baraja-espanola/{r}-de-{p}/",
+      "cobertura": "38/40",
+      "chars_medios": 6020,
+      "nota": "prioridad alta"
+    },
+    {
+      "sitio": "tarotveraluna.com",
+      "patron": "https://tarotveraluna.com/cartas/{r}-de-{p}/",
+      "cobertura": "36/40",
+      "chars_medios": 5338,
+      "nota": "prioridad alta"
+    },
+    {
+      "sitio": "tarotsolaguilar.com",
+      "patron": "https://www.tarotsolaguilar.com/baraja-espanola/{r}-de-{p}/",
+      "cobertura": "21/40",
+      "chars_medios": 1115,
+      "nota": "19 páginas demasiado cortas"
+    },
+    {
+      "sitio": "elreydecopas.com",
+      "patron": "https://elreydecopas.com/baraja-espanola/{r}-de-{p}/",
+      "cobertura": "12/40",
+      "chars_medios": 12994,
+      "nota": "28 dan 404 (otro patrón para el resto); páginas largas y buenas"
+    }
+  ],
+  "paginas_de_indice_con_las_40_cartas": [
+    "https://www.tarotamigo.com/tarot/significado-cartas/baraja-espanola/",
+    "https://www.adivinos.com/significado-cartas-baraja-espanola/",
+    "https://cartiluna.com/es/baraja-espanola/"
+  ],
+  "tarot_en_castellano_por_carta (arcanos, no baraja)": [
+    "https://tarotrossana.com/guia/tarot/arcanos-menores/{rango}-de-{palo}/ (≈ 35.000 caracteres por carta)",
+    "https://consultastarot.online/tarot/arcanos-menores/{rango}-de-{palo}/ (≈ 34.000)"
+  ],
+  "foros_en_espanol": {
+    "forotarot.net": "Secciones útiles: foro-interpretaciones, foro-consultas, foro-consultas-de-amor, foro-baraja-espanola, foro-combinaciones, foro-tiradas-de-cartas, foro-numerologia, foro-astrologia. Acceso público sin login. Los primeros enlaces de cada sección son normas fijadas, no lecturas; hay que extraer los hilos reales y medir el volumen con un rastreo cuidadoso (A3).",
+    "astarte.foroactivo.com": "Foro pequeño; algún hilo de tiradas de 3 cartas",
+    "forum.thetarot.guru": "Foro en inglés accesible; contenido de discusión, no lecturas",
+    "tarotcommunity.com/forum": "Accesible; en inglés"
+  },
+  "foros_bloqueados": "Reddit (API 403; RSS solo 25 publicaciones sin comentarios) y la mayoría de foros en inglés (14 de 80 páginas devolvieron 403 a clientes no navegador). No se intenta saltar el bloqueo.",
+  "conteo": "Baraja española: 3 sitios con ≥ 36/40 páginas (tiradadecartas, tarotdeabsalon, tarotveraluna) + 2 parciales; más 3 páginas índice con las 40 cartas. Falta 1-2 sitios para el mínimo de 5 completos."
+}

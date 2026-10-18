@@ -23,6 +23,7 @@ import json
 import random
 import re
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 SYSTEM = (
     "Eres una experta en adivinación: tarot, astrología, numerología y "
@@ -35,6 +36,14 @@ INSTRUCTION_TEMPLATES = [
     "¿Qué significa {topic}?",
     "Como experta en adivinación, desarróllame {topic}.",
     "Explícame {topic} de forma clara y completa.",
+    "Háblame de {topic}.",
+    "¿Puedes contarme más sobre {topic}?",
+    "¿Qué hay que saber sobre {topic}?",
+    "Dame una explicación completa de {topic}.",
+    "Quiero entender mejor {topic}, ¿me lo explicas?",
+    "¿Qué es {topic} y por qué importa?",
+    "Profundiza en {topic} para mí.",
+    "Cuéntame todo lo posible sobre {topic}.",
 ]
 
 BOILERPLATE_HEADINGS = {
@@ -47,6 +56,9 @@ BOILERPLATE_HEADINGS = {
     "comentarios", "deja un comentario", "noticias",
     "artículos relacionados", "articulos relacionados", "suscríbete",
     "suscribete", "newsletter", "índice", "indice", "tabla de contenidos",
+    "lo que aprenderás", "lo que aprenderas", "curso", "inmersivo",
+    "reserva", "precio", "comprar", "descarga gratis", "preguntas frecuentes",
+    "reseñas", "resenas", "testimonios", "sobre la autora", "sobre el autor",
 }
 
 JUNK_BODY_MARKERS = (
@@ -74,34 +86,67 @@ BAD_TOPIC_RE = re.compile(
     r"|^(referencias?|v[eé]ase tambi[eé]n|enlaces? externos?|bibliograf[ií]a"
     r"|notas?|categor[ií]as?|lecturas? adicionales|fuentes?|galer[ií]a"
     r"|men[uú]|televisi[oó]n|radio|internet|libros?|revistas?"
-    r"|pel[ií]culas?|series?|videojuegos?)\b",
+    r"|pel[ií]culas?|series?|videojuegos?)\b"
+    r"|^(lo que aprender[aá]s|curso|inmersi[oó]n|inmersivo|reserva|precio"
+    r"|comprar|descarga gratis|preguntas frecuentes|rese[ñn]as|testimonios"
+    r"|sobre la autor[ae]|tu propia tirada)\b",
     re.IGNORECASE,
 )
 
-DOMAIN_TERMS = (
-    "tarot", "arcano", "arcanos", "carta", "cartas", "baraja", "mazo",
-    "tirada", "tiradas", "tarotista", "cartomancia", "cartomántica",
-    "astrología", "astrologia", "astral", "astrólogo", "signo", "signos",
-    "zodiaco", "zodíaco", "horóscopo", "horoscopo", "ascendente",
-    "descendente", "planeta", "planetas", "casa", "casas", "aspecto",
-    "conjunción", "trígono", "trigono", "cuadratura", "oposición", "sextil",
-    "sol", "luna", "mercurio", "venus", "marte", "júpiter", "jupiter",
-    "saturno", "urano", "neptuno", "plutón", "pluton", "aries", "tauro",
-    "géminis", "geminis", "cáncer", "cancer", "leo", "virgo", "libra",
-    "escorpio", "sagitario", "capricornio", "acuario", "piscis",
-    "numerología", "numerologia", "numerólogo", "camino de vida",
-    "quiromancia", "quiromántica", "palmistry", "palma", "mano", "manos",
-    "línea de la vida", "línea del corazón", "monte de venus",
-    "runa", "runas", "futhark", "iching", "i ching", "hexagrama",
-    "adivinación", "adivinacion", "adivino", "adivina", "oráculo", "oraculo",
-    "lenormand", "kipper", "sibila", "esotérico", "esoterico", "esoterismo",
-    "ocultismo", "mística", "mistica", "destino", "videncia", "vidente",
+# Términos propios del dominio: su sola aparición ya ancla la pregunta.
+STRONG_TERMS = (
+    "tarot", "tarotista", "arcano", "arcanos", "baraja del tarot",
+    "tirada", "tiradas", "cartomancia", "cartomántica",
+    "astrología", "astrologia", "astrólogo", "carta astral", "carta natal",
+    "horóscopo", "horoscopo", "zodiaco", "zodíaco", "ascendente",
+    "descendente", "trígono", "trigono", "sextil", "cuadratura",
+    "conjunción", "oposición", "numerología", "numerologia", "numerólogo",
+    "camino de vida", "quiromancia", "quiromántica", "palmistry",
+    "línea de la vida", "línea del corazón", "línea de la cabeza",
+    "monte de venus", "runa", "runas", "futhark", "iching", "i ching",
+    "hexagrama", "lenormand", "kipper", "sibila", "adivinación",
+    "adivinacion", "oráculo", "oraculo", "esoterismo", "ocultismo",
+    "videncia", "vidente",
 )
+# Términos cotidianos que solo cobran sentido con anclaje fuerte.
+WEAK_TERMS = (
+    "carta", "cartas", "baraja", "mazo", "astral", "signo", "signos",
+    "planeta", "planetas", "casa", "casas", "aspecto", "sol", "luna",
+    "mercurio", "venus", "marte", "júpiter", "jupiter", "saturno",
+    "urano", "neptuno", "plutón", "pluton", "aries", "tauro", "géminis",
+    "geminis", "cáncer", "cancer", "leo", "virgo", "libra", "escorpio",
+    "sagitario", "capricornio", "acuario", "piscis", "palma", "mano",
+    "manos", "adivino", "adivina", "esotérico", "esoterico", "mística",
+    "mistica", "destino",
+)
+DOMAIN_TERMS = STRONG_TERMS + WEAK_TERMS
 
 DOMAIN_RE = re.compile(
     r"\b(" + "|".join(re.escape(t) for t in DOMAIN_TERMS) + r")\b",
     re.IGNORECASE,
 )
+STRONG_RE = re.compile(
+    r"\b(" + "|".join(re.escape(t) for t in STRONG_TERMS) + r")\b",
+    re.IGNORECASE,
+)
+WEAK_RE = re.compile(
+    r"\b(" + "|".join(re.escape(t) for t in WEAK_TERMS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _strong_raw(text: str) -> set[str]:
+    return {m.group(1).lower() for m in STRONG_RE.finditer(text or "")}
+
+
+def _weak_set(text: str) -> set[str]:
+    return {m.group(1).lower() for m in WEAK_RE.finditer(text or "")}
+
+
+def _strong_set(text: str) -> set[str]:
+    """Fuertes de un texto; «oposición» sola no cuenta como fuerte."""
+    s = _strong_raw(text)
+    return set() if s == {"oposición"} else s
 
 
 def domain_hits(text: str) -> set[str]:
@@ -109,22 +154,73 @@ def domain_hits(text: str) -> set[str]:
     return {m.group(1).lower() for m in DOMAIN_RE.finditer(text or "")}
 
 
+def domain_score(text: str) -> tuple[int, int]:
+    """(fuertes, débiles) del dominio en un texto."""
+    return (len(_strong_set(text)), len(_weak_set(text)))
+
+
 def is_relevant(topic: str, body: str, doc: str, min_terms: int = 2) -> bool:
-    """Exige anclaje real al dominio para evitar preguntas genéricas."""
+    """Relevante si fuertes >= min_terms, o fuertes >= 1 y débiles >= min_terms.
+    Los débiles solos nunca bastan; min_terms <= 0 desactiva el filtro."""
     if min_terms <= 0:
         return True
-    hits = domain_hits(body) | domain_hits(topic)
-    if len(hits) >= min_terms:
+    fuertes_set = _strong_raw(body) | _strong_raw(topic)
+    if fuertes_set == {"oposición"}:
+        fuertes_set = set()
+    fuertes = len(fuertes_set)
+    debiles = len(_weak_set(body) | _weak_set(topic))
+    return fuertes >= min_terms or (fuertes >= 1 and debiles >= min_terms)
+
+
+PT_MARKERS = ("ção", "ções", " não ", " você ", " também ", " são ",
+              " uma ", " pelo ", " pela ", "ê", " muito ", " mais ")
+IT_MARKERS = (" gli ", " della ", " dei ", " sono ", " perché ", " che ",
+              " è ", " il ", "zione")
+ES_MARKERS = (" el ", " los ", " las ", " del ", " que ", "ción", "ñ",
+              " está ", " pero ")
+
+
+def es_puro(texto: str) -> bool:
+    """False si los marcadores portugueses/italianos superan el 40 % de los
+    marcadores idiomáticos en las primeras 3.000 palabras (stdlib, sin red)."""
+    ventana = " ".join((texto or "").split()[:3000]).lower()
+    pt = sum(ventana.count(m) for m in PT_MARKERS)
+    it = sum(ventana.count(m) for m in IT_MARKERS)
+    es = sum(ventana.count(m) for m in ES_MARKERS)
+    total = pt + it + es
+    if total == 0:
         return True
-    return bool(hits) and bool(domain_hits(doc))
+    return (pt + it) <= 0.4 * total
 
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 EMPTY_LINK_RE = re.compile(r"\[\]\([^)]*\)")
-EDIT_LINK_RE = re.compile(r"\[editar\]\([^)]*\)", re.IGNORECASE)
-REF_RE = re.compile(r"\[\d+\]")
-LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+# Diana de un enlace markdown que tolera paréntesis anidados en la URL y un
+# título entre comillas (p. ej. «...Oros_(naipe)&action=edit "Editar...").»
+_LINK_TARGET = r'(?:[^()\s]|\([^)]*\))*(?:\s+"[^"]*")?'
+# Centinelas para los corchetes escapados de markdown (\[ \]) y tratarlos luego.
+_ESC_OPEN, _ESC_CLOSE = "\uE000", "\uE001"
+CITA_LINK_RE = re.compile(r"\[(?:\uE000\d+\uE001|\d+)\]\(" + _LINK_TARGET + r"\)")
+CITA_BARE_RE = re.compile(r"\[(?:\uE000\d+\uE001|\d+)\]|\uE000\d+\uE001")
+EDIT_LINK_RE = re.compile(
+    r"\[(?:\uE000?editar\uE001?|editar)\]\(" + _LINK_TARGET + r"\)", re.IGNORECASE)
+EDIT_BARE_RE = re.compile(
+    r"\[\uE000?editar\uE001?\]|\uE000editar\uE001", re.IGNORECASE)
+LINK_RE = re.compile(r"\[([^\]]+)\]\(" + _LINK_TARGET + r"\)")
+# Rabo que queda cuando un enlace de edición no cierra bien: «&action=edit...")».
+EDIT_RESIDUE_RE = re.compile(r'&action=edit(?:&section=\d+)?(?:\s*"[^"]*")?\)?')
+# Líneas que tras limpiar solo contienen _ * > sueltos.
+JUNK_LINE_RE = re.compile(r"[_*> \t]+")
+# Botones de tienda, con o sin _/* alrededor y con o sin flecha →/».
+BUTTON_RE = re.compile(
+    r"[_*]*\s*(?:ver\s+productos|ver\s+m[áa]s|comprar\s+ahora|"
+    r"a[nñ]adir\s+al\s+carrito|suscr[ií]bete|leer\s+m[áa]s)"
+    r"\s*(?:→|»)?\s*[_*]*",
+    re.IGNORECASE,
+)
+# Resto de enlace «](http…)» sin corchete de apertura.
+STRAY_LINK_RE = re.compile(r"\]\((?:https?://|www\.|/)[^)]*\)")
 
 
 def clean_inline(text: str) -> str:
@@ -135,13 +231,22 @@ def clean_inline(text: str) -> str:
 
 
 def clean_body(text: str) -> str:
-    """Limpia el cuerpo: quita imágenes, enlaces de edición y citas,
-    convierte enlaces a texto plano y colapsa líneas en blanco."""
+    """Limpia el cuerpo: quita imágenes, enlaces de cita y de edición
+    (también con corchetes escapados y paréntesis en la URL), convierte los
+    enlaces restantes a texto plano, borra restos de «action=edit» y las
+    líneas que quedan solo con _ * > sueltos, y colapsa líneas en blanco."""
     text = IMAGE_RE.sub("", text)
+    text = text.replace("\\[", _ESC_OPEN).replace("\\]", _ESC_CLOSE)
+    text = CITA_LINK_RE.sub("", text)
     text = EDIT_LINK_RE.sub("", text)
     text = EMPTY_LINK_RE.sub("", text)
-    text = REF_RE.sub("", text)
+    text = CITA_BARE_RE.sub("", text)
+    text = EDIT_BARE_RE.sub("", text)
     text = LINK_RE.sub(r"\1", text)
+    text = EDIT_RESIDUE_RE.sub("", text)
+    text = BUTTON_RE.sub("", text)
+    text = STRAY_LINK_RE.sub("", text)
+    text = text.replace(_ESC_OPEN, "").replace(_ESC_CLOSE, "")
     lines = [ln.rstrip() for ln in text.splitlines()]
     out = []
     blank = 0
@@ -152,6 +257,8 @@ def clean_body(text: str) -> str:
                 continue
         else:
             blank = 0
+        if ln.strip() and JUNK_LINE_RE.fullmatch(ln):
+            continue
         out.append(ln)
     return "\n".join(out).strip()
 
@@ -164,12 +271,38 @@ def humanize(slug: str) -> str:
     return slug or "este tema"
 
 
-def split_sections(md: str) -> list[tuple[str, str]]:
-    """Trocea markdown en (tema, cuerpo) usando los encabezados ATX."""
+GENERIC_TOPICS = {
+    "inicio", "home", "pagina", "página", "introduccion", "introducción",
+    "tema", "seccion", "sección", "indice", "índice", "otros", "otras",
+    "general", "generales", "informacion", "información", "varios",
+}
+
+
+def tema_legible(topic: str, doc: str) -> str:
+    """Devuelve un tema legible sin la ruta ``A > B > C`` ni puntuación duplicada."""
+    segs = [s.strip() for s in topic.split(">")] if ">" in topic else [topic.strip()]
+    segs = [s for s in segs if s]
+    if not segs:
+        return humanize(doc)
+    ultimo = re.sub(r"[?.:]+$", "", re.sub(r"^[¿¡]+", "", segs[-1])).strip()
+    primero = re.sub(r"[?.:]+$", "", re.sub(r"^[¿¡]+", "", segs[0])).strip()
+    if not ultimo:
+        return primero or humanize(doc)
+    if len(ultimo) < 12 or ultimo.lower() in GENERIC_TOPICS:
+        if primero and primero.lower() != ultimo.lower():
+            return f"{ultimo} ({primero})"
+    return ultimo
+
+
+def split_sections(md: str, doc: str = "") -> list[tuple[str, str]]:
+    """Trocea markdown en (tema, cuerpo) usando los encabezados ATX.
+    El texto previo al primer encabezado se conserva como sección con título
+    humanize(doc) en lugar de descartarse."""
     sections: list[tuple[str, str]] = []
     stack: list[tuple[int, str]] = []
     current_topic: str | None = None
     current: list[str] = []
+    intro: list[str] = []
     saw_heading = False
 
     for line in md.splitlines():
@@ -188,12 +321,18 @@ def split_sections(md: str) -> list[tuple[str, str]]:
             current = []
         elif current_topic is not None:
             current.append(line)
+        else:
+            intro.append(line)
 
     if current_topic is not None:
         body = clean_body("\n".join(current))
         sections.append((" > ".join(t for _, t in stack), body))
 
-    if not saw_heading:
+    if saw_heading:
+        intro_body = clean_body("\n".join(intro))
+        if intro_body:
+            sections.insert(0, (humanize(doc), intro_body))
+    else:
         body = clean_body(md)
         if body:
             sections.append(("", body))
@@ -210,8 +349,55 @@ def is_boilerplate(topic: str) -> bool:
     return any(p in BOILERPLATE_HEADINGS for p in parts)
 
 
+def is_bad_topic(topic: str) -> bool:
+    """Rechaza si ALGÚN segmento de la ruta «A > B > C» es una cabecera mala
+    (navegación, referencias o promoción), no solo el inicio."""
+    for part in topic.split(">"):
+        norm = part.strip().lower().strip(".:")
+        if not norm:
+            continue
+        if norm in BOILERPLATE_HEADINGS or BAD_TOPIC_RE.search(norm):
+            return True
+    return False
+
+
+def domain_of(url: str) -> str:
+    """Nombre de dominio saneado para usar como carpeta."""
+    netloc = urlparse(url).netloc
+    return re.sub(r"[^A-Za-z0-9.\-]", "_", netloc) or "desconocido"
+
+
+def slug_of(url: str) -> str:
+    """Slug del path de la URL, apto para nombre de fichero."""
+    path = unquote(urlparse(url).path).strip("/")
+    if not path:
+        return "index"
+    parts = []
+    for seg in path.split("/"):
+        seg = re.sub(r"[^A-Za-z0-9]+", "_", seg).strip("_")
+        if seg:
+            parts.append(seg)
+    return "_".join(parts)[-80:] or "index"
+
+
+def _strip_collision(stem: str) -> str:
+    """Quita el sufijo de colisión ``_ab12`` si lo hay."""
+    m = re.match(r"^(?P<base>.+?)_[0-9a-f]{4}$", stem)
+    return m.group("base") if m else stem
+
+
+def is_blocked_rel(rel: str, blocked: set[str]) -> bool:
+    """True si la ruta relativa coincide con una bloqueada (con o sin colisión)."""
+    parts = rel.split("/")
+    fn = parts[-1]
+    stem = fn[:-3] if fn.endswith(".md") else fn
+    base = _strip_collision(stem)
+    norm = "/".join(parts[:-1] + [base + ".md"])
+    return norm in blocked
+
+
 def load_blocked(manifest_path: Path) -> set[str]:
-    """Devuelve el conjunto de URLs marcadas como bloqueadas/incompatibles."""
+    """Devuelve las rutas relativas esperadas de los documentos bloqueados."""
     if not manifest_path.exists():
         return set()
     try:
@@ -221,8 +407,11 @@ def load_blocked(manifest_path: Path) -> set[str]:
     blocked = set()
     for entry in data:
         estado = str(entry.get("estado", "")).lower()
-        if estado in {"bloqueado", "incompatible", "excluido"}:
-            blocked.add(str(entry.get("url", "")))
+        if estado in {"bloqueado", "incompatible", "excluido", "fallo"}:
+            url = str(entry.get("url", ""))
+            if not url:
+                continue
+            blocked.add(f"{domain_of(url)}/{slug_of(url)}.md")
     return blocked
 
 
@@ -244,9 +433,9 @@ def build_pairs(doc: str, md: str, rng: random.Random,
                 min_domain_terms: int = 2) -> list[dict]:
     """Convierte un documento markdown en pares ShareGPT."""
     pairs = []
-    for topic, body in split_sections(md):
+    for topic, body in split_sections(md, doc):
         topic = clean_inline(topic or humanize(doc))
-        if not topic or is_boilerplate(topic) or BAD_TOPIC_RE.match(topic):
+        if not topic or is_boilerplate(topic) or is_bad_topic(topic):
             continue
         if len(body) < min_chars or len(body) > max_chars:
             continue
@@ -254,8 +443,10 @@ def build_pairs(doc: str, md: str, rng: random.Random,
             continue
         if not is_relevant(topic, body, doc, min_domain_terms):
             continue
+        if not es_puro(body):
+            continue
         template = rng.choice(INSTRUCTION_TEMPLATES)
-        human = template.format(topic=topic)
+        human = template.format(topic=tema_legible(topic, doc))
         pairs.append({
             "conversations": [
                 {"from": "system", "value": SYSTEM},
@@ -311,7 +502,19 @@ def main(argv=None) -> int:
                              "(0 desactiva el filtro; default: 2)")
     parser.add_argument("--dry-run", action="store_true",
                         help="No escribe ficheros, solo informa de los conteos")
+    parser.add_argument("--license-filter", choices=["off", "strict"],
+                        default="off",
+                        help="strict exige license_filter.py (track T5) para "
+                             "descartar licencias no compatibles (default: off)")
     args = parser.parse_args(argv)
+
+    is_allowed = None
+    if args.license_filter == "strict":
+        try:
+            from license_filter import is_allowed  # type: ignore
+        except ImportError:
+            print("license_filter.py no disponible (track T5)")
+            return 2
 
     raw_dir = Path(args.raw)
     out_dir = Path(args.out)
@@ -325,9 +528,11 @@ def main(argv=None) -> int:
     rng = random.Random(args.seed)
 
     docs = iter_markdown(raw_dir)
+    if is_allowed is not None:
+        docs = [(rel, text) for rel, text in docs if is_allowed(rel)]
     if blocked:
-        docs = [(rel, text) for rel, text in docs if not any(
-            b and b in rel for b in blocked)]
+        docs = [(rel, text) for rel, text in docs
+                if not is_blocked_rel(rel, blocked)]
 
     by_doc: dict[str, list[dict]] = {}
     for rel, text in docs:

@@ -4,6 +4,7 @@
       "nombre": "Aries",
       "elemento": "fuego",
       "regente": "Marte",
+      "regente_tradicional": "Marte",
       "palabras_clave": [
         "impulso",
         "valentía",
@@ -16,6 +17,7 @@
       "nombre": "Tauro",
       "elemento": "tierra",
       "regente": "Venus",
+      "regente_tradicional": "Venus",
       "palabras_clave": [
         "estabilidad",
         "sensualidad",
@@ -28,6 +30,7 @@
       "nombre": "Géminis",
       "elemento": "aire",
       "regente": "Mercurio",
+      "regente_tradicional": "Mercurio",
       "palabras_clave": [
         "comunicación",
         "curiosidad",
@@ -40,6 +43,7 @@
       "nombre": "Cáncer",
       "elemento": "agua",
       "regente": "Luna",
+      "regente_tradicional": "Luna",
       "palabras_clave": [
         "emoción",
         "hogar",
@@ -52,6 +56,7 @@
       "nombre": "Leo",
       "elemento": "fuego",
       "regente": "Sol",
+      "regente_tradicional": "Sol",
       "palabras_clave": [
         "creatividad",
         "liderazgo",
@@ -64,6 +69,7 @@
       "nombre": "Virgo",
       "elemento": "tierra",
       "regente": "Mercurio",
+      "regente_tradicional": "Mercurio",
       "palabras_clave": [
         "análisis",
         "servicio",
@@ -76,6 +82,7 @@
       "nombre": "Libra",
       "elemento": "aire",
       "regente": "Venus",
+      "regente_tradicional": "Venus",
       "palabras_clave": [
         "equilibrio",
         "relación",
@@ -88,6 +95,7 @@
       "nombre": "Escorpio",
       "elemento": "agua",
       "regente": "Plutón",
+      "regente_tradicional": "Marte",
       "palabras_clave": [
         "intensidad",
         "transformación",
@@ -100,6 +108,7 @@
       "nombre": "Sagitario",
       "elemento": "fuego",
       "regente": "Júpiter",
+      "regente_tradicional": "Júpiter",
       "palabras_clave": [
         "expansión",
         "optimismo",
@@ -112,6 +121,7 @@
       "nombre": "Capricornio",
       "elemento": "tierra",
       "regente": "Saturno",
+      "regente_tradicional": "Saturno",
       "palabras_clave": [
         "ambición",
         "disciplina",
@@ -124,6 +134,7 @@
       "nombre": "Acuario",
       "elemento": "aire",
       "regente": "Urano",
+      "regente_tradicional": "Saturno",
       "palabras_clave": [
         "innovación",
         "libertad",
@@ -136,6 +147,7 @@
       "nombre": "Piscis",
       "elemento": "agua",
       "regente": "Neptuno",
+      "regente_tradicional": "Júpiter",
       "palabras_clave": [
         "sensibilidad",
         "intuición",
@@ -313,31 +325,31 @@
     {
       "nombre": "Conjunción",
       "simbolo": "0°",
-      "orbe": 8,
+      "orbe": 6,
       "significado": "los dos planetas funden su energía; intensidad y enfoque."
     },
     {
       "nombre": "Sextil",
       "simbolo": "60°",
-      "orbe": 6,
+      "orbe": 5,
       "significado": "oportunidad y apoyo; se activa con esfuerzo."
     },
     {
       "nombre": "Cuadratura",
       "simbolo": "90°",
-      "orbe": 7,
+      "orbe": 6,
       "significado": "tensión y fricción; exige ajuste y crecimiento."
     },
     {
       "nombre": "Trígono",
       "simbolo": "120°",
-      "orbe": 8,
+      "orbe": 6,
       "significado": "fluidez y talento natural; armonía entre energías."
     },
     {
       "nombre": "Oposición",
       "simbolo": "180°",
-      "orbe": 8,
+      "orbe": 7,
       "significado": "polaridad y confrontación; invita a integrar opuestos."
     }
   ]

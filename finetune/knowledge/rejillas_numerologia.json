@@ -1,0 +1,261 @@
+{
+  "descripcion": "Sitios con una página por número de numerología (n ∈ 1-9, 11, 22, 33). Comprobado el 2026-10-18 con descargas reales (≥ 1.000 caracteres).",
+  "numeros": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    11,
+    22,
+    33
+  ],
+  "rejillas": [
+    {
+      "sitio": "moonoscope.com",
+      "faceta": "alma",
+      "patron": "https://moonoscope.com/es/numerology/soul-urge/{n}",
+      "cobertura": "12/12",
+      "chars_medios": 11998,
+      "nota": ""
+    },
+    {
+      "sitio": "yourastrallife.com",
+      "faceta": "alma",
+      "patron": "https://www.yourastrallife.com/es/numerologia/guia/numero-del-alma-{n}",
+      "cobertura": "12/12",
+      "chars_medios": 8612,
+      "nota": ""
+    },
+    {
+      "sitio": "es.astro-seek.com",
+      "faceta": "ano_personal",
+      "patron": "https://es.astro-seek.com/numerologia-ano-personal/{n}",
+      "cobertura": "12/12",
+      "chars_medios": 8020,
+      "nota": ""
+    },
+    {
+      "sitio": "eight-leaves.de",
+      "faceta": "ano_personal",
+      "patron": "https://eight-leaves.de/es/numerologia/ano-personal-{n}",
+      "cobertura": "9/12",
+      "chars_medios": 8709,
+      "nota": "los 404 son los números maestros 11, 22 y 33"
+    },
+    {
+      "sitio": "freenumerology.net",
+      "faceta": "ano_personal",
+      "patron": "https://freenumerology.net/es/guides/personal-year-{n}",
+      "cobertura": "9/12",
+      "chars_medios": 4555,
+      "nota": "los 404 son los números maestros 11, 22 y 33"
+    },
+    {
+      "sitio": "yourastrallife.com",
+      "faceta": "ano_personal",
+      "patron": "https://www.yourastrallife.com/es/numerologia/guia/ano-personal-{n}",
+      "cobertura": "9/12",
+      "chars_medios": 8241,
+      "nota": "los 404 son los números maestros 11, 22 y 33"
+    },
+    {
+      "sitio": "moonoscope.com",
+      "faceta": "camino_de_vida",
+      "patron": "https://moonoscope.com/es/numerology/life-path/{n}",
+      "cobertura": "12/12",
+      "chars_medios": 6842,
+      "nota": ""
+    },
+    {
+      "sitio": "mundivia.es",
+      "faceta": "camino_de_vida",
+      "patron": "https://www.mundivia.es/numerologia/numero-{n}/",
+      "cobertura": "9/12",
+      "chars_medios": 7562,
+      "nota": "los 404 son los números maestros 11, 22 y 33"
+    },
+    {
+      "sitio": "skywhisper.app",
+      "faceta": "camino_de_vida",
+      "patron": "https://www.skywhisper.app/es/numerology/life-path/{n}",
+      "cobertura": "9/12",
+      "chars_medios": 4069,
+      "nota": "los 404 son los números maestros 11, 22 y 33"
+    },
+    {
+      "sitio": "tarot.ac",
+      "faceta": "camino_de_vida",
+      "patron": "https://tarot.ac/es/numerology/numbers/{n}",
+      "cobertura": "12/12",
+      "chars_medios": 9553,
+      "nota": ""
+    },
+    {
+      "sitio": "yourastrallife.com",
+      "faceta": "camino_de_vida",
+      "patron": "https://www.yourastrallife.com/es/numerologia/guia/camino-de-vida-{n}",
+      "cobertura": "12/12",
+      "chars_medios": 8381,
+      "nota": ""
+    },
+    {
+      "sitio": "moonoscope.com",
+      "faceta": "destino_expresion",
+      "patron": "https://moonoscope.com/es/numerology/destiny/{n}",
+      "cobertura": "12/12",
+      "chars_medios": 16896,
+      "nota": ""
+    },
+    {
+      "sitio": "worldnumerology.com",
+      "faceta": "destino_expresion",
+      "patron": "https://www.worldnumerology.com/numerology-expression/expression-number-{n}/",
+      "cobertura": "12/12",
+      "chars_medios": 2794,
+      "nota": ""
+    },
+    {
+      "sitio": "yourastrallife.com",
+      "faceta": "personalidad",
+      "patron": "https://www.yourastrallife.com/es/numerologia/guia/numero-de-personalidad-{n}",
+      "cobertura": "12/12",
+      "chars_medios": 8441,
+      "nota": ""
+    },
+    {
+      "sitio": "yourastrallife.com",
+      "faceta": "destino_expresion",
+      "patron": "https://www.yourastrallife.com/es/numerologia/guia/numero-de-expresion-{n}",
+      "cobertura": "probado n=5",
+      "chars_medios": 8182,
+      "nota": "rejilla completa sin comprobar"
+    },
+    {
+      "sitio": "yourastrallife.com",
+      "faceta": "mes_personal",
+      "patron": "https://www.yourastrallife.com/es/numerologia/guia/mes-personal-{n}",
+      "cobertura": "probado n=5",
+      "chars_medios": 8035,
+      "nota": "rejilla completa sin comprobar"
+    },
+    {
+      "sitio": "es.astrologyk.com",
+      "faceta": "alma",
+      "patron": "https://es.astrologyk.com/numerologia/alma/{n}",
+      "cobertura": "12/12",
+      "chars_medios": 4938,
+      "nota": ""
+    },
+    {
+      "sitio": "es.astrologyk.com",
+      "faceta": "camino_de_vida",
+      "patron": "https://es.astrologyk.com/numerologia/camino-de-vida/{n}",
+      "cobertura": "12/12",
+      "chars_medios": 6424,
+      "nota": ""
+    },
+    {
+      "sitio": "loveplay.io",
+      "faceta": "compatibilidad",
+      "patron": "https://loveplay.io/es/numerologia/{a}-{b}/",
+      "cobertura": "45/45",
+      "chars_medios": 2189,
+      "nota": "pares a≤b entre 1 y 9 (45); el orden {a}-{b} con a≤b"
+    },
+    {
+      "sitio": "luminamur.com",
+      "faceta": "compatibilidad",
+      "patron": "https://luminamur.com/numerology/life-path-compatibility/{a}-and-{b}/",
+      "cobertura": "45/45",
+      "chars_medios": 3157,
+      "nota": "pares a≤b entre 1 y 9 (45); el orden {a}-{b} con a≤b"
+    },
+    {
+      "sitio": "numerolo.com",
+      "faceta": "compatibilidad",
+      "patron": "https://www.numerolo.com/compatibility/{a}-and-{b}/",
+      "cobertura": "45/45",
+      "chars_medios": 2755,
+      "nota": "pares a≤b entre 1 y 9 (45); el orden {a}-{b} con a≤b"
+    },
+    {
+      "sitio": "pathnumbers.com",
+      "faceta": "compatibilidad",
+      "patron": "https://pathnumbers.com/life-path-{a}-and-{b}-compatibility/",
+      "cobertura": "45/45",
+      "chars_medios": 23504,
+      "nota": "pares a≤b entre 1 y 9 (45); el orden {a}-{b} con a≤b"
+    },
+    {
+      "sitio": "yourastrallife.com",
+      "faceta": "compatibilidad",
+      "patron": "https://www.yourastrallife.com/es/numerologia/guia/compatibilidad-camino-de-vida-{a}-{b}",
+      "cobertura": "45/45",
+      "chars_medios": 8120,
+      "nota": "pares a≤b entre 1 y 9 (45); el orden {a}-{b} con a≤b"
+    },
+    {
+      "sitio": "es.astrologyk.com",
+      "faceta": "destino_expresion",
+      "patron": "https://es.astrologyk.com/numerologia/destino/{n}",
+      "cobertura": "12/12",
+      "chars_medios": 6315,
+      "nota": ""
+    },
+    {
+      "sitio": "horoscopelogic.com",
+      "faceta": "destino_expresion",
+      "patron": "https://horoscopelogic.com/es/expression-number-{n}",
+      "cobertura": "12/12",
+      "chars_medios": 9254,
+      "nota": ""
+    },
+    {
+      "sitio": "numerologia-cotidiana.com",
+      "faceta": "mes_personal",
+      "patron": "https://numerologia-cotidiana.com/mes-personal-{n}/",
+      "cobertura": "10/12",
+      "chars_medios": 1605,
+      "nota": "los 404 son números maestros u otras lagunas"
+    },
+    {
+      "sitio": "es.astrologyk.com",
+      "faceta": "personalidad",
+      "patron": "https://es.astrologyk.com/numerologia/personalidad/{n}",
+      "cobertura": "12/12",
+      "chars_medios": 2332,
+      "nota": ""
+    },
+    {
+      "sitio": "horoscopelogic.com",
+      "faceta": "personalidad",
+      "patron": "https://horoscopelogic.com/es/personality-number-{n}",
+      "cobertura": "12/12",
+      "chars_medios": 9327,
+      "nota": ""
+    },
+    {
+      "sitio": "horoscopelogic.com (portugués)",
+      "faceta": "personalidad",
+      "patron": "https://horoscopelogic.com/pt/personality-number-{n}",
+      "cobertura": "12/12",
+      "chars_medios": 9397,
+      "nota": "PORTUGUÉS: tendría que traducirse; duplica horoscopelogic/es"
+    }
+  ],
+  "conteo_fuentes_por_faceta": {
+    "camino_de_vida": "6 sitios: yourastrallife, moonoscope, tarot.ac, es.astrologyk.com (12/12); mundivia y skywhisper (9/12)",
+    "ano_personal": "4 sitios: astro-seek (12/12); eight-leaves, freenumerology, yourastrallife (9/12). Falta 1",
+    "destino_expresion": "5 sitios: moonoscope, worldnumerology, yourastrallife, es.astrologyk.com (destino), horoscopelogic (12/12)",
+    "alma": "3 sitios: moonoscope, yourastrallife, es.astrologyk.com. Faltan 2",
+    "personalidad": "3 sitios: yourastrallife, es.astrologyk.com (corta, 2,3 k), horoscopelogic (12/12). Faltan 2",
+    "mes_personal": "2 sitios: yourastrallife (probado n=5), numerologia-cotidiana (10/12, páginas cortas). Faltan 3",
+    "compatibilidad": "ver rejillas 'compatibilidad'"
+  },
+  "pendientes": "Alma (faltan 2), personalidad (2), mes personal (3) y año personal (1). Los 404 de camino de vida/año personal en 9/12 son 11, 22 y 33."
+}

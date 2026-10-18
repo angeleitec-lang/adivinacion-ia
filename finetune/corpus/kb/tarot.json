@@ -10,7 +10,13 @@
         "salto de fe"
       ],
       "significado": "Nuevos comienzos, soltar el control y confiar en el camino.",
-      "invertida": "Imprudencia, bloqueo o miedo a dar el paso."
+      "invertida": "Imprudencia, bloqueo o miedo a dar el paso.",
+      "contextos": {
+        "amor": "Deja espacio a la espontaneidad en el vínculo.",
+        "trabajo": "Inicio libre, sin plan fijo ni ataduras.",
+        "dinero": "Gasto despreocupado; evita riesgos ciegos.",
+        "salud": "Vitalidad libre; cuidado con la imprudencia."
+      }
     },
     {
       "numero": 1,
@@ -22,7 +28,13 @@
         "destreza"
       ],
       "significado": "Tienes las herramientas y el poder para materializar tus deseos.",
-      "invertida": "Manipulación, dispersión o talento desaprovechado."
+      "invertida": "Manipulación, dispersión o talento desaprovechado.",
+      "contextos": {
+        "amor": "Sabe lo que quiere y lo atrae con intención.",
+        "trabajo": "Recursos y voluntad al servicio del proyecto.",
+        "dinero": "Genera ingresos con ingenio y habilidad.",
+        "salud": "Energía bien canalizada; úsala con criterio."
+      }
     },
     {
       "numero": 2,
@@ -34,7 +46,13 @@
         "silencio"
       ],
       "significado": "Escucha tu voz interior; hay sabiduría más allá de lo visible.",
-      "invertida": "Secretos, desconexión de la intuición o información oculta."
+      "invertida": "Secretos, desconexión de la intuición o información oculta.",
+      "contextos": {
+        "amor": "Amor callado, intuitivo y misterioso.",
+        "trabajo": "Confía en lo que percibes sin decir.",
+        "dinero": "Reserva y discreción en las finanzas.",
+        "salud": "Cuida el descanso y tu mundo interior."
+      }
     },
     {
       "numero": 3,
@@ -46,7 +64,13 @@
         "creatividad"
       ],
       "significado": "Abundancia, crecimiento y nutrición de proyectos y relaciones.",
-      "invertida": "Dependencia, bloqueo creativo o exceso de control."
+      "invertida": "Dependencia, bloqueo creativo o exceso de control.",
+      "contextos": {
+        "amor": "Nutre la relación con afecto y creatividad.",
+        "trabajo": "Fertilidad de proyectos que crecen.",
+        "dinero": "Abundancia que florece con cuidado.",
+        "salud": "Vitalidad fértil; conecta con el cuerpo."
+      }
     },
     {
       "numero": 4,
@@ -58,7 +82,13 @@
         "orden"
       ],
       "significado": "Firmeza, liderazgo y construcción de bases sólidas.",
-      "invertida": "Rigidez, abuso de poder o falta de estructura."
+      "invertida": "Rigidez, abuso de poder o falta de estructura.",
+      "contextos": {
+        "amor": "Compromiso firme, orden y protección.",
+        "trabajo": "Estructura y autoridad en el terreno.",
+        "dinero": "Estabilidad con reglas claras.",
+        "salud": "Buena base física; evita la rigidez."
+      }
     },
     {
       "numero": 5,
@@ -70,7 +100,13 @@
         "institución"
       ],
       "significado": "Aprende de la tradición y busca guía en estructuras establecidas.",
-      "invertida": "Dogmatismo, rebeldía o rechazo de las normas."
+      "invertida": "Dogmatismo, rebeldía o rechazo de las normas.",
+      "contextos": {
+        "amor": "Compromiso según lo tradicional y acordado.",
+        "trabajo": "Aprende de maestros y del oficio.",
+        "dinero": "Caminos probados e instituciones estables.",
+        "salud": "Bienestar con rutina y guía experta."
+      }
     },
     {
       "numero": 6,
@@ -82,7 +118,13 @@
         "valores"
       ],
       "significado": "Unión profunda y una elección importante alineada con tus valores.",
-      "invertida": "Desarmonía, indecisión o conflicto de valores."
+      "invertida": "Desarmonía, indecisión o conflicto de valores.",
+      "contextos": {
+        "amor": "Elección del corazón alineada con tus valores.",
+        "trabajo": "Decisión importante entre dos caminos.",
+        "dinero": "Elige por valores, no solo por dinero.",
+        "salud": "Coherencia interior que da calma emocional."
+      }
     },
     {
       "numero": 7,
@@ -94,7 +136,13 @@
         "control"
       ],
       "significado": "Avanza con determinación y mantén las riendas de tu rumbo.",
-      "invertida": "Pérdida de control, estancamiento o dirección dispersa."
+      "invertida": "Pérdida de control, estancamiento o dirección dispersa.",
+      "contextos": {
+        "amor": "Avanza con decisión hacia la pareja.",
+        "trabajo": "Victoria por rumbo firme y voluntad.",
+        "dinero": "Logro material por esfuerzo dirigido.",
+        "salud": "Energía en movimiento; controla el impulso."
+      }
     },
     {
       "numero": 8,
@@ -105,8 +153,14 @@
         "compasión",
         "resistencia"
       ],
-      "significado": "La fuerza suave domina: domina el impulso con paciencia.",
-      "invertida": "Debilidad, desgaste o dominio por la ira."
+      "significado": "La fortaleza serena doma el impulso: el coraje se ejerce con paciencia y compasión.",
+      "invertida": "Debilidad, desgaste o dominio por la ira.",
+      "contextos": {
+        "amor": "Domina los celos con paciencia y ternura.",
+        "trabajo": "Lidera con firmeza amable, sin imponer.",
+        "dinero": "Constancia serena para sostener los recursos.",
+        "salud": "Fuerza interior que sostiene el cuerpo."
+      }
     },
     {
       "numero": 9,
@@ -118,7 +172,13 @@
         "búsqueda"
       ],
       "significado": "Retírate a reflexionar; la respuesta llega en el silencio.",
-      "invertida": "Aislamiento, rechazo o encierro excesivo."
+      "invertida": "Aislamiento, rechazo o encierro excesivo.",
+      "contextos": {
+        "amor": "Busca soledad para entender qué quiere amar.",
+        "trabajo": "Trabajo solitario de profundidad.",
+        "dinero": "Prudencia y austeridad elegida.",
+        "salud": "Retiro que sana; evita el aislamiento."
+      }
     },
     {
       "numero": 10,
@@ -130,7 +190,13 @@
         "oportunidad"
       ],
       "significado": "Gira la rueda; los ciclos traen cambios y nuevas oportunidades.",
-      "invertida": "Mala racha, resistencia al cambio o retraso."
+      "invertida": "Mala racha, resistencia al cambio o retraso.",
+      "contextos": {
+        "amor": "La relación cambia de fase por el destino.",
+        "trabajo": "Ciclos de suerte que conviene aprovechar.",
+        "dinero": "Altibajos: ahorra en la subida.",
+        "salud": "Cambios de energía; adapta tus hábitos."
+      }
     },
     {
       "numero": 11,
@@ -142,7 +208,13 @@
         "ley"
       ],
       "significado": "Actúa con integridad; cada acción tiene su consecuencia.",
-      "invertida": "Injusticia, deshonestidad o cuentas pendientes."
+      "invertida": "Injusticia, deshonestidad o cuentas pendientes.",
+      "contextos": {
+        "amor": "Trato justo y honesto entre las partes.",
+        "trabajo": "Decisiones ecuánimes con consecuencias claras.",
+        "dinero": "Cuentas claras y justicia económica.",
+        "salud": "Equilibrio de causa y efecto en el cuerpo."
+      }
     },
     {
       "numero": 12,
@@ -154,7 +226,13 @@
         "entrega"
       ],
       "significado": "Una pausa necesaria; cambiar de perspectiva ilumina el camino.",
-      "invertida": "Estancamiento, sacrificio inútil o resistencia."
+      "invertida": "Estancamiento, sacrificio inútil o resistencia.",
+      "contextos": {
+        "amor": "Pausa que enseña a ver al otro al revés.",
+        "trabajo": "Sacrificar ahora para entender después.",
+        "dinero": "No fuerces: espera y mira desde otro ángulo.",
+        "salud": "Detente y escucha lo que dice el cuerpo."
+      }
     },
     {
       "numero": 13,
@@ -166,7 +244,13 @@
         "cierre"
       ],
       "significado": "Un ciclo termina para que otro nazca; soltar es transformar.",
-      "invertida": "Resistencia al cambio, estancamiento o miedo a soltar."
+      "invertida": "Resistencia al cambio, estancamiento o miedo a soltar.",
+      "contextos": {
+        "amor": "Transformación profunda o cierre del vínculo.",
+        "trabajo": "Fin de etapa que renueva la carrera.",
+        "dinero": "Soltar lo viejo para que llegue lo nuevo.",
+        "salud": "Suelta viejos hábitos que dañan."
+      }
     },
     {
       "numero": 14,
@@ -178,7 +262,13 @@
         "moderación"
       ],
       "significado": "Integra los opuestos y avanza con calma y mesura.",
-      "invertida": "Exceso, desequilibrio o impaciencia."
+      "invertida": "Exceso, desequilibrio o impaciencia.",
+      "contextos": {
+        "amor": "Mezcla paciente que armoniza la pareja.",
+        "trabajo": "Fluir con calma y visión a largo plazo.",
+        "dinero": "Moderación que hace crecer lo poco.",
+        "salud": "Sanación gradual y equilibrio interior."
+      }
     },
     {
       "numero": 15,
@@ -190,7 +280,13 @@
         "tentación"
       ],
       "significado": "Reconoce tus cadenas y los apegos que te limitan.",
-      "invertida": "Liberación, recuperación o despertar de la sombra."
+      "invertida": "Liberación, recuperación o despertar de la sombra.",
+      "contextos": {
+        "amor": "Atrapado por deseo, celos o codependencia.",
+        "trabajo": "Ataduras tóxicas y tentaciones de poder.",
+        "dinero": "Apego material que esclaviza.",
+        "salud": "Adicciones y excesos que encadenan."
+      }
     },
     {
       "numero": 16,
@@ -202,7 +298,13 @@
         "liberación"
       ],
       "significado": "Se derrumba lo falso; tras la crisis queda la verdad.",
-      "invertida": "Crisis evitada, miedo al cambio o ruina postergada."
+      "invertida": "Crisis evitada, miedo al cambio o ruina postergada.",
+      "contextos": {
+        "amor": "Ruptura súbita que revela la verdad.",
+        "trabajo": "Crisis que demuele lo falso.",
+        "dinero": "Pérdida brusca que obliga a reconstruir.",
+        "salud": "Sobresalto; toca sanar los cimientos."
+      }
     },
     {
       "numero": 17,
@@ -214,7 +316,13 @@
         "fe"
       ],
       "significado": "Renace la esperanza; la inspiración guía tu sanación.",
-      "invertida": "Desaliento, pesimismo o pérdida de fe."
+      "invertida": "Desaliento, pesimismo o pérdida de fe.",
+      "contextos": {
+        "amor": "Esperanza renovada y sanación del corazón.",
+        "trabajo": "Inspiración y fe en el camino elegido.",
+        "dinero": "Abundancia que llega con calma.",
+        "salud": "Confía en la recuperación serena."
+      }
     },
     {
       "numero": 18,
@@ -226,7 +334,13 @@
         "sueños"
       ],
       "significado": "No todo es lo que parece; confía en la intuición en la niebla.",
-      "invertida": "Claridad, confusión disipada o engaño revelado."
+      "invertida": "Claridad, confusión disipada o engaño revelado.",
+      "contextos": {
+        "amor": "Celos y cosas que no se dicen.",
+        "trabajo": "Ambiente confuso; no todo es lo que parece.",
+        "dinero": "Cuidado con estafas y malentendidos.",
+        "salud": "Miedos que inquietan; busca claridad."
+      }
     },
     {
       "numero": 19,
@@ -238,7 +352,13 @@
         "claridad"
       ],
       "significado": "Éxito, vitalidad y claridad; todo sale a la luz con alegría.",
-      "invertida": "Felicidad empañada, exceso o falta de entusiasmo."
+      "invertida": "Felicidad empañada, exceso o falta de entusiasmo.",
+      "contextos": {
+        "amor": "Amor claro, cálido y feliz.",
+        "trabajo": "Éxito visible y reconocimiento merecido.",
+        "dinero": "Prosperidad clara en las cuentas.",
+        "salud": "Vitalidad radiante y buen ánimo."
+      }
     },
     {
       "numero": 20,
@@ -250,7 +370,13 @@
         "llamada"
       ],
       "significado": "Una llamada a renacer y asumir una nueva etapa de la vida.",
-      "invertida": "Autocrítica, duda o negarse a la llamada."
+      "invertida": "Autocrítica, duda o negarse a la llamada.",
+      "contextos": {
+        "amor": "Renacer del vínculo o despertar compartido.",
+        "trabajo": "Llamada a una nueva vocación.",
+        "dinero": "Reevalúa lo material con honestidad.",
+        "salud": "Perdón que sana y renueva."
+      }
     },
     {
       "numero": 21,
@@ -262,7 +388,13 @@
         "realización"
       ],
       "significado": "Culminación y logro; integras lo aprendido en un todo.",
-      "invertida": "Incompletitud, retraso o falta de cierre."
+      "invertida": "Incompletitud, retraso o falta de cierre.",
+      "contextos": {
+        "amor": "Relación plena e integrada.",
+        "trabajo": "Culminación profesional exitosa.",
+        "dinero": "Cierre próspero del ciclo económico.",
+        "salud": "Integración plena de cuerpo y mente."
+      }
     }
   ],
   "menores": [
@@ -271,672 +403,1176 @@
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "As",
+      "numero": 1,
       "palabras_clave": [
-        "la acción",
-        "Un comienzo"
+        "inspiración",
+        "impulso",
+        "creatividad",
+        "potencial"
       ],
-      "significado": "Un comienzo y una semilla de potencial en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Una chispa de inspiración y energía creativa: el arranque de un proyecto apasionante.",
+      "invertida": "La chispa se dispersa: retrasos, falta de dirección o energía sin cauce.",
+      "contextos": {
+        "amor": "Atracción nueva que enciende la ilusión.",
+        "trabajo": "Proyecto naciente que pide acción.",
+        "dinero": "Oportunidad de inversión en ciernes.",
+        "salud": "Energía desbordada que necesita descarga."
+      }
     },
     {
       "nombre": "Dos de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Dos",
+      "numero": 2,
       "palabras_clave": [
-        "la acción",
-        "La dualidad"
+        "planificación",
+        "visión",
+        "decisión",
+        "coraje"
       ],
-      "significado": "La dualidad y una elección a tomar en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Sostienes el mundo en tus manos y decides hasta dónde llegar; tus planes se hacen más grandes.",
+      "invertida": "Miedo a lo desconocido: te encierras en lo seguro y recortas tus planes.",
+      "contextos": {
+        "amor": "Decidir hacia dónde dirigir la relación.",
+        "trabajo": "Sopesar una expansión o un cambio de rumbo.",
+        "dinero": "Valorar riesgos antes de invertir.",
+        "salud": "Marcarte metas de bienestar con ambición."
+      }
     },
     {
       "nombre": "Tres de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Tres",
+      "numero": 3,
       "palabras_clave": [
-        "la acción",
-        "El crecimiento"
+        "expansión",
+        "colaboración",
+        "previsión",
+        "crecimiento"
       ],
-      "significado": "El crecimiento y la colaboración en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Tus primeros frutos asoman en el horizonte y el trabajo en equipo abre nuevos caminos.",
+      "invertida": "La expansión se frena: falta de visión, de coordinación o resultados lentos.",
+      "contextos": {
+        "amor": "La relación crece y se proyecta al futuro.",
+        "trabajo": "Colaboraciones que amplían tu alcance.",
+        "dinero": "Primeros beneficios de una buena siembra.",
+        "salud": "Progreso constante si mantienes la disciplina."
+      }
     },
     {
       "nombre": "Cuatro de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Cuatro",
+      "numero": 4,
       "palabras_clave": [
-        "la acción",
-        "La estabilidad"
+        "celebración",
+        "hogar",
+        "comunidad",
+        "armonía"
       ],
-      "significado": "La estabilidad y una pausa para consolidar en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Se celebra un logro en familia o comunidad: estabilidad, acogida y alegría compartida.",
+      "invertida": "La celebración se pospone o falta el apoyo del entorno en tu logro.",
+      "contextos": {
+        "amor": "Compromiso y convivencia feliz.",
+        "trabajo": "Equipo unido que celebra resultados.",
+        "dinero": "Hogar estable y gastos en comunidad.",
+        "salud": "Bienestar emocional y sentido de pertenencia."
+      }
     },
     {
       "nombre": "Cinco de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Cinco",
+      "numero": 5,
       "palabras_clave": [
-        "la acción",
-        "El conflicto"
+        "conflicto",
+        "competencia",
+        "rivalidad",
+        "tensión"
       ],
-      "significado": "El conflicto y un cambio necesario en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Varias varas se cruzan: desacuerdos y competencia que ponen a prueba tu postura.",
+      "invertida": "La disputa termina o la evitas: alivio del choque o conflicto reprimido.",
+      "contextos": {
+        "amor": "Riñas y celos que tensionan el vínculo.",
+        "trabajo": "Competencia sana o luchas de poder internas.",
+        "dinero": "Gastos por disputas o competencia de precios.",
+        "salud": "Irritabilidad y tensión muscular acumulada."
+      }
     },
     {
       "nombre": "Seis de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Seis",
+      "numero": 6,
       "palabras_clave": [
-        "la acción",
-        "La armonía"
+        "victoria",
+        "reconocimiento",
+        "triunfo",
+        "orgullo"
       ],
-      "significado": "La armonía y el equilibrio recuperado en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Vuelves vencedor y la multitud te aclama: reconocimiento público a tu esfuerzo.",
+      "invertida": "El reconocimiento no llega, el orgullo se hiere o triunfas con vanidad.",
+      "contextos": {
+        "amor": "La pareja te admira y te apoya.",
+        "trabajo": "Ascenso, premio o elogio público.",
+        "dinero": "Ganancias ligadas a tu reputación.",
+        "salud": "Vitalidad alta y confianza en ti mismo."
+      }
     },
     {
       "nombre": "Siete de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Siete",
+      "numero": 7,
       "palabras_clave": [
-        "la acción",
-        "La evaluación"
+        "defensa",
+        "persistencia",
+        "valentía",
+        "resistencia"
       ],
-      "significado": "La evaluación y un desafío que pide estrategia en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Desde tu altura defiendes lo conseguido ante quien te cuestiona: mantén la posición.",
+      "invertida": "Te sientes superado y dudas: cedes terreno por agotamiento o inseguridad.",
+      "contextos": {
+        "amor": "Defender la relación frente a críticas externas.",
+        "trabajo": "Sostener tu proyecto ante la competencia.",
+        "dinero": "Proteger tus recursos de amenazas externas.",
+        "salud": "Resistencia física a prueba; no bajes la guardia."
+      }
     },
     {
       "nombre": "Ocho de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Ocho",
+      "numero": 8,
       "palabras_clave": [
-        "la acción",
-        "El movimiento"
+        "rapidez",
+        "noticias",
+        "movimiento",
+        "fluidez"
       ],
-      "significado": "El movimiento y la maestría en la acción en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Ocho varas cruzan el cielo veloz: noticias, viajes y cambios que se suceden sin pausa.",
+      "invertida": "El ritmo se atasca: retrasos, malentendidos o energía que pierde dirección.",
+      "contextos": {
+        "amor": "Un mensaje o encuentro que acelera el romance.",
+        "trabajo": "Trámites y proyectos que avanzan rápido.",
+        "dinero": "Movimientos económicos veloces e imprevistos.",
+        "salud": "Nervios acelerados; conviene bajar el ritmo."
+      }
     },
     {
       "nombre": "Nueve de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Nueve",
+      "numero": 9,
       "palabras_clave": [
-        "la acción",
-        "La culminación"
+        "resiliencia",
+        "cautela",
+        "fortaleza",
+        "experiencia"
       ],
-      "significado": "La culminación y la independencia en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Herido pero en pie, aguantas la última embestida: la experiencia se vuelve escudo.",
+      "invertida": "El cansancio puede más: desconfianza excesiva o rendirse justo antes del final.",
+      "contextos": {
+        "amor": "Vínculo tocado que resiste con cicatrices.",
+        "trabajo": "Proyecto superviviente que exige vigilancia.",
+        "dinero": "Ahorro de reserva para imprevistos.",
+        "salud": "Convalecencia: cuidado con las recaídas."
+      }
     },
     {
       "nombre": "Diez de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Diez",
+      "numero": 10,
       "palabras_clave": [
-        "la acción",
-        "La plenitud"
+        "carga",
+        "responsabilidad",
+        "esfuerzo",
+        "meta"
       ],
-      "significado": "La plenitud y el cierre de un ciclo en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Cargas diez varas hacia la meta: demasiada responsabilidad sobre tus hombros.",
+      "invertida": "Aprendes a soltar y delegar, o simplemente colapsas bajo el peso.",
+      "contextos": {
+        "amor": "Sientes la relación como una carga pesada.",
+        "trabajo": "Sobrecarga de tareas y plazos ajustados.",
+        "dinero": "Gastos que superan tus fuerzas; pide ayuda.",
+        "salud": "Cansancio físico y dolor de espalda."
+      }
     },
     {
       "nombre": "Sota de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Sota",
+      "numero": 11,
       "palabras_clave": [
-        "la acción",
-        "Un mensaje"
+        "entusiasmo",
+        "exploración",
+        "descubrimiento",
+        "mensaje"
       ],
-      "significado": "Un mensaje y el aprendizaje de algo nuevo en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Un joven entusiasta otea el horizonte: llega un mensaje ilusionante y ganas de explorar.",
+      "invertida": "Impulsividad inmadura: dispersión, malas noticias o ilusiones sin fundamento.",
+      "contextos": {
+        "amor": "Coqueteo nuevo y emoción incipiente.",
+        "trabajo": "Idea o aprendizaje que ilusiona empezar.",
+        "dinero": "Pequeña oportunidad que explorar con cautela.",
+        "salud": "Ganas de moverte; cuidado con la impaciencia."
+      }
     },
     {
-      "nombre": "Caballo de Bastos",
+      "nombre": "Caballero de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
-      "rango": "Caballo",
+      "rango": "Caballero",
+      "numero": 12,
       "palabras_clave": [
-        "la acción",
-        "La acción impetuosa"
+        "aventura",
+        "ímpetu",
+        "carisma",
+        "acción"
       ],
-      "significado": "La acción impetuosa y el impulso en marcha en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Un jinete apasionado carga hacia sus metas con carisma y prisa aventurera.",
+      "invertida": "El ímpetu se desboca: impaciencia, arrebatos y promesas que se apagan.",
+      "contextos": {
+        "amor": "Pretendente intenso pero poco constante.",
+        "trabajo": "Alguien que impulsa proyectos con fuego.",
+        "dinero": "Gasto impulsivo tras una corazonada.",
+        "salud": "Energía explosiva que agota si no se dosifica."
+      }
     },
     {
       "nombre": "Reina de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Reina",
+      "numero": 13,
       "palabras_clave": [
-        "la acción",
-        "La madurez emocional"
+        "confianza",
+        "calidez",
+        "independencia",
+        "determinación"
       ],
-      "significado": "La madurez emocional y el cuidado en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Mujer segura y magnética que lidera con calidez y no teme brillar.",
+      "invertida": "Los celos y la exigencia desbordan su carisma; necesita admiración constante.",
+      "contextos": {
+        "amor": "Pareja apasionada, protectora y celosa.",
+        "trabajo": "Liderazgo carismático que inspira al equipo.",
+        "dinero": "Buen hacer para generar y administrar ingresos.",
+        "salud": "Vitalidad y autoestima altas."
+      }
     },
     {
       "nombre": "Rey de Bastos",
       "palo": "Bastos",
       "elemento": "fuego",
       "rango": "Rey",
+      "numero": 14,
       "palabras_clave": [
-        "la acción",
-        "La autoridad"
+        "liderazgo",
+        "visión",
+        "emprendimiento",
+        "honor"
       ],
-      "significado": "La autoridad y el dominio consolidado en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Líder carismático y emprendedor que domina su terreno con visión y honor.",
+      "invertida": "El liderazgo se tuerce: autoritarismo, impulsividad o poder vacío.",
+      "contextos": {
+        "amor": "Pareja protectora de voluntad fuerte.",
+        "trabajo": "Emprendedor que ve lejos y decide rápido.",
+        "dinero": "Negocios prósperos bien dirigidos.",
+        "salud": "Buena constitución; vigilar el exceso de estrés."
+      }
     },
     {
       "nombre": "As de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "As",
+      "numero": 1,
       "palabras_clave": [
-        "las emociones",
-        "Un comienzo"
+        "amor",
+        "compasión",
+        "intuición",
+        "plenitud"
       ],
-      "significado": "Un comienzo y una semilla de potencial en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "El cáliz desborda una emoción nueva: amor, compasión o creatividad que nace en el corazón.",
+      "invertida": "La copa se vacía o se tapa: bloqueo emocional, afecto reprimido o vacío.",
+      "contextos": {
+        "amor": "Comienza un amor tierno y sincero.",
+        "trabajo": "Proyecto que nace del corazón y la intuición.",
+        "dinero": "Abundancia emocional más que material.",
+        "salud": "Sanación emocional; cuida no reprimir lo que sientes."
+      }
     },
     {
       "nombre": "Dos de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Dos",
+      "numero": 2,
       "palabras_clave": [
-        "las emociones",
-        "La dualidad"
+        "unión",
+        "reciprocidad",
+        "conexión",
+        "pareja"
       ],
-      "significado": "La dualidad y una elección a tomar en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Dos copas se intercambian en mutua atracción: vínculo que nace o se renueva en acuerdo.",
+      "invertida": "El vínculo se desequilibra: desamor, ruptura o sentimientos no correspondidos.",
+      "contextos": {
+        "amor": "Atracción mutua y compromiso naciente.",
+        "trabajo": "Sociedad armoniosa y de mutuo acuerdo.",
+        "dinero": "Ganancias compartidas en equidad.",
+        "salud": "Bienestar que nace del afecto recibido."
+      }
     },
     {
       "nombre": "Tres de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Tres",
+      "numero": 3,
       "palabras_clave": [
-        "las emociones",
-        "El crecimiento"
+        "amistad",
+        "celebración",
+        "alegría",
+        "comunidad"
       ],
-      "significado": "El crecimiento y la colaboración en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Tres amigas brindan en círculo: la alegría compartida se multiplica en comunidad.",
+      "invertida": "El grupo se rompe o la fiesta se pasa: aislamiento, chismes o exceso de copa.",
+      "contextos": {
+        "amor": "Amistades que celebran tu romance.",
+        "trabajo": "Equipo que festeja un logro conjunto.",
+        "dinero": "Gasto en celebraciones y regalos.",
+        "salud": "Alegría que sana; cuidado con el exceso de alcohol."
+      }
     },
     {
       "nombre": "Cuatro de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Cuatro",
+      "numero": 4,
       "palabras_clave": [
-        "las emociones",
-        "La estabilidad"
+        "apatía",
+        "contemplación",
+        "descontento",
+        "estancamiento"
       ],
-      "significado": "La estabilidad y una pausa para consolidar en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Sentado bajo el árbol, ignora la copa que se le ofrece: cansancio emocional y desinterés.",
+      "invertida": "Sales del letargo: despiertas a nuevas posibilidades y recuperas la motivación.",
+      "contextos": {
+        "amor": "Desinterés o aburrimiento en la relación.",
+        "trabajo": "Desmotivación y rutina que pesan.",
+        "dinero": "No ver oportunidades por desánimo.",
+        "salud": "Baja energía emocional; busca estímulo nuevo."
+      }
     },
     {
       "nombre": "Cinco de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Cinco",
+      "numero": 5,
       "palabras_clave": [
-        "las emociones",
-        "El conflicto"
+        "pérdida",
+        "duelo",
+        "arrepentimiento",
+        "decepción"
       ],
-      "significado": "El conflicto y un cambio necesario en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Lloras tres copas derramadas sin ver que dos siguen en pie: duelo con consuelo disponible.",
+      "invertida": "El duelo se transforma: aceptas la pérdida y vuelves la mirada a lo que queda.",
+      "contextos": {
+        "amor": "Ruptura o desengaño que duele profundamente.",
+        "trabajo": "Decepción por un proyecto que fracasó.",
+        "dinero": "Pérdida económica; aún conservas lo esencial.",
+        "salud": "Tristeza que pide ser acompañada."
+      }
     },
     {
       "nombre": "Seis de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Seis",
+      "numero": 6,
       "palabras_clave": [
-        "las emociones",
-        "La armonía"
+        "nostalgia",
+        "recuerdo",
+        "inocencia",
+        "reencuentro"
       ],
-      "significado": "La armonía y el equilibrio recuperado en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Dos niños se intercambian flores del pasado: recuerdos dulces, reencuentros e inocencia.",
+      "invertida": "Vives anclado en lo que fue y no dejas crecer el presente.",
+      "contextos": {
+        "amor": "Reencuentro con un amor del pasado.",
+        "trabajo": "Colaboraciones antiguas que regresan.",
+        "dinero": "Regalos o apoyos de gente querida.",
+        "salud": "Nostalgia tierna; no confundir pasado con bienestar."
+      }
     },
     {
       "nombre": "Siete de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Siete",
+      "numero": 7,
       "palabras_clave": [
-        "las emociones",
-        "La evaluación"
+        "fantasía",
+        "ilusión",
+        "opciones",
+        "ensueño"
       ],
-      "significado": "La evaluación y un desafío que pide estrategia en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Siete copas llenas de fantasías te tientan en la niebla: muchas opciones, poca realidad.",
+      "invertida": "La niebla se disipa: eliges con los pies en la tierra y ves claro.",
+      "contextos": {
+        "amor": "Idealizas a quien te gusta o te pierdes en sueños.",
+        "trabajo": "Demasiadas ideas y ninguna concretada.",
+        "dinero": "Castillos en el aire que no se materializan.",
+        "salud": "Mente dispersa; conecta con lo real."
+      }
     },
     {
       "nombre": "Ocho de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Ocho",
+      "numero": 8,
       "palabras_clave": [
-        "las emociones",
-        "El movimiento"
+        "abandono",
+        "búsqueda",
+        "desilusión",
+        "valentía"
       ],
-      "significado": "El movimiento y la maestría en la acción en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Dejas ocho copas a la espalda y caminas hacia la montaña: lo que ya no llena queda atrás.",
+      "invertida": "El miedo te frena: vuelves sobre tus pasos o te quedas por comodidad.",
+      "contextos": {
+        "amor": "Irse de una relación que ya no llena.",
+        "trabajo": "Dejar un empleo seguro por un sentido mayor.",
+        "dinero": "Renunciar a lo material por convicción.",
+        "salud": "Desgaste emocional que pide un cambio de vida."
+      }
     },
     {
       "nombre": "Nueve de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Nueve",
+      "numero": 9,
       "palabras_clave": [
-        "las emociones",
-        "La culminación"
+        "satisfacción",
+        "deseo",
+        "placer",
+        "abundancia"
       ],
-      "significado": "La culminación y la independencia en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "La copa de los deseos cumplidos: satisfacción, placer y orgullo sereno por lo conseguido.",
+      "invertida": "El placer deja vacío: gula emocional, deseo incumplido o felicidad de apariencias.",
+      "contextos": {
+        "amor": "Relación que colma tus deseos.",
+        "trabajo": "Logro que disfrutas plenamente.",
+        "dinero": "Abundancia y capricho permitido.",
+        "salud": "Bienestar; cuidado con los excesos de mesa."
+      }
     },
     {
       "nombre": "Diez de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Diez",
+      "numero": 10,
       "palabras_clave": [
-        "las emociones",
-        "La plenitud"
+        "felicidad",
+        "familia",
+        "armonía",
+        "plenitud"
       ],
-      "significado": "La plenitud y el cierre de un ciclo en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "El arcoíris cubre a la familia en calma: plenitud emocional y felicidad duradera.",
+      "invertida": "La imagen ideal se quiebra: tensiones familiares y felicidad incompleta.",
+      "contextos": {
+        "amor": "Amor estable y hogar feliz.",
+        "trabajo": "Ambiente laboral cálido y afectuoso.",
+        "dinero": "Estabilidad económica en familia.",
+        "salud": "Equilibrio emocional pleno."
+      }
     },
     {
       "nombre": "Sota de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Sota",
+      "numero": 11,
       "palabras_clave": [
-        "las emociones",
-        "Un mensaje"
+        "intuición",
+        "romanticismo",
+        "sueños",
+        "mensaje"
       ],
-      "significado": "Un mensaje y el aprendizaje de algo nuevo en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Un joven soñador mira los peces del cáliz: llegan mensajes emocionales e ideas creativas.",
+      "invertida": "Sensiblería e inmadurez: ilusiones frágiles o noticias que decepcionan.",
+      "contextos": {
+        "amor": "Declaración tímida y romance naciente.",
+        "trabajo": "Idea creativa que requiere madurar.",
+        "dinero": "Promesas económicas por confirmar.",
+        "salud": "Sensibilidad a flor de piel."
+      }
     },
     {
-      "nombre": "Caballo de Copas",
+      "nombre": "Caballero de Copas",
       "palo": "Copas",
       "elemento": "agua",
-      "rango": "Caballo",
+      "rango": "Caballero",
+      "numero": 12,
       "palabras_clave": [
-        "las emociones",
-        "La acción impetuosa"
+        "romance",
+        "encanto",
+        "propuesta",
+        "idealismo"
       ],
-      "significado": "La acción impetuosa y el impulso en marcha en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "El jinete del corazón llega con una propuesta bajo el brazo: seducción e idealismo romántico.",
+      "invertida": "Encanto que manipula: promesas vacías, humor cambiante o dramatismo.",
+      "contextos": {
+        "amor": "Pretendente romántico e intenso.",
+        "trabajo": "Propuesta tentadora más emocional que práctica.",
+        "dinero": "Gasto por impulso sentimental.",
+        "salud": "Emociones en constante vaivén."
+      }
     },
     {
       "nombre": "Reina de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Reina",
+      "numero": 13,
       "palabras_clave": [
-        "las emociones",
-        "La madurez emocional"
+        "compasión",
+        "madurez",
+        "intuición",
+        "cuidado"
       ],
-      "significado": "La madurez emocional y el cuidado en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Mujer de corazón maduro que escucha, acoge y cuida sin perderse en lo que siente.",
+      "invertida": "Se ahoga o ahoga: dependencia emocional, chantaje afectivo o inseguridad.",
+      "contextos": {
+        "amor": "Pareja empática y protectora.",
+        "trabajo": "Liderazgo humano que cuida a su gente.",
+        "dinero": "Administra con generosidad medida.",
+        "salud": "Gran inteligencia emocional bien equilibrada."
+      }
     },
     {
       "nombre": "Rey de Copas",
       "palo": "Copas",
       "elemento": "agua",
       "rango": "Rey",
+      "numero": 14,
       "palabras_clave": [
-        "las emociones",
-        "La autoridad"
+        "equilibrio",
+        "diplomacia",
+        "sabiduría",
+        "control"
       ],
-      "significado": "La autoridad y el dominio consolidado en el ámbito de las emociones, el amor y las relaciones.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Gobierna el mar de las emociones con temple y empatía: liderazgo sereno del corazón.",
+      "invertida": "El temple se quiebra: frialdad calculada, manipulación afectiva o ahogarse sintiendo.",
+      "contextos": {
+        "amor": "Pareja estable que comunica bien lo que siente.",
+        "trabajo": "Jefe diplomático y ecuánime.",
+        "dinero": "Decisiones financieras serenas y medidas.",
+        "salud": "Dominio emocional que aporta calma."
+      }
     },
     {
       "nombre": "As de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "As",
+      "numero": 1,
       "palabras_clave": [
-        "la mente",
-        "Un comienzo"
+        "verdad",
+        "claridad",
+        "revelación",
+        "decisión"
       ],
-      "significado": "Un comienzo y una semilla de potencial en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "La espada erguida corta la confusión: verdad, claridad mental y un avance decisivo.",
+      "invertida": "El filo se empaña: confusión, pensamiento nublado o verdad usada para herir.",
+      "contextos": {
+        "amor": "Una conversación clara define la relación.",
+        "trabajo": "Idea brillante y decisión cortante.",
+        "dinero": "Contrato o acuerdo que se aclara.",
+        "salud": "Mente despejada; cuida el estrés mental."
+      }
     },
     {
       "nombre": "Dos de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Dos",
+      "numero": 2,
       "palabras_clave": [
-        "la mente",
-        "La dualidad"
+        "indecisión",
+        "bloqueo",
+        "evitación",
+        "tensión"
       ],
-      "significado": "La dualidad y una elección a tomar en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Con los ojos vendados y dos espadas cruzadas, te niegas a elegir lo que ya se impone.",
+      "invertida": "La venda cae: sales del bloqueo y tomas al fin la decisión pendiente.",
+      "contextos": {
+        "amor": "Dilema entre dos personas o dos caminos.",
+        "trabajo": "Conflicto sin resolver que paraliza.",
+        "dinero": "Empate financiero que exige decidir.",
+        "salud": "Tensión por evitar un problema emocional."
+      }
     },
     {
       "nombre": "Tres de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Tres",
+      "numero": 3,
       "palabras_clave": [
-        "la mente",
-        "El crecimiento"
+        "dolor",
+        "desamor",
+        "pena",
+        "verdad"
       ],
-      "significado": "El crecimiento y la colaboración en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Tres espadas atraviesan un corazón nublado: dolor, desamor y una verdad que duele.",
+      "invertida": "La herida empieza a cerrar: se suelta el rencor y el dolor se elabora.",
+      "contextos": {
+        "amor": "Ruptura, traición o desengaño amoroso.",
+        "trabajo": "Críticas duras o decisiones que duelen.",
+        "dinero": "Pérdida que duele pero enseña.",
+        "salud": "Pena que afecta al pecho; necesita desahogo."
+      }
     },
     {
       "nombre": "Cuatro de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Cuatro",
+      "numero": 4,
       "palabras_clave": [
-        "la mente",
-        "La estabilidad"
+        "descanso",
+        "recuperación",
+        "pausa",
+        "reflexión"
       ],
-      "significado": "La estabilidad y una pausa para consolidar en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "El caballero yace en reposo mientras cuatro espadas velan: pausa necesaria para sanar la mente.",
+      "invertida": "No puedes desconectar: inquietud, agotamiento mental o pausa interrumpida.",
+      "contextos": {
+        "amor": "Pausa necesaria en la relación para reflexionar.",
+        "trabajo": "Baja temporal para recuperar fuerzas.",
+        "dinero": "Congelar gastos y reorganizar las finanzas.",
+        "salud": "Descanso prescrito; el cuerpo pide parar."
+      }
     },
     {
       "nombre": "Cinco de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Cinco",
+      "numero": 5,
       "palabras_clave": [
-        "la mente",
-        "El conflicto"
+        "derrota",
+        "traición",
+        "conflicto",
+        "orgullo"
       ],
-      "significado": "El conflicto y un cambio necesario en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Uno recoge las espadas mientras los demás se alejan: victoria vacía ganada a costa de todos.",
+      "invertida": "Se cierra la disputa: reconciliación, perdón o abandono del orgullo herido.",
+      "contextos": {
+        "amor": "Discusión en la que nadie gana de verdad.",
+        "trabajo": "Ambiente tóxico y luchas desleales.",
+        "dinero": "Pérdida por competencia sucia.",
+        "salud": "Estrés y resentimiento tras el conflicto."
+      }
     },
     {
       "nombre": "Seis de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Seis",
+      "numero": 6,
       "palabras_clave": [
-        "la mente",
-        "La armonía"
+        "transición",
+        "viaje",
+        "alivio",
+        "distancia"
       ],
-      "significado": "La armonía y el equilibrio recuperado en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Cruzas el agua hacia una orilla más serena: dejas atrás el conflicto y ganas calma.",
+      "invertida": "El cruce se atasca: no sueltas el pasado y los problemas te siguen.",
+      "contextos": {
+        "amor": "Alejarse de una relación dolorosa para sanar.",
+        "trabajo": "Cambio de aires o de proyecto que alivia.",
+        "dinero": "Salir de deudas con esfuerzo y orden.",
+        "salud": "Convalecencia lenta pero hacia la mejoría."
+      }
     },
     {
       "nombre": "Siete de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Siete",
+      "numero": 7,
       "palabras_clave": [
-        "la mente",
-        "La evaluación"
+        "engaño",
+        "estrategia",
+        "sigilo",
+        "traición"
       ],
-      "significado": "La evaluación y un desafío que pide estrategia en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Alguien se lleva espadas a escondidas: te rodea el engaño o te tienta el atajo deshonesto.",
+      "invertida": "El engaño se descubre: confesión, remordimiento o estrategia replanteada con honestidad.",
+      "contextos": {
+        "amor": "Secretos, infidelidad o desconfianza en la pareja.",
+        "trabajo": "Competencia desleal o información oculta.",
+        "dinero": "Cuidado con estafas y robos pequeños.",
+        "salud": "Culpa o secreto que quita el sueño."
+      }
     },
     {
       "nombre": "Ocho de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Ocho",
+      "numero": 8,
       "palabras_clave": [
-        "la mente",
-        "El movimiento"
+        "atrapamiento",
+        "limitación",
+        "miedo",
+        "víctima"
       ],
-      "significado": "El movimiento y la maestría en la acción en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Atada y vendada entre ocho espadas, crees que no puedes salir: la prisión es mental.",
+      "invertida": "Las cuerdas caen: recuperas el poder propio y sales de la falsa trampa.",
+      "contextos": {
+        "amor": "Sentirte atrapado en una relación que no avanza.",
+        "trabajo": "Bloqueo por miedo a equivocarte o a hablar.",
+        "dinero": "Creenza de escasez que limita tus opciones.",
+        "salud": "Ansiedad que paraliza; busca ayuda real."
+      }
     },
     {
       "nombre": "Nueve de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Nueve",
+      "numero": 9,
       "palabras_clave": [
-        "la mente",
-        "La culminación"
+        "ansiedad",
+        "angustia",
+        "insomnio",
+        "culpa"
       ],
-      "significado": "La culminación y la independencia en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Te despiertas en la oscuridad con las manos en la cara: las preocupaciones agrandan los miedos.",
+      "invertida": "La madrugada pasa: la angustia cede, pides ayuda y ves que el miedo era mayor que el daño.",
+      "contextos": {
+        "amor": "Miedo a perder a quien amas que no deja dormir.",
+        "trabajo": "Estrés y preocupación constante por el trabajo.",
+        "dinero": "Angustia por deudas o inestabilidad.",
+        "salud": "Insomnio y ansiedad; cuídala seriamente."
+      }
     },
     {
       "nombre": "Diez de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Diez",
+      "numero": 10,
       "palabras_clave": [
-        "la mente",
-        "La plenitud"
+        "final",
+        "traición",
+        "ruina",
+        "cierre"
       ],
-      "significado": "La plenitud y el cierre de un ciclo en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Diez espadas clavan el final en la espalda: el golpe más duro, tras el cual el sol vuelve a salir.",
+      "invertida": "Sobrevives al fondo: la recuperación empieza y la esperanza regresa.",
+      "contextos": {
+        "amor": "Ruptura definitiva que lo acaba todo.",
+        "trabajo": "Despido o cierre doloroso de una etapa.",
+        "dinero": "Pérdida total que obliga a reiniciar.",
+        "salud": "Agotamiento extremo; toca reconstruirse."
+      }
     },
     {
       "nombre": "Sota de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Sota",
+      "numero": 11,
       "palabras_clave": [
-        "la mente",
-        "Un mensaje"
+        "vigilancia",
+        "curiosidad",
+        "astucia",
+        "escepticismo"
       ],
-      "significado": "Un mensaje y el aprendizaje de algo nuevo en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Figura agazapada que observa todo con desconfianza: mente alerta, preguntas incómodas y también chismes.",
+      "invertida": "La vigilancia se vuelve paranoia: mentiras, espionaje o palabras que hieren.",
+      "contextos": {
+        "amor": "Celos infundados o vigilancia en la pareja.",
+        "trabajo": "Compañero astuto que observa y reporta.",
+        "dinero": "Revisar la letra pequeña antes de firmar.",
+        "salud": "Mente hiperactiva que no descansa."
+      }
     },
     {
-      "nombre": "Caballo de Espadas",
+      "nombre": "Caballero de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
-      "rango": "Caballo",
+      "rango": "Caballero",
+      "numero": 12,
       "palabras_clave": [
-        "la mente",
-        "La acción impetuosa"
+        "ambición",
+        "rapidez",
+        "determinación",
+        "franqueza"
       ],
-      "significado": "La acción impetuosa y el impulso en marcha en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Galopa cortando el viento: acción rápida y decidida guiada por la mente, sin miramientos.",
+      "invertida": "El filo se descontrola: impulsividad agresiva y palabras que dejan marca.",
+      "contextos": {
+        "amor": "Alguien directo e intenso que impresiona.",
+        "trabajo": "Ejecución veloz y sin miramientos.",
+        "dinero": "Decisiones rápidas de alto riesgo.",
+        "salud": "Tensión nerviosa; necesita calma mental."
+      }
     },
     {
       "nombre": "Reina de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Reina",
+      "numero": 13,
       "palabras_clave": [
-        "la mente",
-        "La madurez emocional"
+        "independencia",
+        "claridad",
+        "límites",
+        "franqueza"
       ],
-      "significado": "La madurez emocional y el cuidado en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Mujer de mente clara y límites firmes que dice la verdad sin titubear ni herir de más.",
+      "invertida": "La claridad se vuelve filo cruel: dureza, sarcasmo o amargura que hiere.",
+      "contextos": {
+        "amor": "Pareja independiente que exige honestidad.",
+        "trabajo": "Profesional rigurosa de criterio firme.",
+        "dinero": "Administra con criterios estrictos.",
+        "salud": "Buena salud mental; vigilar la rigidez."
+      }
     },
     {
       "nombre": "Rey de Espadas",
       "palo": "Espadas",
       "elemento": "aire",
       "rango": "Rey",
+      "numero": 14,
       "palabras_clave": [
-        "la mente",
-        "La autoridad"
+        "autoridad",
+        "lógica",
+        "intelecto",
+        "disciplina"
       ],
-      "significado": "La autoridad y el dominio consolidado en el ámbito de la mente, el conflicto y la verdad.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Gobierna con razón imparcial y justicia rigurosa: autoridad del pensamiento sobre el sentimiento.",
+      "invertida": "La razón se vuelve tiranía: abuso de poder, frialdad calculada o crueldad legalista.",
+      "contextos": {
+        "amor": "Pareja racional que puede parecer fría.",
+        "trabajo": "Juez, jefe o asesor de criterio implacable.",
+        "dinero": "Finanzas gobernadas por la lógica pura.",
+        "salud": "Salud mental fuerte; cuidado con la rigidez."
+      }
     },
     {
       "nombre": "As de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "As",
+      "numero": 1,
       "palabras_clave": [
-        "el dinero",
-        "Un comienzo"
+        "prosperidad",
+        "abundancia",
+        "semilla",
+        "oportunidad"
       ],
-      "significado": "Un comienzo y una semilla de potencial en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Una moneda nueva brota del jardín: semilla de prosperidad material y oportunidad concreta.",
+      "invertida": "La semilla no prende: oportunidad perdida, bloqueos económicos o mala gestión.",
+      "contextos": {
+        "amor": "Relación estable que ofrece seguridad.",
+        "trabajo": "Empleo o proyecto sólido que comienza.",
+        "dinero": "Inversión prometedora que cultivar.",
+        "salud": "Cuerpo sano y recursos para cuidarlo."
+      }
     },
     {
       "nombre": "Dos de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Dos",
+      "numero": 2,
       "palabras_clave": [
-        "el dinero",
-        "La dualidad"
+        "equilibrio",
+        "adaptación",
+        "fluidez",
+        "prioridades"
       ],
-      "significado": "La dualidad y una elección a tomar en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Malabares con dos monedas entre olas: mantén el equilibrio entre dar y recibir, gastar y ahorrar.",
+      "invertida": "El ritmo se desordena: desequilibrio financiero, exceso de compromisos o descontrol.",
+      "contextos": {
+        "amor": "Equilibrar el tiempo entre la pareja y lo demás.",
+        "trabajo": "Multitarea y malabares con recursos.",
+        "dinero": "Ajustar el presupuesto mes a mes.",
+        "salud": "Ritmo de vida ajetreado; busca equilibrio."
+      }
     },
     {
       "nombre": "Tres de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Tres",
+      "numero": 3,
       "palabras_clave": [
-        "el dinero",
-        "El crecimiento"
+        "maestría",
+        "colaboración",
+        "calidad",
+        "oficio"
       ],
-      "significado": "El crecimiento y la colaboración en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Cantero, monje y arquitecto trabajan juntos: el oficio bien hecho y el talento reconocido.",
+      "invertida": "Falta de coordinación o de calidad: trabajo mediocre sin reconocimiento.",
+      "contextos": {
+        "amor": "Construir la relación con esmero compartido.",
+        "trabajo": "Equipo competente que valora tu arte.",
+        "dinero": "Ingresos por trabajo bien cualificado.",
+        "salud": "Bienestar por hacer un trabajo con sentido."
+      }
     },
     {
       "nombre": "Cuatro de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Cuatro",
+      "numero": 4,
       "palabras_clave": [
-        "el dinero",
-        "La estabilidad"
+        "seguridad",
+        "conservación",
+        "estabilidad",
+        "control"
       ],
-      "significado": "La estabilidad y una pausa para consolidar en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Abraza sus monedas sin soltarlas: seguridad material, ahorro y control de lo propio.",
+      "invertida": "El agarre se vuelve avaricia, o se afloja: miedo a perder o gasto descontrolado.",
+      "contextos": {
+        "amor": "Aferrarse a la pareja por seguridad, no por amor.",
+        "trabajo": "Empego al puesto y al control del recurso.",
+        "dinero": "Ahorro excesivo por miedo a la escasez.",
+        "salud": "Tensión por no soltar el control."
+      }
     },
     {
       "nombre": "Cinco de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Cinco",
+      "numero": 5,
       "palabras_clave": [
-        "el dinero",
-        "El conflicto"
+        "carencia",
+        "necesidad",
+        "abandono",
+        "crisis"
       ],
-      "significado": "El conflicto y un cambio necesario en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Dos mendigos pasan junto a la iglesia iluminada: penuria y soledad, aunque la ayuda está cerca.",
+      "invertida": "La crisis amaina: encuentras apoyo, recuperas recursos o ves la puerta que antes ignorabas.",
+      "contextos": {
+        "amor": "Sentirse solo o excluido dentro de la relación.",
+        "trabajo": "Exclusión laboral o crisis de empleo.",
+        "dinero": "Dificultad económica; pide ayuda a tiempo.",
+        "salud": "Descuido y frío; busca cuidado y calor."
+      }
     },
     {
       "nombre": "Seis de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Seis",
+      "numero": 6,
       "palabras_clave": [
-        "el dinero",
-        "La armonía"
+        "generosidad",
+        "caridad",
+        "reciprocidad",
+        "equilibrio"
       ],
-      "significado": "La armonía y el equilibrio recuperado en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "El comerciante reparte monedas con balanza: dar y recibir en proporción justa.",
+      "invertida": "El intercambio se vicia: dar con interés, deudas de favor o dependencia del don.",
+      "contextos": {
+        "amor": "Dar y recibir afecto en igualdad.",
+        "trabajo": "Patrocinio, beca o ayuda generosa recibida.",
+        "dinero": "Donaciones, préstamos o reparto justo.",
+        "salud": "Recibir cuidado cuando lo necesitas."
+      }
     },
     {
       "nombre": "Siete de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Siete",
+      "numero": 7,
       "palabras_clave": [
-        "el dinero",
-        "La evaluación"
+        "paciencia",
+        "inversión",
+        "espera",
+        "cosecha"
       ],
-      "significado": "La evaluación y un desafío que pide estrategia en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "El labrador descansa sobre su hoz y mira la parra: espera paciente la cosecha de lo sembrado.",
+      "invertida": "La espera frustra: impaciencia, mala inversión o esfuerzo que no da frutos.",
+      "contextos": {
+        "amor": "Cultivar el vínculo sin forzar sus tiempos.",
+        "trabajo": "Proyecto a largo plazo que aún madura.",
+        "dinero": "Inversión que requiere paciencia para rendir.",
+        "salud": "Resultados lentos; mantén los hábitos."
+      }
     },
     {
       "nombre": "Ocho de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Ocho",
+      "numero": 8,
       "palabras_clave": [
-        "el dinero",
-        "El movimiento"
+        "dedicación",
+        "oficio",
+        "aprendizaje",
+        "perfección"
       ],
-      "significado": "El movimiento y la maestría en la acción en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "El artesano pule moneda tras moneda sin mirar arriba: maestría por repetición y detalle.",
+      "invertida": "El trabajo pierde rumbo: perfeccionismo, distracción o rutina sin aprendizaje.",
+      "contextos": {
+        "amor": "Trabajar la relación con constancia artesanal.",
+        "trabajo": "Aprendizaje intenso de un oficio concreto.",
+        "dinero": "Ingresos por habilidad técnica en desarrollo.",
+        "salud": "Cuida la vista y la postura al trabajar."
+      }
     },
     {
       "nombre": "Nueve de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Nueve",
+      "numero": 9,
       "palabras_clave": [
-        "el dinero",
-        "La culminación"
+        "independencia",
+        "autosuficiencia",
+        "abundancia",
+        "disfrute"
       ],
-      "significado": "La culminación y la independencia en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Mujer serena en su viñedo próspero: disfruta sola lo que cultivó con esfuerzo.",
+      "invertida": "La autosuficiencia se quiebra: dependencia económica, vanidad o inseguridad material.",
+      "contextos": {
+        "amor": "Plenitud individual que no depende de nadie.",
+        "trabajo": "Freelance próspera dueña de su tiempo.",
+        "dinero": "Riqueza tranquila y bien ganada.",
+        "salud": "Bienestar físico y holgura para cuidarse."
+      }
     },
     {
       "nombre": "Diez de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Diez",
+      "numero": 10,
       "palabras_clave": [
-        "el dinero",
-        "La plenitud"
+        "herencia",
+        "legado",
+        "patrimonio",
+        "familia"
       ],
-      "significado": "La plenitud y el cierre de un ciclo en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Tres personas, dos perros y diez monedas bajo el arco: patrimonio familiar que perdura por generaciones.",
+      "invertida": "El legado se discute: pérdida de herencia, disputas familiares o inestabilidad económica.",
+      "contextos": {
+        "amor": "Familia consolidada y compromiso duradero.",
+        "trabajo": "Negocio familiar o empresa estable.",
+        "dinero": "Herencia, patrimonio y seguridad a largo plazo.",
+        "salud": "Bienestar sostenido en el tiempo."
+      }
     },
     {
       "nombre": "Sota de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Sota",
+      "numero": 11,
       "palabras_clave": [
-        "el dinero",
-        "Un mensaje"
+        "estudio",
+        "diligencia",
+        "enfoque",
+        "desarrollo"
       ],
-      "significado": "Un mensaje y el aprendizaje de algo nuevo en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Joven que examina su moneda con seriedad: llega un mensaje concreto para aprender y crecer.",
+      "invertida": "Falta de foco: oportunidades desperdiciadas, desgana o estancamiento.",
+      "contextos": {
+        "amor": "Sentimiento estable pero aún por construir.",
+        "trabajo": "Aprendizaje aplicado o nuevo puesto formativo.",
+        "dinero": "Pequeño ingreso que administrar con seriedad.",
+        "salud": "Hábitos nuevos que cultivar con constancia."
+      }
     },
     {
-      "nombre": "Caballo de Oros",
+      "nombre": "Caballero de Oros",
       "palo": "Oros",
       "elemento": "tierra",
-      "rango": "Caballo",
+      "rango": "Caballero",
+      "numero": 12,
       "palabras_clave": [
-        "el dinero",
-        "La acción impetuosa"
+        "constancia",
+        "responsabilidad",
+        "método",
+        "esfuerzo"
       ],
-      "significado": "La acción impetuosa y el impulso en marcha en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Jinete metódico que avanza despacio pero sin desviarse: palabra que se cumple y trabajo que rinde.",
+      "invertida": "El caballo se planta: estancamiento, terquedad o promesas incumplidas.",
+      "contextos": {
+        "amor": "Pareja fiel y estable, sin grandes gestos.",
+        "trabajo": "Profesional fiable que cumple plazos.",
+        "dinero": "Ahorro constante y gasto prudente.",
+        "salud": "Resistencia física; evita la inercia."
+      }
     },
     {
       "nombre": "Reina de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Reina",
+      "numero": 13,
       "palabras_clave": [
-        "el dinero",
-        "La madurez emocional"
+        "provisión",
+        "estabilidad",
+        "practicidad",
+        "cuidado"
       ],
-      "significado": "La madurez emocional y el cuidado en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Mujer práctica y proveedora que crea seguridad, hogar y bienestar a su alrededor.",
+      "invertida": "La provisión se desequilibra: dependencia, descuido propio o seguridad delegada en otros.",
+      "contextos": {
+        "amor": "Pareja que cuida y provee con calidez práctica.",
+        "trabajo": "Gestora eficiente de recursos y equipos.",
+        "dinero": "Administra el hogar y las finanzas con acierto.",
+        "salud": "Cuida el cuerpo con hábitos concretos."
+      }
     },
     {
       "nombre": "Rey de Oros",
       "palo": "Oros",
       "elemento": "tierra",
       "rango": "Rey",
+      "numero": 14,
       "palabras_clave": [
-        "el dinero",
-        "La autoridad"
+        "riqueza",
+        "autoridad",
+        "negocio",
+        "estabilidad"
       ],
-      "significado": "La autoridad y el dominio consolidado en el ámbito de el dinero, el cuerpo y lo material.",
-      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+      "significado": "Empresario próspero que gobierna con criterio y crea riqueza estable para los suyos.",
+      "invertida": "La abundancia se corrompe: avarencia, abuso de poder o éxito material vacío.",
+      "contextos": {
+        "amor": "Pareja generosa que da seguridad material.",
+        "trabajo": "Director de negocios con mano firme.",
+        "dinero": "Patrimonio consolidado y bien administrado.",
+        "salud": "Holgura para cuidarse; cuidado con la gula."
+      }
     }
   ]
 }

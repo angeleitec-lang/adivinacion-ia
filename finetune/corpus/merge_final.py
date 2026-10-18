@@ -15,8 +15,33 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from translate_dataset import detect_language
-from validate_synthetic import answer_of, sha
+from validate_synthetic import answer_of, human_of, sha
 from build_dataset import BAD_TOPIC_RE, domain_hits
+
+
+def extraer_tema(human: str) -> str:
+    """Extrae el tema real del prompt, tolerando las plantillas de INSTRUCTION_TEMPLATES.
+
+    Si hay «:» toma lo posterior; si coincide con una plantilla conocida
+    («¿Qué significa X?», «Háblame de X.», «Explícame X de forma…», «…desarróllame X.»)
+    toma X; si no puede extraer, devuelve la frase completa.
+    """
+    t = (human or "").strip()
+    if ":" in t:
+        t = t.split(":", 1)[1].strip()
+    else:
+        patrones = (
+            r"^¿?Qu[eé]\s+significa\s+(.+?)\??$",
+            r"^H[áa]blame\s+(?:del\s+|de\s+)(.+?)[.?]?$",
+            r"^Expl[íi]came\s+(.+?)\s+de\s+forma\s+.+$",
+            r"^.*desarr[oó]llame\s+(.+?)[.?]?$",
+        )
+        for pat in patrones:
+            m = re.match(pat, t, re.IGNORECASE)
+            if m:
+                t = m.group(1)
+                break
+    return t.strip().rstrip(".?").strip()
 
 
 def is_junk_pair(row: dict, min_terms: int = 2) -> bool:
@@ -29,8 +54,12 @@ def is_junk_pair(row: dict, min_terms: int = 2) -> bool:
     answer = answer_of(row)
     if re.search(r"secci[oó]n\s*\d+|§\s*\d+", human, re.IGNORECASE):
         return True
-    if BAD_TOPIC_RE.search(human):
+    tema = extraer_tema(human)
+    if len(tema) <= 2:
         return True
+    for segmento in tema.split(" > "):
+        if BAD_TOPIC_RE.search(segmento.strip()):
+            return True
     if min_terms > 0 and len(domain_hits(human) | domain_hits(answer)) < min_terms:
         return True
     return False
@@ -82,6 +111,144 @@ def lang_counts(rows: list[dict]) -> dict[str, int]:
     return dict(c)
 
 
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip().lower()
+
+
+def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
+            meta: list[dict], cfg: dict) -> dict:
+    """Fusiona reales y sintéticos: filtros, splits 50/50 del val real, dedupes y reporte.
+
+    cfg: seed, train_ratio, val_ratio, include_en.
+    Devuelve {"train", "val", "test", "report"}.
+    """
+    seed = cfg.get("seed", 42)
+    r_train = cfg.get("train_ratio", 0.8)
+    r_val = cfg.get("val_ratio", 0.1)
+    include_en = cfg.get("include_en", False)
+    descartes = {"junk": 0, "duplicado_exacto": 0, "duplicado_prefijo": 0, "idioma": 0}
+
+    rt, rv = [], []
+    for src, dst in ((real_train, rt), (real_val, rv)):
+        for r in src:
+            if is_junk_pair(r):
+                descartes["junk"] += 1
+                continue
+            if not include_en and detect_language(answer_of(r)) != "es":
+                descartes["idioma"] += 1
+                continue
+            dst.append(r)
+
+    seen_real: set[str] = set()
+    train_real, val_cands = [], []
+    for r in rt:
+        h = sha(answer_of(r))
+        if h in seen_real:
+            descartes["duplicado_exacto"] += 1
+            continue
+        seen_real.add(h)
+        train_real.append(r)
+    for r in rv:
+        h = sha(answer_of(r))
+        if h in seen_real:
+            descartes["duplicado_exacto"] += 1
+            continue
+        seen_real.add(h)
+        val_cands.append(r)
+
+    by_block: dict[str, list[dict]] = defaultdict(list)
+    dup_vs_real = 0
+    seen_synth: set[str] = set()
+    for r, m in zip(synth, meta):
+        h = sha(answer_of(r))
+        if h in seen_real:
+            dup_vs_real += 1
+            descartes["duplicado_exacto"] += 1
+            continue
+        if h in seen_synth:
+            descartes["duplicado_exacto"] += 1
+            continue
+        seen_synth.add(h)
+        by_block[m.get("block", "sintetico")].append(r)
+
+    st, sv, ste = [], [], []
+    for block, rows in sorted(by_block.items()):
+        a, b, c = split_block(rows, block, seed, r_train, r_val)
+        st += [(r, block) for r in a]
+        sv += [(r, block) for r in b]
+        ste += [(r, block) for r in c]
+
+    val_real, test_real = [], []
+    for r in val_cands:
+        h = sha(human_of(r))
+        (val_real if int(h, 16) % 2 == 0 else test_real).append(r)
+
+    prefijos = {_norm(answer_of(r))[:200] for r in train_real}
+    prefijos.update(_norm(answer_of(r))[:200] for r, _ in st)
+
+    def sin_prefijo(rows: list[dict]) -> list[dict]:
+        out = []
+        for r in rows:
+            if _norm(answer_of(r))[:200] in prefijos:
+                descartes["duplicado_prefijo"] += 1
+                continue
+            out.append(r)
+        return out
+
+    def sin_prefijo_tup(items: list[tuple]) -> list[tuple]:
+        out = []
+        for row, block in items:
+            if _norm(answer_of(row))[:200] in prefijos:
+                descartes["duplicado_prefijo"] += 1
+                continue
+            out.append((row, block))
+        return out
+
+    val_real = sin_prefijo(val_real)
+    test_real = sin_prefijo(test_real)
+    sv = sin_prefijo_tup(sv)
+    ste = sin_prefijo_tup(ste)
+
+    train = train_real + [r for r, _ in st]
+    val = val_real + [r for r, _ in sv]
+    test = test_real + [r for r, _ in ste]
+    random.Random(seed).shuffle(train)
+
+    bps: dict[str, Counter] = {"train": Counter(), "val": Counter(), "test": Counter()}
+    for r in train_real:
+        bps["train"]["real"] += 1
+    for _, b in st:
+        bps["train"][b] += 1
+    for r in val_real:
+        bps["val"]["real"] += 1
+    for _, b in sv:
+        bps["val"][b] += 1
+    for r in test_real:
+        bps["test"]["real"] += 1
+    for _, b in ste:
+        bps["test"][b] += 1
+
+    report = {
+        "real_train_in": len(real_train),
+        "real_val_in": len(real_val),
+        "real_train_kept": len(train_real),
+        "real_val_kept": len(val_real) + len(test_real),
+        "synth_in": len(synth),
+        "synth_dups_vs_real": dup_vs_real,
+        "synth_kept": sum(len(v) for v in by_block.values()),
+        "split": {"train": len(train), "val": len(val), "test": len(test)},
+        "blocks": {k: len(v) for k, v in sorted(by_block.items())},
+        "blocks_por_split": {k: dict(sorted(v.items())) for k, v in bps.items()},
+        "descartes": descartes,
+        "langs": {
+            "train": lang_counts(train),
+            "val": lang_counts(val),
+            "test": lang_counts(test),
+        },
+    }
+    return {"train": train, "val": val, "test": test, "report": report}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Fusiona real + sintético y genera splits.")
     ap.add_argument("--real-train", default="corpus/train_final.jsonl")
@@ -92,6 +259,8 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--train-ratio", type=float, default=0.8)
     ap.add_argument("--val-ratio", type=float, default=0.1)
+    ap.add_argument("--include-en", action="store_true",
+                    help="conserva respuestas no españolas en los datos reales")
     args = ap.parse_args(argv)
 
     real_train = load_jsonl(Path(args.real_train))
@@ -103,72 +272,31 @@ def main(argv=None) -> int:
         n = min(len(meta), len(synth))
         synth, meta = synth[:n], meta[:n]
 
-    real_train = [r for r in real_train if not is_junk_pair(r)]
-    real_val = [r for r in real_val if not is_junk_pair(r)]
-
-    seen: set[str] = set()
-    dedup_real_train, dedup_real_val = [], []
-    for r in real_train:
-        h = sha(answer_of(r))
-        if h not in seen:
-            seen.add(h)
-            dedup_real_train.append(r)
-    for r in real_val:
-        h = sha(answer_of(r))
-        if h not in seen:
-            seen.add(h)
-            dedup_real_val.append(r)
-
-    by_block: dict[str, list[dict]] = defaultdict(list)
-    dup_synth = 0
-    for r, m in zip(synth, meta):
-        h = sha(answer_of(r))
-        if h in seen:
-            dup_synth += 1
-            continue
-        seen.add(h)
-        by_block[m.get("block", "sintetico")].append(r)
-
-    st, sv, ste = [], [], []
-    for block, rows in sorted(by_block.items()):
-        a, b, c = split_block(rows, block, args.seed, args.train_ratio, args.val_ratio)
-        st += a
-        sv += b
-        ste += c
-
-    train = dedup_real_train + st
-    val = dedup_real_val + sv
-    test = ste
-    random.Random(args.seed).shuffle(train)
+    cfg = {
+        "seed": args.seed,
+        "train_ratio": args.train_ratio,
+        "val_ratio": args.val_ratio,
+        "include_en": args.include_en,
+    }
+    res = fusionar(real_train, real_val, synth, meta, cfg)
+    train, val, test, report = res["train"], res["val"], res["test"], res["report"]
 
     out = Path(args.out_dir)
     write_jsonl(out / "train.jsonl", train)
     write_jsonl(out / "val.jsonl", val)
     write_jsonl(out / "test.jsonl", test)
-
-    report = {
-        "real_train_in": len(real_train),
-        "real_val_in": len(real_val),
-        "real_train_kept": len(dedup_real_train),
-        "real_val_kept": len(dedup_real_val),
-        "synth_in": len(synth),
-        "synth_dups_vs_real": dup_synth,
-        "synth_kept": sum(len(v) for v in by_block.values()),
-        "split": {"train": len(train), "val": len(val), "test": len(test)},
-        "blocks": {k: len(v) for k, v in sorted(by_block.items())},
-        "langs": {
-            "train": lang_counts(train),
-            "val": lang_counts(val),
-            "test": lang_counts(test),
-        },
-    }
     (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"[merge] real train {len(real_train)}→{len(dedup_real_train)} · val {len(real_val)}→{len(dedup_real_val)}")
-    print(f"[merge] sintético {len(synth)} · dup con real {dup_synth} · útil {report['synth_kept']}")
+    d = report["descartes"]
+    print(f"[merge] real train {report['real_train_in']}→{report['real_train_kept']} · "
+          f"val {report['real_val_in']}→{report['real_val_kept']}")
+    print(f"[merge] sintético {report['synth_in']} · dup con real {report['synth_dups_vs_real']} · "
+          f"útil {report['synth_kept']}")
+    print(f"[merge] descartes: junk={d['junk']} exacto={d['duplicado_exacto']} "
+          f"prefijo={d['duplicado_prefijo']} idioma={d['idioma']}")
     print(f"[merge] split train={len(train)} val={len(val)} test={len(test)}")
-    for k, v in sorted(by_block.items()):
-        print(f"  {k:18s} {len(v)}")
+    for k, v in sorted(report["blocks"].items()):
+        print(f"  {k:18s} {v}")
     print(f"[merge] idiomas train: {report['langs']['train']}")
     print(f"[merge] salida: {out}/")
     return 0

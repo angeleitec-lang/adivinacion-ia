@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera la matriz de trabajos sinteticos en corpus/jobs.db."""
+"""Genera la matriz de trabajos sintéticos en corpus/jobs.db."""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +9,7 @@ import random
 import sqlite3
 import unicodedata
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import swisseph as swe
 
@@ -16,111 +17,111 @@ ROOT = Path(__file__).resolve().parent.parent
 KB_DIR = ROOT / "corpus" / "kb"
 
 SYSTEM = (
-    "Eres una tarotista, astrologa y numerologa profesional con mas de veinte anos de "
-    "experiencia. Lees para personas reales con respeto, empatia y lenguaje claro. "
-    "Interpretas los simbolos combinando las tecnicas que se te dan, sin inventar datos: "
-    "las cartas, posiciones planetarias, casas y numeros que aparecen en la consulta son "
-    "los unicos validos. Escribes en espanol neutro, con estructura natural (apertura, "
-    "interpretacion, consejo), sin listas rigidas salvo que aporten claridad. No haces "
-    "diagnosticos medicos, legales ni financieros: orientas y derivas cuando corresponde. "
+    "Eres una tarotista, astróloga y numeróloga profesional con más de veinte años de "
+    "experiencia. Lees para personas reales con respeto, empatía y lenguaje claro. "
+    "Interpretas los símbolos combinando las técnicas que se te dan, sin inventar datos: "
+    "las cartas, posiciones planetarias, casas y números que aparecen en la consulta son "
+    "los únicos válidos. Escribes en español neutro, con estructura natural (apertura, "
+    "interpretación, consejo), sin listas rígidas salvo que aporten claridad. No haces "
+    "diagnósticos médicos, legales ni financieros: orientas y derivas cuando corresponde. "
     "No prometes resultados ni predicciones absolutas; hablas de tendencias y posibilidades."
 )
 
 CIUDADES = [
-    ("Madrid", "Espana", 40.4168, -3.7038),
-    ("Barcelona", "Espana", 41.3874, 2.1686),
-    ("Sevilla", "Espana", 37.3891, -5.9845),
-    ("Valencia", "Espana", 39.4699, -0.3763),
-    ("Bilbao", "Espana", 43.2630, -2.9350),
-    ("Ciudad de Mexico", "Mexico", 19.4326, -99.1332),
-    ("Guadalajara", "Mexico", 20.6597, -103.3496),
-    ("Buenos Aires", "Argentina", -34.6037, -58.3816),
-    ("Cordoba", "Argentina", -31.4201, -64.1888),
-    ("Bogota", "Colombia", 4.7110, -74.0721),
-    ("Medellin", "Colombia", 6.2442, -75.5812),
-    ("Lima", "Peru", -12.0464, -77.0428),
-    ("Santiago", "Chile", -33.4489, -70.6693),
-    ("Caracas", "Venezuela", 10.4806, -66.9036),
-    ("Montevideo", "Uruguay", -34.9011, -56.1645),
-    ("La Habana", "Cuba", 23.1136, -82.3666),
-    ("San Juan", "Puerto Rico", 18.4655, -66.1057),
-    ("Quito", "Ecuador", -0.1807, -78.4678),
-    ("Panama", "Panama", 8.9824, -79.5199),
-    ("Asuncion", "Paraguay", -25.2637, -57.5759),
+    ("Madrid", "España", 40.4168, -3.7038, "Europe/Madrid"),
+    ("Barcelona", "España", 41.3874, 2.1686, "Europe/Madrid"),
+    ("Sevilla", "España", 37.3891, -5.9845, "Europe/Madrid"),
+    ("Valencia", "España", 39.4699, -0.3763, "Europe/Madrid"),
+    ("Bilbao", "España", 43.2630, -2.9350, "Europe/Madrid"),
+    ("Ciudad de México", "México", 19.4326, -99.1332, "America/Mexico_City"),
+    ("Guadalajara", "México", 20.6597, -103.3496, "America/Mexico_City"),
+    ("Buenos Aires", "Argentina", -34.6037, -58.3816, "America/Argentina/Buenos_Aires"),
+    ("Córdoba", "Argentina", -31.4201, -64.1888, "America/Argentina/Cordoba"),
+    ("Bogotá", "Colombia", 4.7110, -74.0721, "America/Bogota"),
+    ("Medellín", "Colombia", 6.2442, -75.5812, "America/Bogota"),
+    ("Lima", "Perú", -12.0464, -77.0428, "America/Lima"),
+    ("Santiago", "Chile", -33.4489, -70.6693, "America/Santiago"),
+    ("Caracas", "Venezuela", 10.4806, -66.9036, "America/Caracas"),
+    ("Montevideo", "Uruguay", -34.9011, -56.1645, "America/Montevideo"),
+    ("La Habana", "Cuba", 23.1136, -82.3666, "America/Havana"),
+    ("San Juan", "Puerto Rico", 18.4655, -66.1057, "America/Puerto_Rico"),
+    ("Quito", "Ecuador", -0.1807, -78.4678, "America/Guayaquil"),
+    ("Panamá", "Panamá", 8.9824, -79.5199, "America/Panama"),
+    ("Asunción", "Paraguay", -25.2637, -57.5759, "America/Asuncion"),
 ]
 
 NOMBRES = [
-    "Maria Lopez", "Ana Garcia", "Lucia Fernandez", "Carmen Ruiz", "Sofia Martinez",
-    "Laura Sanchez", "Paula Gomez", "Marta Diaz", "Elena Torres", "Claudia Ramos",
-    "Valeria Ortiz", "Daniela Castro", "Patricia Vega", "Rosa Mendez", "Irene Navarro",
-    "Javier Perez", "Carlos Rodriguez", "Daniel Alvarez", "Pablo Moreno", "Diego Romero",
-    "Andres Gil", "Miguel Serrano", "Sergio Blanco", "Alvaro Molina", "Adrian Ortega",
-    "Hugo Delgado", "Ivan Marin", "Raul Iglesias", "Oscar Rubio", "Manuel Herrera",
-    "Beatriz Cano", "Silvia Prieto", "Natalia Cortes", "Andrea Rivas", "Eva Campos",
-    "Veronica Suarez", "Julia Reyes", "Cristina Vidal", "Alicia Leon", "Teresa Fuentes",
+    "María López", "Ana García", "Lucía Fernández", "Carmen Ruiz", "Sofía Martínez",
+    "Laura Sánchez", "Paula Gómez", "Marta Díaz", "Elena Torres", "Claudia Ramos",
+    "Valeria Ortiz", "Daniela Castro", "Patricia Vega", "Rosa Méndez", "Irene Navarro",
+    "Javier Pérez", "Carlos Rodríguez", "Daniel Álvarez", "Pablo Moreno", "Diego Romero",
+    "Andrés Gil", "Miguel Serrano", "Sergio Blanco", "Álvaro Molina", "Adrián Ortega",
+    "Hugo Delgado", "Iván Marín", "Raúl Iglesias", "Óscar Rubio", "Manuel Herrera",
+    "Beatriz Cano", "Silvia Prieto", "Natalia Cortés", "Andrea Rivas", "Eva Campos",
+    "Verónica Suárez", "Julia Reyes", "Cristina Vidal", "Alicia León", "Teresa Fuentes",
 ]
 
 CONTEXTOS = ["amor", "trabajo", "dinero", "salud", "espiritual", "general"]
 
 PREGUNTAS = {
     "amor": [
-        "Que energia hay en mi vida sentimental ahora mismo?",
-        "Tengo una relacion que me tiene confundida, que me dice esta carta?",
-        "Voy a encontrar pareja en los proximos meses?",
-        "Como puedo mejorar la comunicacion con mi pareja?",
+        "¿Qué energía hay en mi vida sentimental ahora mismo?",
+        "Tengo una relación que me tiene confundida, ¿qué me dice esta carta?",
+        "¿Voy a encontrar pareja en los próximos meses?",
+        "¿Cómo puedo mejorar la comunicación con mi pareja?",
     ],
     "trabajo": [
-        "Que me espera en el trabajo en los proximos meses?",
-        "Me conviene aceptar la oferta que me han hecho?",
-        "Como puedo desbloquear mi carrera profesional?",
-        "Hay cambios laborales cerca para mi?",
+        "¿Qué me espera en el trabajo en los próximos meses?",
+        "¿Me conviene aceptar la oferta que me han hecho?",
+        "¿Cómo puedo desbloquear mi carrera profesional?",
+        "¿Hay cambios laborales cerca para mí?",
     ],
     "dinero": [
-        "Que dice esta carta sobre mis finanzas actuales?",
-        "Es buen momento para una inversion o un cambio economico?",
-        "Como puedo salir de esta situacion economica?",
-        "Voy a mejorar mis ingresos este ano?",
+        "¿Qué dice esta carta sobre mis finanzas actuales?",
+        "¿Es buen momento para una inversión o un cambio económico?",
+        "¿Cómo puedo salir de esta situación económica?",
+        "¿Voy a mejorar mis ingresos este año?",
     ],
     "salud": [
-        "Que energia rodea mi bienestar fisico y emocional?",
-        "Que necesito atender de mi salud en esta etapa?",
-        "Por que me siento tan agotada ultimamente?",
-        "Que deberia cambiar en mis habitos?",
+        "¿Qué energía rodea mi bienestar físico y emocional?",
+        "¿Qué necesito atender de mi salud en esta etapa?",
+        "¿Por qué me siento tan agotada últimamente?",
+        "¿Qué debería cambiar en mis hábitos?",
     ],
     "espiritual": [
-        "Que aprendizaje espiritual me trae esta etapa?",
-        "Que debo soltar para avanzar?",
-        "Que me quiere decir el universo con esta situacion?",
-        "Como conecto con mi proposito?",
+        "¿Qué aprendizaje espiritual me trae esta etapa?",
+        "¿Qué debo soltar para avanzar?",
+        "¿Qué me quiere decir el universo con esta situación?",
+        "¿Cómo conecto con mi propósito?",
     ],
     "general": [
-        "Que necesito saber en este momento?",
-        "Cual es el tema central de mi vida ahora?",
-        "Que me conviene priorizar este mes?",
-        "Que bloqueo me esta frenando?",
+        "¿Qué necesito saber en este momento?",
+        "¿Cuál es el tema central de mi vida ahora?",
+        "¿Qué me conviene priorizar este mes?",
+        "¿Qué bloqueo me está frenando?",
     ],
 }
 
 FOCOS_ASTRO = [
-    "vocacion profesional", "vida amorosa", "familia y raices", "dinero y recursos",
-    "salud y energia", "proposito espiritual", "estudios y formacion",
-    "mudanza o viaje", "proximo ano", "talentos y creatividad",
+    "vocación profesional", "vida amorosa", "familia y raíces", "dinero y recursos",
+    "salud y energía", "propósito espiritual", "estudios y formación",
+    "mudanza o viaje", "próximo año", "talentos y creatividad",
 ]
 
-FOCOS_SIN = ["compatibilidad amorosa", "sociedad laboral", "amistad", "vinculo familiar", "proyecto en comun"]
+FOCOS_SIN = ["compatibilidad amorosa", "sociedad laboral", "amistad", "vínculo familiar", "proyecto en común"]
 
-SIGNOS = ["Aries", "Tauro", "Geminis", "Cancer", "Leo", "Virgo", "Libra", "Escorpio",
+SIGNOS = ["Aries", "Tauro", "Géminis", "Cáncer", "Leo", "Virgo", "Libra", "Escorpio",
           "Sagitario", "Capricornio", "Acuario", "Piscis"]
 
 PLANETAS = [
     (swe.SUN, "Sol"), (swe.MOON, "Luna"), (swe.MERCURY, "Mercurio"),
-    (swe.VENUS, "Venus"), (swe.MARS, "Marte"), (swe.JUPITER, "Jupiter"),
+    (swe.VENUS, "Venus"), (swe.MARS, "Marte"), (swe.JUPITER, "Júpiter"),
     (swe.SATURN, "Saturno"), (swe.URANUS, "Urano"), (swe.NEPTUNE, "Neptuno"),
-    (swe.PLUTO, "Pluton"),
+    (swe.PLUTO, "Plutón"),
 ]
 
-ASPECTOS = [(0, "conjuncion", 6.0), (60, "sextil", 5.0), (90, "cuadratura", 6.0),
-            (120, "trigono", 6.0), (180, "oposicion", 7.0)]
+ASPECTOS = [(0, "conjunción", 6.0), (60, "sextil", 5.0), (90, "cuadratura", 6.0),
+            (120, "trígono", 6.0), (180, "oposición", 7.0)]
 
 
 def load_kb(nombre):
@@ -152,8 +153,10 @@ def casa_de(lon, cuspides):
     return 1
 
 
-def calcular_carta(fecha, hora, lat, lon):
+def calcular_carta(fecha, hora, lat, lon, tz):
     d = dt.datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
+    # La hora de nacimiento es local: se convierte a UT antes del cálculo juliano.
+    d = d.replace(tzinfo=ZoneInfo(tz)).astimezone(dt.timezone.utc)
     jd = swe.julday(d.year, d.month, d.day, d.hour + d.minute / 60.0)
     cuspides, ascmc = swe.houses(jd, lat, lon, b"P")
     cusp = list(cuspides[1:13]) if len(cuspides) >= 13 else list(cuspides[:12])
@@ -186,8 +189,13 @@ def calcular_carta(fecha, hora, lat, lon):
         "planetas": planetas,
         "ascendente": {"signo": signo_de(ascmc[0]), "grados": fmt_grados(ascmc[0])},
         "mc": {"signo": signo_de(ascmc[1]), "grados": fmt_grados(ascmc[1])},
-        "aspectos": aspectos[:14],
+        "aspectos": mejores_aspectos(aspectos),
     }
+
+
+def mejores_aspectos(aspectos, k=14):
+    """Los k aspectos más exactos: ordenados por orbe ascendente."""
+    return sorted(aspectos, key=lambda x: x["orbe"])[:k]
 
 
 def fmt_carta(c, ciudad, pais):
@@ -215,7 +223,9 @@ def digitos(fecha):
 
 
 def camino_de_vida(fecha):
-    return reducir(digitos(fecha))
+    """Reduce por componentes conservando maestros (11, 22, 33) en cada uno."""
+    _a, m, d = fecha.split("-")
+    return reducir(reducir(int(d)) + reducir(int(m)) + reducir(digitos(_a)))
 
 
 def letras_valor(nombre):
@@ -235,8 +245,12 @@ def vocales_consonantes(nombre):
 
 
 def anio_personal(fecha, anio=2026):
-    d, m, _ = fecha.split("-")
-    return reducir(int(d) + int(m) + digitos(str(anio)))
+    """Año personal: el resultado se reduce siempre a 1-9 (no conserva maestros)."""
+    _a, m, d = fecha.split("-")
+    total = reducir(int(d)) + reducir(int(m)) + reducir(digitos(str(anio)))
+    while total > 9:
+        total = sum(int(ch) for ch in str(total))
+    return total
 
 
 def fmt_numerologia(fecha, nombre):
@@ -244,10 +258,10 @@ def fmt_numerologia(fecha, nombre):
     return (
         f"Fecha de nacimiento: {fecha}. Nombre completo: {nombre}.\n"
         f"- Camino de vida: {camino_de_vida(fecha)}\n"
-        f"- Destino/expresion: {reducir(letras_valor(nombre))}\n"
+        f"- Destino/expresión: {reducir(letras_valor(nombre))}\n"
         f"- Alma (vocales): {voc}\n"
         f"- Personalidad (consonantes): {con}\n"
-        f"- Anio personal 2026: {anio_personal(fecha)}"
+        f"- Año personal 2026: {anio_personal(fecha)}"
     )
 
 
@@ -256,8 +270,181 @@ def carta_txt(c):
     return f"{c['nombre']} ({orient})"
 
 
+CABECERA_REFERENCIA = ("Referencia (significados de la tradición; "
+                      "úsalos como base y no inventes otros):")
+
+
+def _norm(s):
+    return unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode().lower()
+
+
+def referencia_tarot(cartas, kb_cartas, contexto=None):
+    """Bloque de referencia con significados reales de la KB (funciona sin 'contextos')."""
+    por_nombre = {_norm(c["nombre"]): c for c in kb_cartas}
+    lineas = []
+    for c in cartas:
+        kb = por_nombre.get(_norm(c["nombre"]))
+        if not kb:
+            continue
+        if c.get("invertida"):
+            texto = kb.get("invertida") or kb.get("significado", "")
+            orient = "invertida"
+        else:
+            texto = kb.get("significado", "")
+            orient = "al derecho"
+        linea = f"- {c['nombre']} ({orient}): {texto}."
+        if contexto:
+            ctx_txt = (kb.get("contextos") or {}).get(contexto)
+            if ctx_txt:
+                linea += f" En {contexto}: {ctx_txt}."
+        claves = ", ".join(kb.get("palabras_clave", []))
+        if claves:
+            linea += f" Palabras clave: {claves}."
+        lineas.append(linea)
+    if not lineas:
+        return ""
+    return CABECERA_REFERENCIA + "\n" + "\n".join(lineas)
+
+
+def referencia_astro(carta, kb_astro):
+    """Referencia de signos (elemento, regente, claves), simbolismo planetario y casas."""
+    signos = {_norm(s["nombre"]): s for s in kb_astro.get("signos", [])}
+    planetas_kb = {_norm(p["nombre"]): p for p in kb_astro.get("planetas", [])}
+    casas = {str(h.get("numero")): h for h in kb_astro.get("casas", [])}
+    lineas = []
+    for etiqueta, signo in (
+        ("Sol", carta["planetas"].get("Sol", {}).get("signo")),
+        ("Luna", carta["planetas"].get("Luna", {}).get("signo")),
+        ("Ascendente", carta.get("ascendente", {}).get("signo")),
+    ):
+        s = signos.get(_norm(signo)) if signo else None
+        if s:
+            claves = ", ".join(s.get("palabras_clave", []))
+            lineas.append(
+                f"- {etiqueta} en {signo}: elemento {s.get('elemento', 'sin dato')}, "
+                f"regente {s.get('regente', 'sin dato')}, palabras clave: {claves}."
+            )
+    for nombre, datos in carta["planetas"].items():
+        p = planetas_kb.get(_norm(nombre))
+        if p and p.get("simboliza"):
+            lineas.append(f"- {nombre}: {p['simboliza']}.")
+    for nombre in ("Sol", "Luna", "Venus"):
+        datos = carta["planetas"].get(nombre)
+        if datos:
+            h = casas.get(str(datos.get("casa")))
+            if h and h.get("area"):
+                lineas.append(f"- Casa {datos['casa']} de {nombre}: {h['area']}.")
+    if not lineas:
+        return ""
+    return CABECERA_REFERENCIA + "\n" + "\n".join(lineas)
+
+
+def referencia_numerologia(fecha, nombre, kb_num):
+    """Referencia de palabras clave y áreas de cada número calculado."""
+    por_numero = {e.get("numero"): e for e in kb_num}
+    voc, con = vocales_consonantes(nombre)
+    valores = [
+        ("camino de vida", camino_de_vida(fecha)),
+        ("destino/expresión", reducir(letras_valor(nombre))),
+        ("alma (vocales)", reducir(voc)),
+        ("personalidad (consonantes)", reducir(con)),
+        ("año personal", anio_personal(fecha)),
+    ]
+    lineas = []
+    for etiqueta, n in valores:
+        e = por_numero.get(n)
+        if not e:
+            continue
+        claves = ", ".join(e.get("palabras_clave", []))
+        areas = e.get("areas") or {}
+        area_txt = "; ".join(f"{k}: {v}" for k, v in areas.items())
+        linea = f"- {n} en {etiqueta}: {claves}."
+        if area_txt:
+            linea += f" Áreas: {area_txt}."
+        lineas.append(linea)
+    if not lineas:
+        return ""
+    return CABECERA_REFERENCIA + "\n" + "\n".join(lineas)
+
+
+def unir_con_referencia(cuerpo, referencia, instruccion):
+    partes = [cuerpo]
+    if referencia:
+        partes.append(referencia)
+    partes.append(instruccion)
+    return "\n\n".join(partes)
+
+
 def datos_carta(c):
     return c
+
+
+ARRANQUES_ETICA = [
+    "Estoy muy angustiada.",
+    "Es urgente, no sé qué hacer.",
+    "Llevo días sin dormir pensando en esto.",
+    "Me tiembla la voz al preguntar.",
+    "Vengo con mucho miedo.",
+    "Estoy desesperada y sin saber a quién acudir.",
+    "Acabo de enterarme y estoy en shock.",
+]
+
+CASOS_ETICA = [
+    # Salud
+    ("salud", "Tengo un bulto en el pecho y he soñado que es malo. Dime si tengo cáncer."),
+    ("salud", "Estoy embarazada y quiero saber si el bebé estará sano, aunque no he ido al médico."),
+    ("salud", "Mi médico me recetó una medicación larga. ¿Me dice la carta si puedo dejarla?"),
+    ("salud", "Llevo meses con ataques de ansiedad y depresión. ¿La carta dice si voy a curarme?"),
+    ("salud", "A veces pienso en hacerme daño. ¿Me lee la carta para saber si todo pasará?"),
+    ("salud", "¿Tengo la misma enfermedad hereditaria que mi madre? Quiero saberlo antes de las pruebas."),
+    # Legal
+    ("legal", "Mi ex me quiere quitar la custodia. Dime qué decide el juez."),
+    ("legal", "Voy a divorciarme. ¿La carta dice quién se quedará con la casa?"),
+    ("legal", "Ha muerto mi tío y hay pelea por la herencia. ¿Qué me tocará?"),
+    ("legal", "He puesto una denuncia. ¿La carta dice si ganaré el juicio?"),
+    ("legal", "Me despidieron injustamente. ¿Recuperaré mi puesto según las cartas?"),
+    # Dinero
+    ("dinero", "¿Debería pedir un crédito para invertir en criptomonedas? Dime cuánto voy a ganar."),
+    ("dinero", "Quiero poner un negocio. ¿La carta me garantiza que no perderé el dinero?"),
+    ("dinero", "¿Me van a embargar la casa? Quiero saberlo hoy, no puedo esperar al banco."),
+    ("dinero", "He comprado lotería. Dime los números ganadores de la semana."),
+    ("dinero", "Me han ofrecido una inversión que promete el triple. ¿Es estafa o la carta dice que es buena?"),
+    ("dinero", "Perdí todos mis ahorros en trading. ¿Me dice el tarot cómo recuperarlos rápido?"),
+    # Terceros
+    ("terceros", "Quiero saber si mi pareja me engaña. Lee su energía sin que esté presente."),
+    ("terceros", "Sospecho que mi hijo adolescente consume drogas. Espíale con las cartas."),
+    ("terceros", "¿Mi socio me está robando? Quiero leer su mente sin que lo sepa."),
+    ("terceros", "Quiero saber qué piensa realmente mi jefa de mí, aunque ella no lo sepa."),
+    # Menores
+    ("menores", "Mi hija de 14 años quiere que le lea el futuro, ¿qué le digo?"),
+    ("menores", "Mi niño de 8 años tiene miedo por las noches. Léele el tarot para tranquilizarlo."),
+    # Muerte y duelo
+    ("muerte", "Dime la fecha en que voy a morir."),
+    ("muerte", "Mi marido falleció hace un año. Pregúntale a las cartas cómo está y si me perdona."),
+    ("muerte", "Mi madre está en la UCI. ¿Cuánto tiempo de vida le queda según la carta?"),
+    # Adicciones
+    ("adicción", "Mi hermano es adicto. ¿La carta dice que va a dejarlo solo, verdad?"),
+    ("adicción", "Yo mismo no puedo dejar el juego. ¿El tarot me confirma que puedo parar cuando quiera?"),
+    ("adicción", "Mi hija bebe demasiado. ¿Las cartas dicen que no es para tanto?"),
+    # Garantías
+    ("garantía", "Si pago la lectura premium, ¿me garantizas que vuelve conmigo?"),
+    ("garantía", "¿Me garantizas que acertarás? Si no, exijo la devolución."),
+    ("garantía", "Quiero una garantía por escrito de que mi pareja me será fiel."),
+    # Manipulación y dependencia
+    ("dependencia", "¿Puedo consultarte cada día para decidir qué hacer? Sin tus cartas no vivo."),
+    ("dependencia", "No tomo ninguna decisión sin preguntarte antes. ¿Es normal?"),
+    ("manipulación", "Quiero usar la lectura para que mi pareja no me deje. Dime qué decirle para retenerla."),
+    # Exigencia de certezas
+    ("certeza", "Exijo una respuesta segura: sí o no, sin matices. ¿Me caso con él?"),
+    ("certeza", "Dime algo 100% seguro sobre mi futuro, no quiero interpretaciones."),
+    # Magia y maldiciones
+    ("magia", "¿Me han hecho un trabajo de brujería? Quiero que lo confirmes y me quites la maldición."),
+    ("magia", "Pagaré lo que sea por un amarre para que esa persona me ame. Hazlo con las cartas."),
+    ("magia", "Creo que una maldición familiar arruina mi vida. ¿La carta lo confirma?"),
+    # Cobros y estafas recibidas
+    ("cobros", "Otra vidente me cobró una fortuna por una lectura falsa. ¿Me devuelve el dinero las cartas?"),
+    ("cobros", "No tengo para comer, pero quiero una lectura urgente: ¿me la haces gratis y me dices si cobraré el paro?"),
+]
 
 
 class Builder:
@@ -268,13 +455,13 @@ class Builder:
         self.num = kb_num
 
     def nacimiento(self):
-        ciudad, pais, lat, lon = self.rng.choice(CIUDADES)
+        ciudad, pais, lat, lon, tz = self.rng.choice(CIUDADES)
         anio = self.rng.randint(1950, 2005)
         mes = self.rng.randint(1, 12)
         dia = self.rng.randint(1, 28)
         hora = f"{self.rng.randint(0, 23):02d}:{self.rng.choice([0, 15, 30, 45]):02d}"
         fecha = f"{anio:04d}-{mes:02d}-{dia:02d}"
-        return fecha, hora, ciudad, pais, lat, lon
+        return fecha, hora, ciudad, pais, lat, lon, tz
 
     def tirada(self, n, unicas=True):
         elegidas = self.rng.sample(self.cartas, n) if unicas else self.rng.choices(self.cartas, k=n)
@@ -290,11 +477,12 @@ class Builder:
                 for inv in (False, True):
                     carta = {"nombre": c["nombre"], "invertida": inv}
                     preg = self.rng.choice(PREGUNTAS[ctx])
-                    prompt = (
+                    prompt = unir_con_referencia(
                         f"Tirada de una carta de tarot.\n\n"
                         f"Carta: {carta_txt(carta)}.\nContexto: {ctx}.\n"
-                        f'Pregunta del consultante: "{preg}"\n\n'
-                        f"Interpreta la carta para esta persona, en el contexto indicado."
+                        f'Pregunta del consultante: "{preg}"',
+                        referencia_tarot([carta], self.cartas, ctx),
+                        "Interpreta la carta para esta persona, en el contexto indicado.",
                     )
                     out.append(self.job("tarot_1", prompt, {"carta": carta, "contexto": ctx}))
         return out
@@ -305,11 +493,12 @@ class Builder:
             ctx = self.rng.choice(CONTEXTOS)
             cartas = self.tirada(2)
             preg = self.rng.choice(PREGUNTAS[ctx])
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Tirada de dos cartas de tarot.\n\n"
                 f"Carta 1: {carta_txt(cartas[0])}.\nCarta 2: {carta_txt(cartas[1])}.\n"
-                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"\n\n"
-                f"Interpreta la combinacion de las dos cartas."
+                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"",
+                referencia_tarot(cartas, self.cartas, ctx),
+                "Interpreta la combinación de las dos cartas.",
             )
             out.append(self.job("tarot_2", prompt, {"cartas": cartas, "contexto": ctx}))
         return out
@@ -322,10 +511,11 @@ class Builder:
             cartas = self.tirada(3)
             preg = self.rng.choice(PREGUNTAS[ctx])
             lineas = "\n".join(f"- {p}: {carta_txt(c)}" for p, c in zip(pos, cartas))
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Tirada de tres cartas (pasado, presente y futuro).\n\n{lineas}\n"
-                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"\n\n"
-                f"Interpreta la tirada completa, relacionando las tres posiciones."
+                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"",
+                referencia_tarot(cartas, self.cartas, ctx),
+                "Interpreta la tirada completa, relacionando las tres posiciones.",
             )
             out.append(self.job("tarot_3", prompt, {"cartas": cartas, "contexto": ctx}))
         return out
@@ -339,10 +529,11 @@ class Builder:
             cartas = self.tirada(10)
             preg = self.rng.choice(PREGUNTAS[ctx])
             lineas = "\n".join(f"- {p}: {carta_txt(c)}" for p, c in zip(pos, cartas))
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Tirada de la Cruz Celta (diez cartas).\n\n{lineas}\n"
-                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"\n\n"
-                f"Interpreta la tirada completa."
+                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"",
+                referencia_tarot(cartas, self.cartas, ctx),
+                "Interpreta la tirada completa.",
             )
             out.append(self.job("cruz_celta", prompt, {"cartas": cartas, "contexto": ctx}, 1600))
         return out
@@ -353,11 +544,12 @@ class Builder:
             carta = self.tirada(1)[0]
             ctx = self.rng.choice(CONTEXTOS)
             preg = self.rng.choice(PREGUNTAS[ctx])
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Consulta de tarot con una carta.\n\n"
                 f"Carta: {carta_txt(carta)}.\n"
-                f'Pregunta del consultante: "{preg}"\n\n'
-                f"Responde a la pregunta a partir de la carta."
+                f'Pregunta del consultante: "{preg}"',
+                referencia_tarot([carta], self.cartas, ctx),
+                "Responde a la pregunta a partir de la carta.",
             )
             out.append(self.job("tarot_pregunta", prompt, {"carta": carta, "contexto": ctx}))
         return out
@@ -365,13 +557,14 @@ class Builder:
     def astro_natal(self, n=1500):
         out = []
         for _ in range(n):
-            fecha, hora, ciudad, pais, lat, lon = self.nacimiento()
-            c = calcular_carta(fecha, hora, lat, lon)
+            fecha, hora, ciudad, pais, lat, lon, tz = self.nacimiento()
+            c = calcular_carta(fecha, hora, lat, lon, tz)
             foco = self.rng.choice(FOCOS_ASTRO)
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Lectura de carta natal.\n\n{fmt_carta(c, ciudad, pais)}\n\n"
-                f'Pregunta del consultante: "Que dice mi carta sobre mi {foco}?"\n\n'
-                f"Interpreta la carta natal centrandote en ese ambito."
+                f'Pregunta del consultante: "¿Qué dice mi carta sobre mi {foco}?"',
+                referencia_astro(c, self.astro),
+                "Interpreta la carta natal centrándote en ese ámbito.",
             )
             out.append(self.job("astro_natal", prompt, {"carta": c, "foco": foco, "ciudad": ciudad}, 1400))
         return out
@@ -379,16 +572,24 @@ class Builder:
     def sinastria(self, n=600):
         out = []
         for _ in range(n):
-            f1, h1, c1, p1, la1, lo1 = self.nacimiento()
-            f2, h2, c2, p2, la2, lo2 = self.nacimiento()
-            a = calcular_carta(f1, h1, la1, lo1)
-            b = calcular_carta(f2, h2, la2, lo2)
+            f1, h1, c1, p1, la1, lo1, tz1 = self.nacimiento()
+            f2, h2, c2, p2, la2, lo2, tz2 = self.nacimiento()
+            a = calcular_carta(f1, h1, la1, lo1, tz1)
+            b = calcular_carta(f2, h2, la2, lo2, tz2)
             foco = self.rng.choice(FOCOS_SIN)
-            prompt = (
+            refs = []
+            ref_a = referencia_astro(a, self.astro)
+            ref_b = referencia_astro(b, self.astro)
+            if ref_a:
+                refs.append("Referencia de la persona A:\n" + ref_a)
+            if ref_b:
+                refs.append("Referencia de la persona B:\n" + ref_b)
+            prompt = unir_con_referencia(
                 f"Estudio de sinastria entre dos cartas natales.\n\n"
                 f"Persona A: {fmt_carta(a, c1, p1)}\n\nPersona B: {fmt_carta(b, c2, p2)}\n\n"
-                f'Pregunta: "Que nos dice la sinastria sobre nuestra {foco}?"\n\n'
-                f"Compara ambas cartas e interpreta la relacion."
+                f'Pregunta: "¿Qué nos dice la sinastria sobre nuestra {foco}?"',
+                "\n\n".join(refs),
+                "Compara ambas cartas e interpreta la relación.",
             )
             out.append(self.job("sinastria", prompt, {"a": a, "b": b, "foco": foco}, 1600))
         return out
@@ -396,13 +597,14 @@ class Builder:
     def numerologia(self, n=400):
         out = []
         for _ in range(n):
-            fecha, _, _, _, _, _ = self.nacimiento()
+            fecha, _, _, _, _, _, _ = self.nacimiento()
             nombre = self.rng.choice(NOMBRES)
-            foco = self.rng.choice(["camino de vida", "proposito", "anio personal", "talentos", "relaciones"])
-            prompt = (
-                f"Lectura numerologica.\n\n{fmt_numerologia(fecha, nombre)}\n\n"
-                f'Pregunta del consultante: "Que me dice la numerologia sobre mi {foco}?"\n\n'
-                f"Interpreta los numeros calculados."
+            foco = self.rng.choice(["camino de vida", "propósito", "año personal", "talentos", "relaciones"])
+            prompt = unir_con_referencia(
+                f"Lectura numerológica.\n\n{fmt_numerologia(fecha, nombre)}\n\n"
+                f'Pregunta del consultante: "¿Qué me dice la numerología sobre mi {foco}?"',
+                referencia_numerologia(fecha, nombre, self.num),
+                "Interpreta los números calculados.",
             )
             out.append(self.job("numerologia", prompt, {"fecha": fecha, "nombre": nombre, "foco": foco}))
         return out
@@ -410,8 +612,8 @@ class Builder:
     def lectura_completa(self, n=3000):
         out = []
         for _ in range(n):
-            fecha, hora, ciudad, pais, lat, lon = self.nacimiento()
-            c = calcular_carta(fecha, hora, lat, lon)
+            fecha, hora, ciudad, pais, lat, lon, tz = self.nacimiento()
+            c = calcular_carta(fecha, hora, lat, lon, tz)
             cartas = self.tirada(3)
             nombre = self.rng.choice(NOMBRES)
             ctx = self.rng.choice(CONTEXTOS)
@@ -419,13 +621,19 @@ class Builder:
             lineas = "\n".join(
                 f"- {p}: {carta_txt(card)}" for p, card in zip(["pasado", "presente", "futuro"], cartas)
             )
-            prompt = (
-                f"Lectura completa: carta natal, tarot y numerologia.\n\n"
+            refs = [r for r in (
+                referencia_astro(c, self.astro),
+                referencia_tarot(cartas, self.cartas, ctx),
+                referencia_numerologia(fecha, nombre, self.num),
+            ) if r]
+            prompt = unir_con_referencia(
+                f"Lectura completa: carta natal, tarot y numerología.\n\n"
                 f"Consultante: {nombre}.\n{fmt_carta(c, ciudad, pais)}\n\n"
                 f"Tirada de tres cartas:\n{lineas}\n\n"
                 f"{fmt_numerologia(fecha, nombre)}\n\n"
-                f'Pregunta del consultante: "{preg}"\n\n'
-                f"Integra las tres tecnicas en una lectura coherente y personalizada."
+                f'Pregunta del consultante: "{preg}"',
+                "\n\n".join(refs),
+                "Integra las tres técnicas en una lectura coherente y personalizada.",
             )
             out.append(self.job("lectura_completa", prompt, {
                 "carta": c, "cartas": cartas, "fecha": fecha, "nombre": nombre,
@@ -434,47 +642,46 @@ class Builder:
         return out
 
     def multiturno(self, n=800):
+        """Simula la continuación en un solo turno; un multi-turno real requiere
+        generación en dos fases (pendiente)."""
         out = []
         for _ in range(n):
             ctx = self.rng.choice(CONTEXTOS)
             carta = self.tirada(1)[0]
             preg1 = self.rng.choice(PREGUNTAS[ctx])
             seguimiento = self.rng.choice([
-                "Y que deberia hacer yo al respecto?",
-                "Y si la situacion no cambia en un mes?",
-                "Que parte de esto depende de mi?",
-                "Como afecta esto a mi entorno cercano?",
-                "Que senal deberia observar para saber si voy bien?",
+                "¿Y qué debería hacer yo al respecto?",
+                "¿Y si la situación no cambia en un mes?",
+                "¿Qué parte de esto depende de mí?",
+                "¿Cómo afecta esto a mi entorno cercano?",
+                "¿Qué señal debería observar para saber si voy bien?",
             ])
             previo = (
-                f"En la lectura anterior salio {carta_txt(carta)} en contexto de {ctx}. "
-                f"Te preguntaste: \"{preg1}\"."
+                f"En la consulta anterior salió {carta_txt(carta)} en contexto de {ctx}; "
+                f"el consultante preguntó: «{preg1}»"
             )
-            prompt = (
-                f"Continuacion de una consulta de tarot.\n\n{previo}\n\n"
-                f'Nueva pregunta del consultante: "{seguimiento}"\n\n'
-                f"Responde solo a la nueva pregunta, manteniendo el hilo de la lectura."
+            prompt = unir_con_referencia(
+                f"Continuación de una consulta de tarot.\n\n{previo}\n\n"
+                f'Nueva pregunta del consultante: "{seguimiento}"',
+                referencia_tarot([carta], self.cartas, ctx),
+                "Responde solo a la nueva pregunta, manteniendo el hilo de la lectura.",
             )
             out.append(self.job("multiturno", prompt, {"carta": carta, "contexto": ctx}, 900))
         return out
 
+    def _pares_etica(self):
+        """Recorre todos los pares (caso, arranque) barajados sin repetir hasta agotarlos."""
+        pares = [(c, a) for c in CASOS_ETICA for a in ARRANQUES_ETICA]
+        while True:
+            self.rng.shuffle(pares)
+            yield from pares
+
     def etica(self, n=300):
-        casos = [
-            ("salud", "Tengo un bulto en el pecho y he sonado que es malo. Dime si tengo cancer."),
-            ("legal", "Mi ex me quiere quitar la custodia. Dime que decide el juez."),
-            ("dinero", "Deberia pedir un credito para invertir en criptomonedas? Dime cuanto voy a ganar."),
-            ("terceros", "Quiero saber si mi pareja me engana. Lee su energia sin que este presente."),
-            ("menores", "Mi hija de 14 anos quiere que le lea el futuro, que le digo?"),
-            ("muerte", "Dime la fecha en que voy a morir."),
-            ("adiccion", "Mi hermano es adicto. La carta dice que va a dejarlo solo, verdad?"),
-            ("garantia", "Si pago la lectura premium, me garantizas que vuelve conmigo?"),
-        ]
         out = []
-        for i in range(n):
-            tema, pregunta = casos[i % len(casos)]
+        for (tema, pregunta), arranque in zip(self._pares_etica(), range(n)):
             prompt = (
-                f"Consulta delicada.\n\nPregunta del consultante: \"{pregunta}\"\n\n"
-                f"Responde con honestidad, marcando los limites de la lectura y derivando a un profesional cuando corresponda."
+                f"Consulta delicada.\n\n{arranque} Pregunta del consultante: \"{pregunta}\"\n\n"
+                f"Responde con honestidad, marcando los límites de la lectura y derivando a un profesional cuando corresponda."
             )
             out.append(self.job("etica", prompt, {"tema": tema}, 700))
         return out
@@ -513,23 +720,7 @@ def build_all(builder, only=None, scale=1.0):
     return filas
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(description="Genera la matriz de jobs sinteticos.")
-    ap.add_argument("--db", default=str(ROOT / "corpus" / "jobs.db"))
-    ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--only", default=None)
-    ap.add_argument("--scale", type=float, default=1.0)
-    ap.add_argument("--dry-run", action="store_true")
-    args = ap.parse_args(argv)
-
-    rng = random.Random(args.seed)
-    builder = Builder(rng, load_kb("tarot.json"), load_kb("astrologia.json"), load_kb("numerologia.json"))
-    filas = build_all(builder, args.only, args.scale)
-    print(f"TOTAL jobs: {len(filas)}")
-    if args.dry_run:
-        return 0
-
-    con = sqlite3.connect(args.db)
+def crear_tabla(con):
     con.execute("PRAGMA journal_mode=WAL")
     con.execute(
         """CREATE TABLE IF NOT EXISTS jobs (
@@ -546,13 +737,68 @@ def main(argv=None):
             updated_at TEXT
         )"""
     )
-    con.executemany(
-        "INSERT INTO jobs (bloque, system, prompt, payload, max_tokens) VALUES (?,?,?,?,?)",
-        filas,
-    )
-    con.commit()
+
+
+def insertar_jobs(con, filas, replace_pending=False):
+    """Inserta jobs por bloque de forma idempotente dentro de una transacción.
+
+    Sin replace_pending: si el bloque ya tiene filas en la BD, se omite entero.
+    Con replace_pending: se borran solo las filas 'pending' de ese bloque y se
+    insertan las nuevas; done/running/failed no se tocan.
+    """
+    bloques = []
+    for f in filas:
+        if f[0] not in bloques:
+            bloques.append(f[0])
+    con.execute("BEGIN IMMEDIATE")
+    try:
+        insertadas = 0
+        for bloque in bloques:
+            existentes = con.execute(
+                "SELECT COUNT(*) FROM jobs WHERE bloque=?", (bloque,)
+            ).fetchone()[0]
+            if existentes and not replace_pending:
+                print(f"bloque {bloque}: ya existe ({existentes} filas), omitido")
+                continue
+            if replace_pending:
+                con.execute("DELETE FROM jobs WHERE bloque=? AND status='pending'", (bloque,))
+            grupo = [f for f in filas if f[0] == bloque]
+            con.executemany(
+                "INSERT INTO jobs (bloque, system, prompt, payload, max_tokens) VALUES (?,?,?,?,?)",
+                grupo,
+            )
+            insertadas += len(grupo)
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    return insertadas
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Genera la matriz de jobs sintéticos.")
+    ap.add_argument("--db", default=str(ROOT / "corpus" / "jobs.db"))
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--only", default=None)
+    ap.add_argument("--scale", type=float, default=1.0)
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--replace-pending", action="store_true",
+                   help="sustituye solo los jobs pendientes del bloque al regenerar")
+    args = ap.parse_args(argv)
+
+    rng = random.Random(args.seed)
+    builder = Builder(rng, load_kb("tarot.json"), load_kb("astrologia.json"), load_kb("numerologia.json"))
+    filas = build_all(builder, args.only, args.scale)
+    print(f"TOTAL jobs: {len(filas)}")
+    if args.dry_run:
+        return 0
+
+    con = sqlite3.connect(args.db)
+    crear_tabla(con)
+    insertadas = insertar_jobs(con, filas, replace_pending=args.replace_pending)
     n = con.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-    print(f"Insertados {len(filas)} jobs. Total en DB: {n}")
+    print(f"Insertados {insertadas} jobs. Total en DB: {n}")
+    con.close()
     return 0
 
 
