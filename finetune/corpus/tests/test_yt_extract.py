@@ -174,11 +174,11 @@ class ExtraerLectura(unittest.TestCase):
 class ValidarLectura(unittest.TestCase):
     def setUp(self):
         self.texto_base = (
-            "hola bienvenidos hoy vemos los enamorados en presente "
-            "la emperatriz invertida en pasado y el sol en futuro "
-            "los enamorados indica decision importante en el amor "
-            "la emperatriz invertida sugiere bloqueo creativo "
-            "el sol augura claridad y exito "
+            "hola bienvenidos hoy en esta tirada la carta los enamorados sale en presente "
+            "la carta la emperatriz invertida en pasado y la carta el sol sale en futuro "
+            "los enamorados significa decision importante en el amor "
+            "la emperatriz invertida representa bloqueo creativo "
+            "el sol representa claridad y exito "
             "sintesis la lectura muestra evolucion de bloqueo a claridad "
             "consejo confia en tu intuicion"
         )
@@ -296,6 +296,108 @@ class ValidarLectura(unittest.TestCase):
         # No debe fallar por validaciones 1-4 (no hay cartas)
         # La validación 5 (carta_natal) es passthrough por ahora
         self.assertTrue(valida or len(motivos) == 0)
+
+    # --- Tests A4.5b: validaciones de carta en original y orientación ---
+    def test_carta_no_mencionada_en_original_falla(self):
+        """Carta extraída que no está en el texto original debe fallar."""
+        lectura = {
+            "tipo": "lectura",
+            "tirada": "3_cartas",
+            "pregunta_o_tema": "amor",
+            "cartas": [
+                {"nombre": "El Loco", "orientacion": "derecha", "posicion": "presente"},  # no en texto_base
+                {"nombre": "La Emperatriz", "orientacion": "invertida", "posicion": "pasado"},
+                {"nombre": "El Sol", "orientacion": "derecha", "posicion": "futuro"},
+            ],
+            "interpretaciones": [],
+            "sintesis": "", "consejo": "",
+        }
+        valida, motivos = yt_extract.validar_lectura(lectura, self.texto_base)
+        self.assertFalse(valida)
+        self.assertTrue(any("carta_no_mencionada" in m and "El Loco" in m for m in motivos))
+
+    def test_orientacion_contradice_original_invertida_vs_derecha_falla(self):
+        """Original dice invertida, extracción dice derecha -> falla."""
+        # En texto_base: "la carta la emperatriz invertida"
+        lectura = {
+            "tipo": "lectura",
+            "tirada": "3_cartas",
+            "pregunta_o_tema": "amor",
+            "cartas": [
+                {"nombre": "Los Enamorados", "orientacion": "derecha", "posicion": "presente"},
+                {"nombre": "La Emperatriz", "orientacion": "derecha", "posicion": "pasado"},  # contradice
+                {"nombre": "El Sol", "orientacion": "derecha", "posicion": "futuro"},
+            ],
+            "interpretaciones": [],
+            "sintesis": "", "consejo": "",
+        }
+        valida, motivos = yt_extract.validar_lectura(lectura, self.texto_base)
+        self.assertFalse(valida)
+        self.assertTrue(any("orientacion_contradice" in m and "La Emperatriz" in m for m in motivos))
+
+    def test_orientacion_contradice_original_derecha_vs_invertida_falla(self):
+        """Original dice derecha (al derecho), extracción dice invertida -> falla."""
+        texto = (
+            "hola en esta tirada la carta los enamorados sale al derecho en presente "
+            "la carta la emperatriz en pasado y la carta el sol en futuro "
+        )
+        lectura = {
+            "tipo": "lectura",
+            "tirada": "3_cartas",
+            "pregunta_o_tema": "amor",
+            "cartas": [
+                {"nombre": "Los Enamorados", "orientacion": "invertida", "posicion": "presente"},  # contradice
+                {"nombre": "La Emperatriz", "orientacion": "derecha", "posicion": "pasado"},
+                {"nombre": "El Sol", "orientacion": "derecha", "posicion": "futuro"},
+            ],
+            "interpretaciones": [],
+            "sintesis": "", "consejo": "",
+        }
+        valida, motivos = yt_extract.validar_lectura(lectura, texto)
+        self.assertFalse(valida)
+        self.assertTrue(any("orientacion_contradice" in m and "Los Enamorados" in m for m in motivos))
+
+    def test_sinonimo_carta_en_original_pasa(self):
+        """Sinónimo en original (la papisa) coincide con canónico (La Sacerdotisa) -> pasa."""
+        texto = (
+            "hola en esta tirada la carta la papisa sale en presente "
+            "la carta el emperador en pasado y la carta el sol en futuro "
+        )
+        lectura = {
+            "tipo": "lectura",
+            "tirada": "3_cartas",
+            "pregunta_o_tema": "amor",
+            "cartas": [
+                {"nombre": "La Sacerdotisa", "orientacion": "derecha", "posicion": "presente"},  # sinónimo
+                {"nombre": "El Emperador", "orientacion": "derecha", "posicion": "pasado"},
+                {"nombre": "El Sol", "orientacion": "derecha", "posicion": "futuro"},
+            ],
+            "interpretaciones": [],
+            "sintesis": "", "consejo": "",
+        }
+        valida, motivos = yt_extract.validar_lectura(lectura, texto)
+        self.assertTrue(valida, f"Fallos: {motivos}")
+
+    def test_orientacion_no_mencionada_pasa(self):
+        """Original no menciona orientación, extracción puede poner cualquiera -> pasa."""
+        texto = (
+            "hola en esta tirada la carta los enamorados sale en presente "
+            "la carta la emperatriz en pasado y la carta el sol en futuro "
+        )
+        lectura = {
+            "tipo": "lectura",
+            "tirada": "3_cartas",
+            "pregunta_o_tema": "amor",
+            "cartas": [
+                {"nombre": "Los Enamorados", "orientacion": "invertida", "posicion": "presente"},  # original no dice
+                {"nombre": "La Emperatriz", "orientacion": "derecha", "posicion": "pasado"},
+                {"nombre": "El Sol", "orientacion": "derecha", "posicion": "futuro"},
+            ],
+            "interpretaciones": [],
+            "sintesis": "", "consejo": "",
+        }
+        valida, motivos = yt_extract.validar_lectura(lectura, texto)
+        self.assertTrue(valida, f"Fallos: {motivos}")
 
 
 if __name__ == "__main__":

@@ -230,6 +230,31 @@ def validar_lectura(lectura: Dict[str, Any], texto_original: str) -> Tuple[bool,
         # Aquí validamos que al menos algunos planetas/signos/casas mencionados estén en el texto
         pass  # Implementación simplificada
 
+    # 6. Toda carta extraída debe aparecer en el texto original (modo contextual)
+    menciones_original = cartas.extraer_cartas(texto_original, mazo="tarot", contextual=True)
+    nombres_en_original = {m["carta"]["nombre"] for m in menciones_original}
+    for c in cartas_lectura:
+        nombre_extraido = c.get("nombre", "")
+        entrada_norm = cartas.normalizar_carta(nombre_extraido, mazo="tarot")
+        if entrada_norm and entrada_norm["nombre"] not in nombres_en_original:
+            motivos.append(f'carta_no_mencionada: {entrada_norm["nombre"]}')
+
+    # 7. Orientación no debe contradecir al original
+    for c in cartas_lectura:
+        nombre_extraido = c.get("nombre", "")
+        orient_extraida = c.get("orientacion")
+        if orient_extraida in ("derecha", "invertida"):
+            entrada_norm = cartas.normalizar_carta(nombre_extraido, mazo="tarot")
+            if not entrada_norm:
+                continue
+            # Buscar mención correspondiente en original
+            for m in menciones_original:
+                if m["carta"]["nombre"] == entrada_norm["nombre"]:
+                    orient_original = m.get("orientacion")
+                    if orient_original and orient_original != orient_extraida:
+                        motivos.append(f'orientacion_contradice: {entrada_norm["nombre"]}')
+                    break
+
     es_valida = len(motivos) == 0
     return es_valida, motivos
 
