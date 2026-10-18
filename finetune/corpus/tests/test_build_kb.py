@@ -49,7 +49,7 @@ class TestMenoresEscritos(unittest.TestCase):
                 self.assertTrue(ctx.get(k), f"{c['nombre']}: falta contexto {k}")
 
     def test_numero_y_palo_coherentes(self):
-        self.assertEqual(sorted(c["numero"] for c in self.menores), list(range(1, 15)) * 4)
+        self.assertEqual(sorted(c["numero"] for c in self.menores), sorted(list(range(1, 15)) * 4))
         for c in self.menores:
             self.assertEqual(c["elemento"], ELEMENTO_PALO[c["palo"]])
 
