@@ -9,6 +9,7 @@ import random
 import sqlite3
 import unicodedata
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import swisseph as swe
 
@@ -27,26 +28,26 @@ SYSTEM = (
 )
 
 CIUDADES = [
-    ("Madrid", "Espana", 40.4168, -3.7038),
-    ("Barcelona", "Espana", 41.3874, 2.1686),
-    ("Sevilla", "Espana", 37.3891, -5.9845),
-    ("Valencia", "Espana", 39.4699, -0.3763),
-    ("Bilbao", "Espana", 43.2630, -2.9350),
-    ("Ciudad de Mexico", "Mexico", 19.4326, -99.1332),
-    ("Guadalajara", "Mexico", 20.6597, -103.3496),
-    ("Buenos Aires", "Argentina", -34.6037, -58.3816),
-    ("Cordoba", "Argentina", -31.4201, -64.1888),
-    ("Bogota", "Colombia", 4.7110, -74.0721),
-    ("Medellin", "Colombia", 6.2442, -75.5812),
-    ("Lima", "Peru", -12.0464, -77.0428),
-    ("Santiago", "Chile", -33.4489, -70.6693),
-    ("Caracas", "Venezuela", 10.4806, -66.9036),
-    ("Montevideo", "Uruguay", -34.9011, -56.1645),
-    ("La Habana", "Cuba", 23.1136, -82.3666),
-    ("San Juan", "Puerto Rico", 18.4655, -66.1057),
-    ("Quito", "Ecuador", -0.1807, -78.4678),
-    ("Panama", "Panama", 8.9824, -79.5199),
-    ("Asuncion", "Paraguay", -25.2637, -57.5759),
+    ("Madrid", "Espana", 40.4168, -3.7038, "Europe/Madrid"),
+    ("Barcelona", "Espana", 41.3874, 2.1686, "Europe/Madrid"),
+    ("Sevilla", "Espana", 37.3891, -5.9845, "Europe/Madrid"),
+    ("Valencia", "Espana", 39.4699, -0.3763, "Europe/Madrid"),
+    ("Bilbao", "Espana", 43.2630, -2.9350, "Europe/Madrid"),
+    ("Ciudad de Mexico", "Mexico", 19.4326, -99.1332, "America/Mexico_City"),
+    ("Guadalajara", "Mexico", 20.6597, -103.3496, "America/Mexico_City"),
+    ("Buenos Aires", "Argentina", -34.6037, -58.3816, "America/Argentina/Buenos_Aires"),
+    ("Cordoba", "Argentina", -31.4201, -64.1888, "America/Argentina/Cordoba"),
+    ("Bogota", "Colombia", 4.7110, -74.0721, "America/Bogota"),
+    ("Medellin", "Colombia", 6.2442, -75.5812, "America/Bogota"),
+    ("Lima", "Peru", -12.0464, -77.0428, "America/Lima"),
+    ("Santiago", "Chile", -33.4489, -70.6693, "America/Santiago"),
+    ("Caracas", "Venezuela", 10.4806, -66.9036, "America/Caracas"),
+    ("Montevideo", "Uruguay", -34.9011, -56.1645, "America/Montevideo"),
+    ("La Habana", "Cuba", 23.1136, -82.3666, "America/Havana"),
+    ("San Juan", "Puerto Rico", 18.4655, -66.1057, "America/Puerto_Rico"),
+    ("Quito", "Ecuador", -0.1807, -78.4678, "America/Guayaquil"),
+    ("Panama", "Panama", 8.9824, -79.5199, "America/Panama"),
+    ("Asuncion", "Paraguay", -25.2637, -57.5759, "America/Asuncion"),
 ]
 
 NOMBRES = [
@@ -152,8 +153,10 @@ def casa_de(lon, cuspides):
     return 1
 
 
-def calcular_carta(fecha, hora, lat, lon):
+def calcular_carta(fecha, hora, lat, lon, tz):
     d = dt.datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
+    # La hora de nacimiento es local: se convierte a UT antes del calculo juliano.
+    d = d.replace(tzinfo=ZoneInfo(tz)).astimezone(dt.timezone.utc)
     jd = swe.julday(d.year, d.month, d.day, d.hour + d.minute / 60.0)
     cuspides, ascmc = swe.houses(jd, lat, lon, b"P")
     cusp = list(cuspides[1:13]) if len(cuspides) >= 13 else list(cuspides[:12])
@@ -268,13 +271,13 @@ class Builder:
         self.num = kb_num
 
     def nacimiento(self):
-        ciudad, pais, lat, lon = self.rng.choice(CIUDADES)
+        ciudad, pais, lat, lon, tz = self.rng.choice(CIUDADES)
         anio = self.rng.randint(1950, 2005)
         mes = self.rng.randint(1, 12)
         dia = self.rng.randint(1, 28)
         hora = f"{self.rng.randint(0, 23):02d}:{self.rng.choice([0, 15, 30, 45]):02d}"
         fecha = f"{anio:04d}-{mes:02d}-{dia:02d}"
-        return fecha, hora, ciudad, pais, lat, lon
+        return fecha, hora, ciudad, pais, lat, lon, tz
 
     def tirada(self, n, unicas=True):
         elegidas = self.rng.sample(self.cartas, n) if unicas else self.rng.choices(self.cartas, k=n)
@@ -365,8 +368,8 @@ class Builder:
     def astro_natal(self, n=1500):
         out = []
         for _ in range(n):
-            fecha, hora, ciudad, pais, lat, lon = self.nacimiento()
-            c = calcular_carta(fecha, hora, lat, lon)
+            fecha, hora, ciudad, pais, lat, lon, tz = self.nacimiento()
+            c = calcular_carta(fecha, hora, lat, lon, tz)
             foco = self.rng.choice(FOCOS_ASTRO)
             prompt = (
                 f"Lectura de carta natal.\n\n{fmt_carta(c, ciudad, pais)}\n\n"
@@ -379,10 +382,10 @@ class Builder:
     def sinastria(self, n=600):
         out = []
         for _ in range(n):
-            f1, h1, c1, p1, la1, lo1 = self.nacimiento()
-            f2, h2, c2, p2, la2, lo2 = self.nacimiento()
-            a = calcular_carta(f1, h1, la1, lo1)
-            b = calcular_carta(f2, h2, la2, lo2)
+            f1, h1, c1, p1, la1, lo1, tz1 = self.nacimiento()
+            f2, h2, c2, p2, la2, lo2, tz2 = self.nacimiento()
+            a = calcular_carta(f1, h1, la1, lo1, tz1)
+            b = calcular_carta(f2, h2, la2, lo2, tz2)
             foco = self.rng.choice(FOCOS_SIN)
             prompt = (
                 f"Estudio de sinastria entre dos cartas natales.\n\n"
@@ -396,7 +399,7 @@ class Builder:
     def numerologia(self, n=400):
         out = []
         for _ in range(n):
-            fecha, _, _, _, _, _ = self.nacimiento()
+            fecha, _, _, _, _, _, _ = self.nacimiento()
             nombre = self.rng.choice(NOMBRES)
             foco = self.rng.choice(["camino de vida", "proposito", "anio personal", "talentos", "relaciones"])
             prompt = (
@@ -410,8 +413,8 @@ class Builder:
     def lectura_completa(self, n=3000):
         out = []
         for _ in range(n):
-            fecha, hora, ciudad, pais, lat, lon = self.nacimiento()
-            c = calcular_carta(fecha, hora, lat, lon)
+            fecha, hora, ciudad, pais, lat, lon, tz = self.nacimiento()
+            c = calcular_carta(fecha, hora, lat, lon, tz)
             cartas = self.tirada(3)
             nombre = self.rng.choice(NOMBRES)
             ctx = self.rng.choice(CONTEXTOS)
