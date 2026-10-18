@@ -62,15 +62,20 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def merge(base_rows: list[dict], new_rows: list[dict], include_en: bool) -> tuple[list[dict], dict]:
+def merge(base_rows: list[dict], new_rows: list[dict], include_en: bool,
+         keep_base_en: bool = False) -> tuple[list[dict], dict]:
     seen: set[str] = set()
     out: list[dict] = []
-    stats: dict = {"base": 0, "base_dup": 0, "new_added": 0, "new_dup": 0, "new_lang": 0, "new_empty": 0}
+    stats: dict = {"base": 0, "base_dup": 0, "base_lang": 0, "new_added": 0,
+                  "new_dup": 0, "new_lang": 0, "new_empty": 0}
     langs = {"es": 0, "en": 0, "mixed": 0, "unknown": 0}
 
     for row in base_rows:
         text = answer(row)
         if not text:
+            continue
+        if not include_en and not keep_base_en and detect_language(text) != "es":
+            stats["base_lang"] += 1
             continue
         key = text_hash(text)
         if key in seen:
@@ -113,13 +118,16 @@ def main(argv=None) -> int:
     parser.add_argument("--val-new", default="corpus/val_scrapy.jsonl")
     parser.add_argument("--val-out", default="corpus/val_final.jsonl")
     parser.add_argument("--include-en", action="store_true", help="no filtrar por idioma")
+    parser.add_argument("--keep-base-en", action="store_true",
+                      help="conserva respuestas no españolas en la base (comportamiento antiguo)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
     base = load_jsonl(Path(args.base))
     new = load_jsonl(Path(args.new))
-    merged, stats = merge(base, new, args.include_en)
-    print(f"base {args.base}: {len(base)} filas -> {stats['base']} utiles ({stats['base_dup']} duplicadas)")
+    merged, stats = merge(base, new, args.include_en, keep_base_en=args.keep_base_en)
+    print(f"base {args.base}: {len(base)} filas -> {stats['base']} utiles "
+          f"({stats['base_dup']} duplicadas, {stats['base_lang']} descartadas por idioma)")
     print(f"nuevos {args.new}: {len(new)} filas -> {stats['new_added']} anadidos, "
           f"{stats['new_dup']} duplicados, {stats['new_lang']} descartados por idioma, {stats['new_empty']} vacios")
     print(f"total fusionado: {stats['total']} pares; idiomas {stats['langs']}")
@@ -129,7 +137,7 @@ def main(argv=None) -> int:
 
     val_base = load_jsonl(Path(args.val_base))
     val_new = load_jsonl(Path(args.val_new))
-    val_merged, val_stats = merge(val_base, val_new, args.include_en)
+    val_merged, val_stats = merge(val_base, val_new, args.include_en, keep_base_en=args.keep_base_en)
     print(f"val base {args.val_base}: {len(val_base)} -> {val_stats['base']} utiles")
     print(f"val nuevos {args.val_new}: {len(val_new)} -> {val_stats['new_added']} anadidos, "
           f"{val_stats['new_dup']} duplicados, {val_stats['new_lang']} descartados por idioma")
