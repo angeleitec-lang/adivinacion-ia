@@ -13,6 +13,7 @@ import hashlib
 import json
 import re
 import sys
+import unicodedata
 from collections import Counter
 from pathlib import Path
 
@@ -27,8 +28,43 @@ JUNK = (
 
 CARD_RE = re.compile(r"Carta[s]?:\s*([^(\n]+?)\s*(?:\(|\.|$)", re.I)
 SIGN_RE = re.compile(r"(?:Signo solar|Ascendente|Luna|Sol)\s*:?\s*(?:en\s+)?([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)", re.I)
-NUM_RE = re.compile(r"(?:Camino de vida|Número|Destino|Alma|Personalidad|Año personal)\s*:?\s*(\d{1,2})", re.I)
+NUM_RE = re.compile(
+    r"(?:Camino de vida|Número|Destino|Alma|Personalidad|Año personal)"
+    r"(?:\s*\([^)]*\))?\s*:?\s*(\d{1,2})",
+    re.I,
+)
 QUESTION_RE = re.compile(r'Pregunta del consultante:\s*"([^"]+)"', re.I)
+# Reconoce «Carta: X (o)», «Carta N: X (o)» y líneas de tirada «- posición: X (o)».
+CARTA_LINEA_RE = re.compile(
+    r"(?:Carta(?:\s*\d+)?\s*:|[-•]\s*[^\n:]+?:)\s*([^(\n]+?)\s*\((invertid[ao]|al derecho)\)",
+    re.I,
+)
+ARTICULOS = ("el ", "la ", "los ", "las ", "un ", "una ", "unos ", "unas ")
+
+
+def norm(texto: str) -> str:
+    """Minúsculas, sin tildes (NFKD) y sin signos: base de toda comparación."""
+    texto = unicodedata.normalize("NFKD", texto.lower())
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", texto).split())
+
+
+def _sin_articulo(nombre_norm: str) -> str:
+    for art in ARTICULOS:
+        if nombre_norm.startswith(art):
+            return nombre_norm[len(art):]
+    return nombre_norm
+
+
+def extraer_cartas(prompt: str) -> list:
+    """[(nombre, orientacion)] con orientacion en {"derecho", "invertida"}."""
+    cartas = []
+    for m in CARTA_LINEA_RE.finditer(prompt):
+        nombre = m.group(1).strip().strip(".").strip()
+        orient = "invertida" if m.group(2).lower().startswith("invertid") else "derecho"
+        if nombre and len(nombre) > 2:
+            cartas.append((nombre, orient))
+    return cartas
 
 
 def words(text: str) -> list[str]:
@@ -76,20 +112,32 @@ def human_of(row: dict) -> str:
     return ""
 
 
+def _menciona(na: str, token_norm: str) -> bool:
+    return bool(token_norm) and re.search(r"\b" + re.escape(token_norm) + r"\b", na) is not None
+
+
 def grounding(prompt: str, answer: str) -> bool:
-    low = answer.lower()
-    checks = []
-    for m in CARD_RE.finditer(prompt):
-        name = m.group(1).strip().strip(".")
-        if name and len(name) > 2:
-            checks.append(name.lower())
-    for m in SIGN_RE.finditer(prompt):
-        checks.append(m.group(1).lower())
-    for m in NUM_RE.finditer(prompt):
-        checks.append(m.group(1))
-    if not checks:
-        return True
-    return any(c in low for c in checks)
+    """Exige que la respuesta mencione todos los datos reconocibles del prompt.
+
+    Cartas: todas. Signos astrológicos y números: al menos 2/3.
+    Sin datos reconocibles -> True (comportamiento heredado).
+    """
+    na = norm(answer)
+    cartas = extraer_cartas(prompt)
+    for nombre, _ in cartas:
+        if not _menciona(na, _sin_articulo(norm(nombre))):
+            return False
+    signos = list(dict.fromkeys(norm(m.group(1)) for m in SIGN_RE.finditer(prompt)))
+    if signos:
+        menc = sum(1 for s in signos if _menciona(na, s))
+        if menc / len(signos) < 2 / 3:
+            return False
+    numeros = list(dict.fromkeys(m.group(1) for m in NUM_RE.finditer(prompt)))
+    if numeros:
+        menc = sum(1 for n in numeros if _menciona(na, n))
+        if menc / len(numeros) < 2 / 3:
+            return False
+    return True
 
 
 def validate(row: dict, args) -> tuple[bool, str]:
