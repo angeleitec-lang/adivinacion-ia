@@ -104,6 +104,11 @@ class TestParseoLicencia(RaizLicencias):
     def test_texto_vacio_es_desconocida(self):
         self.assertEqual(license_filter.classify_license_text(""), "desconocida")
 
+    def test_cc0_es_publico(self):
+        self.assertEqual(license_filter.classify_license_text("CC0"), "publico")
+        self.assertEqual(license_filter.classify_license_text("CC0 1.0"), "publico")
+        self.assertEqual(license_filter.classify_license_text("Creative Commons Zero"), "publico")
+
 
 class TestRutasOrigen(RaizLicencias):
     def test_raw_manifest_por_ruta_relativa(self):

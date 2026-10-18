@@ -79,6 +79,8 @@ def classify_license_text(text: str) -> str:
     t = (text or "").lower()
     if "verificar" in t or "varía por obra" in t:
         return "desconocida"
+    if re.search(r"\bcc0\b", t) or "creative commons zero" in t:
+        return "publico"
     if re.search(r"\bnc\b", t):
         return "cc-nc"
     if re.search(r"\bnd\b", t):
