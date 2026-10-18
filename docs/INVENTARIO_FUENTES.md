@@ -13,7 +13,7 @@ Fecha: 2026-10-18 · Alcance: tarot, baraja española, astrología occidental y 
 
 ## Hallazgos que condicionan el plan
 
-1. **El español está muy poco cubierto con libros libres.** Solo hay texto completo de *La vía del tarot* (Jodorowsky) y de un libro de numerología. Los libros de baraja española (Salas, Rossi y otro) existen en archive.org pero **solo en préstamo digital**, sin texto descargable. El español tendrá que venir de **sitios web, traducción de los clásicos ingleses y libros que el usuario aporte**.
+1. **El español está mejor cubierto de lo que parecía (corregido en la 2.ª pasada):** una búsqueda por idioma en archive.org encontró 22 libros en español con texto descargable (ver sección «Libros en español»). Sigue habiendo huecos serios: los libros de **baraja española** (Salas, Rossi, Beltrame) y varios de tarot moderno (*Fundamentos del tarot*, *La práctica del Tarot*, *Tarot Marsellés*, *Aprenda a consultar el tarot*) están en **préstamo digital con acceso restringido** y no se pueden descargar.
 2. **Astrología occidental clásica está bien cubierta** (Alan Leo ×5, Raphael, Carter, Adams, Heindel, Ptolomeo, Lilly): unos 8 MB de texto limpio.
 3. **Tarot:** hay base sólida (Waite, Papus, Wirth, Case) y en `docs_epub` ya descargados Pollack (*78 Degrees of Wisdom*), Nichols, Wang y Cicero, pendientes de verificar que traen texto y no solo imagen.
 4. **Las obras modernas más valiosas** (Hand, Sasportas, Forrest, Greer, Jordan, Campbell, Cheiro) están **solo en préstamo digital**.
@@ -135,3 +135,40 @@ Se extrajo el texto de los 155 EPUB (solo lectura) y se midió: texto real, idio
 **Con limpieza** (descartar páginas marcadas): Case *Tarot Fundamentals* (259 págs. marcadas), DuQuette *Thoth* (329), Papus *Tarot of the Bohemians* (218), Curtiss *Key to the Universe* (190). Para Case, Papus y Taylor existe además texto mejor en archive.org (ver tabla de libros verificados).
 
 **Lo que sigue sin cubrirse con los EPUB locales:** **astrología occidental** (no hay ninguna obra occidental entre los 155; todo es védico) y **baraja española en español** (solo el breve *Tiradas de cartas españolas*). La astrología occidental se cubre con los libros de archive.org verificados (Alan Leo, Raphael, Carter, Adams, Heindel) y con los sitios web.
+
+## Libros en español (2.ª pasada, 2026-10-18)
+
+La primera pasada buscó por títulos en inglés y no vio estos. Se buscó por idioma (`language:spa`) y por materia; de 136 candidatos, **47 son de préstamo con acceso restringido** (el fichero de texto aparece en la lista pero no se puede descargar) y de los demás se comprobó la descarga real. Datos en `finetune/knowledge/fuentes_libros_es.jsonl`.
+
+**Corrección:** en el mensaje anterior se citaron como descargables *Fundamentos del tarot*, *La práctica del Tarot*, *Tarot con cartas españolas*, *Tarot Marsellés*, *Aprenda a consultar el tarot* y *Mi primer libro de tarot*. **No lo son**: son de préstamo restringido.
+
+Resultado: **22 libros con texto verificado (≈ 10.6 MB)** y 2 pendientes de reintento porque el servidor devuelve HTTP 500 de forma intermitente (entre ellos *El gran libro del tarot* de Banzhaf).
+
+| Familia | Obra | Autor | Año | Texto | Prioridad |
+|---|---|---|---|---|---|
+| astrologia | Astrologia Para Dummies Rae Orion 6 | Rae Orion |  | 1052 KB | alta |
+| astrologia | Le Grice, K. El Cosmos Arquetipal [ocr] [2018] | K. Le Grice | 2018 | 805 KB | alta |
+| astrologia | Los Planetas. Organos de función. | Bruno Huber. Louise Huber | 2004 | 803 KB | alta |
+| astrologia | INTRODUCCIÓN A LA ASTROLOGIA | Lisa Morpurgo Dordoni | 1973 | 740 KB | alta |
+| astrologia | Gramaglia, E. Astrología Hermética [ocr] [2006] | E. Gramaglia | 2006 | 653 KB | media |
+| astrologia | Astrología Científica Simplificada Max Heindel |  |  | 287 KB | media |
+| astrologia | Astrología Predictiva Tito Macià |  |  | 255 KB | media |
+| astrologia | Fundamentos De La Astrologia Clasica Tito Macia |  |  | 187 KB | media |
+| astrologia | María Blaquier Astrología Tradicional. Técnicas Predictivas De | Rodrigo Mitre | 2024 | 162 KB | media |
+| astrologia | Astrología Kabbalística Rav Berg |  |  | 198 KB | baja |
+| astrologia | El Lenguaje Del Espíritu - Guía Básica de Astrología | Jorge Andrés Delgado |  | 80 KB | baja |
+| iching | Alvá, J. (trad.) - Yi Jing: El libro de los cambios |  |  | 969 KB | aplazado |
+| numerologia | La Numerologia A La Luz Del Arbol De La Vida Y Las Letras Hebr |  |  | 693 KB | alta |
+| numerologia | numerologia-portal-del-destino-helyn-hitchcock | Helyn Hitchcock | 1980 | 401 KB | alta |
+| quiromancia | La Revolucion De La Quiromancia ( Yasuto Nishitani) | Liu-Nen | 1994 | 188 KB | aplazado |
+| tarot | Anónimo. Los Arcanos Mayores Del Tarot [ocr] [1987] | anónimo | 1987 | 1808 KB | alta |
+| tarot | El Gran Libro del Tarot - Hajo Banzhaf |  |  | 466 KB | alta |
+| tarot | Tarot De Los Bohemios | Encausse, Gérard, 1865-1916 | 1892 | 308 KB | alta |
+| tarot | Tarot El Arte De Adivinar Enrique Eskenazi | Creador del contenido |  | 248 KB | alta |
+| tarot | Compendium Tarot Mexicanus. Estudios sobre el Tarot desde Méxi | LAJU OX | 2025 | 446 KB | media |
+| tarot | ¿ WTF Es El Tarot Un Enfoque Sensato Al Antiguo Arte De La Lec |  |  | 371 KB | media |
+| tarot | El Arte De Tirar El Tarot Vanessa Bell | Creador del contenido |  | 199 KB | media |
+| tarot | Cartas Tarot De Las Brujas Modernas |  |  | 94 KB | baja |
+| tarot | (hajo Banzhaf) El Tarot ( Una Guia De Ayuda Para La Toma De De |  |  | 74 KB | baja |
+
+**Notas de calidad pendientes:** estos textos son OCR y habrá que pasar la limpieza (páginas marcadas, cabeceras, numeración). Para astrología psicológica (Huber, Le Grice) y divulgativa (Rae Orion, Morpurgo) el estilo es muy útil para aprender a *explicar* posiciones; los de Tito Macià y Blaquier son de astrología tradicional/predictiva. No hay ningún libro de **baraja española** descargable: ese hueco solo se cubre con sitios web, YouTube y obras que aportes.
