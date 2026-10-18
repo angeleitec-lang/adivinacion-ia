@@ -9,6 +9,7 @@ import unittest.mock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import build_dataset as bd
+import build_scrapy_dataset as bsd
 
 
 class LimpiezaResiduosWikipedia(unittest.TestCase):
@@ -351,6 +352,50 @@ class TemasLegibles(unittest.TestCase):
         tpl_b = [__import__("random").Random(1).choice(bd.INSTRUCTION_TEMPLATES)
                 for _ in range(3)]
         self.assertEqual(tpl_a, tpl_b)
+
+
+def _mk_pair(prompt, answer):
+    return {"conversations": [
+        {"from": "system", "value": "s"},
+        {"from": "human", "value": prompt},
+        {"from": "gpt", "value": answer},
+    ]}
+
+
+class ScrapyDedupe(unittest.TestCase):
+    """T3.7: dedupe por prompt ademas de respuesta y pares extranjeros cortos."""
+
+    def test_duplicado_por_prompt(self):
+        pairs = [_mk_pair("Háblame del tarot.", "respuesta uno"),
+                _mk_pair("Háblame del tarot.", "respuesta dos distinta")]
+        kept, dup = bsd.dedupe_new(pairs, set())
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(dup, 1)
+
+    def test_mismo_prompt_normalizado(self):
+        pairs = [_mk_pair("Háblame   del tarot", "a"),
+                _mk_pair("háblame del TAROT", "b")]
+        kept, dup = bsd.dedupe_new(pairs, set())
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(dup, 1)
+
+    def test_respuesta_ya_integrada_se_descarta(self):
+        p = _mk_pair("pregunta nueva", "respuesta ya usada")
+        existing = {bsd.text_hash("respuesta ya usada")}
+        kept, dup = bsd.dedupe_new([p], existing)
+        self.assertEqual(kept, [])
+        self.assertEqual(dup, 1)
+
+    def test_pares_distintos_se_conservan(self):
+        pairs = [_mk_pair("uno", "resp a"), _mk_pair("dos", "resp b")]
+        kept, dup = bsd.dedupe_new(pairs, set())
+        self.assertEqual(len(kept), 2)
+        self.assertEqual(dup, 0)
+
+    def test_extranjero_corto(self):
+        self.assertTrue(bsd.is_foreign_short("en", "x" * 100))
+        self.assertFalse(bsd.is_foreign_short("es", "x" * 100))
+        self.assertFalse(bsd.is_foreign_short("en", "x" * 2000))
 
 
 if __name__ == "__main__":
