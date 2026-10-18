@@ -82,5 +82,36 @@ class TestMayoresConContextos(unittest.TestCase):
         self.assertEqual(justicia["numero"], 11)
 
 
+class TestAstroCoherencia(unittest.TestCase):
+    def test_orbes_aspectos(self):
+        esperado = {"Conjunción": 6, "Sextil": 5, "Cuadratura": 6, "Trígono": 6, "Oposición": 7}
+        self.assertEqual(len(build_kb.ASPECTOS), 5)
+        for a in build_kb.ASPECTOS:
+            self.assertEqual(a["orbe"], esperado[a["nombre"]], a["nombre"])
+
+    def test_regentes_tradicionales(self):
+        for s in build_kb.SIGNOS:
+            self.assertIn("regente_tradicional", s, s["nombre"])
+        escorpio = next(s for s in build_kb.SIGNOS if s["nombre"] == "Escorpio")
+        acuario = next(s for s in build_kb.SIGNOS if s["nombre"] == "Acuario")
+        self.assertEqual(escorpio["regente_tradicional"], "Marte")
+        self.assertEqual(acuario["regente_tradicional"], "Saturno")
+        self.assertEqual(escorpio["regente"], "Plutón")
+        self.assertEqual(acuario["regente"], "Urano")
+        tradicional = {"Aries": "Marte", "Tauro": "Venus", "Géminis": "Mercurio",
+                      "Cáncer": "Luna", "Leo": "Sol", "Virgo": "Mercurio",
+                      "Libra": "Venus", "Escorpio": "Marte", "Sagitario": "Júpiter",
+                      "Capricornio": "Saturno", "Acuario": "Saturno", "Piscis": "Júpiter"}
+        for s in build_kb.SIGNOS:
+            self.assertEqual(s["regente_tradicional"], tradicional[s["nombre"]], s["nombre"])
+
+    def test_numerologia_doce_con_areas(self):
+        self.assertEqual(len(build_kb.NUMEROS), 12)
+        for n in build_kb.NUMEROS:
+            areas = n.get("areas", {})
+            for k in CLAVES_CONTEXTO:
+                self.assertTrue(areas.get(k), f"{n['nombre']}: falta área {k}")
+
+
 if __name__ == "__main__":
     unittest.main()
