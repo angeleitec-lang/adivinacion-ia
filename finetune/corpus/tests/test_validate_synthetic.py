@@ -184,5 +184,62 @@ class TestOrientacion(unittest.TestCase):
         self.assertTrue(vs.orientacion_ok("Háblame del amor.", "El amor es complejo."))
 
 
+BASE_LARGA = (
+    "La Torre invertida anuncia un derrumbe necesario en tu vida sentimental. "
+    "Durante semanas has sostenido una estructura agrietada por silencios, dudas y "
+    "promesas que nadie terminó de cumplir. Esa construcción temblaba desde adentro "
+    "y ahora toca mirar los escombros sin miedo, porque cada bloque caído deja "
+    "ver el cielo que tapaba. No es un castigo, es una liberación tardía. "
+) * 2
+
+CASI_IGUAL = BASE_LARGA + " Consejo final: respira hondo."
+
+DISTINTA_MISMA_CARTA = (
+    "El Sol ilumina esta tirada con una energía de madurez y claridad mental. "
+    "Lejos de los fuegos impulsivos de otras cartas, aquí manda la serenidad de "
+    "quien ya atravesó la crisis y aprendió a nombrar lo que siente. En el amor "
+    "propuesto, conviene hablar pronto y sin dramatismos, porque la honestidad "
+    "abre puertas que la timidez cerró durante meses. "
+) * 2
+
+
+class TestCasiDuplicados(unittest.TestCase):
+    def test_shingles_estables(self):
+        s1 = vs.shingles("texto de prueba con varias palabras normalizadas")
+        s2 = vs.shingles("TEXTO de prueba, con varias palabras normalizadas!")
+        self.assertEqual(s1, s2)
+        self.assertTrue(all(isinstance(x, int) for x in s1))
+
+    def test_minhash_determinista(self):
+        sh = vs.shingles(BASE_LARGA)
+        self.assertEqual(vs.minhash(sh), vs.minhash(sh))
+        self.assertEqual(len(vs.minhash(sh)), 64)
+
+    def test_casi_igual_es_duplicado(self):
+        idx = vs.IndiceCasiDuplicados()
+        idx.add("a", BASE_LARGA)
+        self.assertTrue(idx.buscar(CASI_IGUAL))
+
+    def test_distintas_sobre_misma_carta_no_duplicado(self):
+        idx = vs.IndiceCasiDuplicados()
+        idx.add("a", BASE_LARGA)
+        self.assertFalse(idx.buscar(DISTINTA_MISMA_CARTA))
+
+    def test_texto_corto_no_revienta(self):
+        idx = vs.IndiceCasiDuplicados()
+        idx.add("c", "hola")
+        self.assertTrue(idx.buscar("hola"))
+        self.assertFalse(idx.buscar("adios"))
+        self.assertFalse(idx.buscar(""))
+
+    def test_determinismo_entre_indices(self):
+        i1 = vs.IndiceCasiDuplicados()
+        i2 = vs.IndiceCasiDuplicados()
+        i1.add("x", BASE_LARGA)
+        i2.add("y", BASE_LARGA)
+        self.assertEqual(i1.buscar(CASI_IGUAL), i2.buscar(CASI_IGUAL))
+        self.assertTrue(i1.buscar(CASI_IGUAL))
+
+
 if __name__ == "__main__":
     unittest.main()

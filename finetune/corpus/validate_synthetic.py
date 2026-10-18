@@ -11,10 +11,11 @@ import argparse
 import glob
 import hashlib
 import json
+import random
 import re
 import sys
 import unicodedata
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from translate_dataset import detect_language
@@ -87,6 +88,79 @@ def near_key(text: str) -> tuple:
     picks = [w[int(len(w) * f)] for f in (0.1, 0.5, 0.9)]
     mids = [w[min(len(w) - 1, int(len(w) * f) + 1)] for f in (0.1, 0.5, 0.9)]
     return tuple(picks + mids)
+
+
+# --- Casi-duplicados: MinHash + LSH (solo stdlib, determinista) ---
+_MHASH_P = (1 << 61) - 1
+_rng = random.Random(20261018)
+_MHASH_A = [_rng.randrange(1, _MHASH_P) for _ in range(64)]
+_MHASH_B = [_rng.randrange(0, _MHASH_P) for _ in range(64)]
+
+
+def shingles(texto: str, k: int = 5) -> set:
+    """Conjunto de hashes estables (hashlib) de k-gramas de palabras normalizadas."""
+    w = norm(texto).split()
+    if not w:
+        return set()
+    if len(w) < k:
+        grams = [" ".join(w)]
+    else:
+        grams = [" ".join(w[i:i + k]) for i in range(len(w) - k + 1)]
+    return {
+        int.from_bytes(hashlib.blake2b(g.encode("utf-8"), digest_size=8).digest(), "big")
+        for g in grams
+    }
+
+
+def minhash(sh: set, n: int = 64) -> tuple:
+    """Firma MinHash con n funciones (a*x + b) % p de constantes fijas."""
+    if not sh:
+        return tuple()
+    return tuple(
+        min((_MHASH_A[i] * x + _MHASH_B[i]) % _MHASH_P for x in sh)
+        for i in range(n)
+    )
+
+
+class IndiceCasiDuplicados:
+    """LSH por bandas (16 bandas x 4 filas) sobre firmas MinHash.
+
+    `buscar` devuelve True si algún candidato alcanza un Jaccard estimado >= 0,9.
+    """
+
+    def __init__(self, n: int = 64, bandas: int = 16, filas: int = 4, umbral: float = 0.9):
+        self.n = n
+        self.bandas = bandas
+        self.filas = filas
+        self.umbral = umbral
+        self.sigs: dict = {}
+        self.cubetas: dict = defaultdict(set)
+
+    def _clave(self, banda: int, sig: tuple) -> bytes:
+        crudo = "|".join(str(x) for x in sig[banda * self.filas:(banda + 1) * self.filas])
+        return hashlib.blake2b(crudo.encode("utf-8"), digest_size=8).digest()
+
+    def add(self, id_: str, texto: str) -> None:
+        sig = minhash(shingles(texto), self.n)
+        self.sigs[id_] = sig
+        for b in range(self.bandas):
+            self.cubetas[(b, self._clave(b, sig))].add(id_)
+
+    def buscar(self, texto: str) -> bool:
+        sig = minhash(shingles(texto), self.n)
+        if not sig:
+            return False
+        candidatos: set = set()
+        for b in range(self.bandas):
+            candidatos |= self.cubetas.get((b, self._clave(b, sig)), set())
+        for cid in candidatos:
+            otra = self.sigs[cid]
+            if len(otra) != len(sig):
+                continue
+            acuerdo = sum(1 for a, c in zip(sig, otra) if a == c) / len(sig)
+            if acuerdo >= self.umbral:
+                return True
+        return False
 
 
 def repetition_ratio(text: str, n: int = 12) -> float:
@@ -216,7 +290,7 @@ def main(argv=None) -> int:
         return 1
 
     seen_hash: set[str] = set()
-    seen_near: set[tuple] = set()
+    indice = IndiceCasiDuplicados()
     meta: list[dict] = []
     reasons: Counter = Counter()
     per_block: dict[str, dict[str, int]] = {}
@@ -254,14 +328,13 @@ def main(argv=None) -> int:
                         stats["dup"] += 1
                         reasons["duplicado_exacto"] += 1
                         continue
-                    k = near_key(answer)
-                    if k in seen_near:
+                    if indice.buscar(answer):
                         stats["dup"] += 1
                         pairs_dup += 1
                         reasons["duplicado_cercano"] += 1
                         continue
                     seen_hash.add(h)
-                    seen_near.add(k)
+                    indice.add(str(kept), answer)
                     stats["ok"] += 1
                     kept += 1
                     fh.write(json.dumps(row, ensure_ascii=False) + "\n")
