@@ -1,0 +1,326 @@
+[
+  {
+    "numero": 1,
+    "tipo": "simple",
+    "nombre": "El Uno",
+    "palabras_clave": [
+      "liderazgo",
+      "iniciativa",
+      "independencia",
+      "individualidad"
+    ],
+    "positivo": [
+      "pionero",
+      "decidido",
+      "original"
+    ],
+    "sombra": [
+      "egoísmo",
+      "terquedad",
+      "aislamiento"
+    ],
+    "areas": {
+      "amor": "quiere iniciativa y sinceridad",
+      "trabajo": "destaca liderando y empezando proyectos",
+      "dinero": "gana por cuenta propia o siendo el primero",
+      "salud": "cuidar la cabeza y el estrés"
+    }
+  },
+  {
+    "numero": 2,
+    "tipo": "simple",
+    "nombre": "El Dos",
+    "palabras_clave": [
+      "cooperación",
+      "diplomacia",
+      "sensibilidad",
+      "equilibrio"
+    ],
+    "positivo": [
+      "paciente",
+      "empático",
+      "mediador"
+    ],
+    "sombra": [
+      "dependencia",
+      "indecisión",
+      "hipersensibilidad"
+    ],
+    "areas": {
+      "amor": "busca unión y compañía",
+      "trabajo": "destaca en equipo y apoyando",
+      "dinero": "mejor en alianza que en solitario",
+      "salud": "cuidar sistema digestivo y emociones"
+    }
+  },
+  {
+    "numero": 3,
+    "tipo": "simple",
+    "nombre": "El Tres",
+    "palabras_clave": [
+      "creatividad",
+      "comunicación",
+      "expresión",
+      "alegría"
+    ],
+    "positivo": [
+      "expresivo",
+      "optimista",
+      "versátil"
+    ],
+    "sombra": [
+      "dispersión",
+      "superficialidad",
+      "drama"
+    ],
+    "areas": {
+      "amor": "juguetón y expresivo",
+      "trabajo": "destaca creando y comunicando",
+      "dinero": "fluye con la creatividad",
+      "salud": "cuidar garganta y pulmones"
+    }
+  },
+  {
+    "numero": 4,
+    "tipo": "simple",
+    "nombre": "El Cuatro",
+    "palabras_clave": [
+      "orden",
+      "estabilidad",
+      "trabajo",
+      "estructura"
+    ],
+    "positivo": [
+      "constante",
+      "fiable",
+      "práctico"
+    ],
+    "sombra": [
+      "rigidez",
+      "monotonía",
+      "terquedad"
+    ],
+    "areas": {
+      "amor": "valora compromiso y seguridad",
+      "trabajo": "construye con método",
+      "dinero": "ahorra y planifica",
+      "salud": "cuidar huesos y estructura"
+    }
+  },
+  {
+    "numero": 5,
+    "tipo": "simple",
+    "nombre": "El Cinco",
+    "palabras_clave": [
+      "cambio",
+      "libertad",
+      "aventura",
+      "versatilidad"
+    ],
+    "positivo": [
+      "adaptable",
+      "curioso",
+      "enérgico"
+    ],
+    "sombra": [
+      "inconstancia",
+      "exceso",
+      "impaciencia"
+    ],
+    "areas": {
+      "amor": "necesita libertad y variedad",
+      "trabajo": "destaca en lo cambiante y viajes",
+      "dinero": "altibajos, evita la rutina",
+      "salud": "cuidar sistema nervioso"
+    }
+  },
+  {
+    "numero": 6,
+    "tipo": "simple",
+    "nombre": "El Seis",
+    "palabras_clave": [
+      "armonía",
+      "familia",
+      "responsabilidad",
+      "cuidado"
+    ],
+    "positivo": [
+      "protector",
+      "equilibrado",
+      "leal"
+    ],
+    "sombra": [
+      "sacrificio",
+      "interferencia",
+      "perfeccionismo"
+    ],
+    "areas": {
+      "amor": "hogar y vínculos profundos",
+      "trabajo": "destaca cuidando y armonizando equipos",
+      "dinero": "estable y orientado al hogar",
+      "salud": "cuidar corazón y equilibrio"
+    }
+  },
+  {
+    "numero": 7,
+    "tipo": "simple",
+    "nombre": "El Siete",
+    "palabras_clave": [
+      "introspección",
+      "espiritualidad",
+      "análisis",
+      "sabiduría"
+    ],
+    "positivo": [
+      "profundo",
+      "observador",
+      "sabio"
+    ],
+    "sombra": [
+      "aislamiento",
+      "desconfianza",
+      "frialdad"
+    ],
+    "areas": {
+      "amor": "necesita confianza y profundidad",
+      "trabajo": "destaca investigando y analizando",
+      "dinero": "prudente y reservado",
+      "salud": "cuidar la mente y el descanso"
+    }
+  },
+  {
+    "numero": 8,
+    "tipo": "simple",
+    "nombre": "El Ocho",
+    "palabras_clave": [
+      "poder",
+      "ambición",
+      "materialidad",
+      "ejecución"
+    ],
+    "positivo": [
+      "eficiente",
+      "ambicioso",
+      "autoridad"
+    ],
+    "sombra": [
+      "autoritarismo",
+      "avaricia",
+      "materialismo"
+    ],
+    "areas": {
+      "amor": "busca solidez y respeto",
+      "trabajo": "destaca dirigiendo y gestionando",
+      "dinero": "gran capacidad de logro",
+      "salud": "cuidar estrés y circulación"
+    }
+  },
+  {
+    "numero": 9,
+    "tipo": "simple",
+    "nombre": "El Nueve",
+    "palabras_clave": [
+      "altruismo",
+      "cierre",
+      "sabiduría",
+      "humanitarismo"
+    ],
+    "positivo": [
+      "generoso",
+      "compasivo",
+      "idealista"
+    ],
+    "sombra": [
+      "frustración",
+      "control",
+      "resentimiento"
+    ],
+    "areas": {
+      "amor": "entrega profunda y desprendida",
+      "trabajo": "destaca sirviendo a otros",
+      "dinero": "menos interés, más propósito",
+      "salud": "cuidar sistema inmunitario"
+    }
+  },
+  {
+    "numero": 11,
+    "tipo": "maestro",
+    "nombre": "Maestro Once",
+    "palabras_clave": [
+      "intuición",
+      "iluminación",
+      "idealismo",
+      "inspiración"
+    ],
+    "positivo": [
+      "visionario",
+      "inspirador",
+      "sensible"
+    ],
+    "sombra": [
+      "nerviosismo",
+      "mesianismo",
+      "autoengaño"
+    ],
+    "areas": {
+      "amor": "unión espiritual y mental",
+      "trabajo": "destaca inspirando y canalizando ideas",
+      "dinero": "canal de ideas, no de rutina",
+      "salud": "cuidar sistema nervioso"
+    }
+  },
+  {
+    "numero": 22,
+    "tipo": "maestro",
+    "nombre": "Maestro Veintidós",
+    "palabras_clave": [
+      "constructor",
+      "visión",
+      "servicio",
+      "realización"
+    ],
+    "positivo": [
+      "constructor",
+      "práctico",
+      "ambicioso con causa"
+    ],
+    "sombra": [
+      "grandiosidad",
+      "sobrecarga",
+      "frustración"
+    ],
+    "areas": {
+      "amor": "construye vínculos con visión de futuro",
+      "trabajo": "edifica proyectos grandes",
+      "dinero": "logro material con propósito",
+      "salud": "cuidar agotamiento"
+    }
+  },
+  {
+    "numero": 33,
+    "tipo": "maestro",
+    "nombre": "Maestro Treinta y Tres",
+    "palabras_clave": [
+      "maestría",
+      "compasión",
+      "guía",
+      "entrega"
+    ],
+    "positivo": [
+      "maestro",
+      "compasivo",
+      "protector"
+    ],
+    "sombra": [
+      "autoexigencia",
+      "mártir",
+      "sobreimplicación"
+    ],
+    "areas": {
+      "amor": "amor incondicional y guía",
+      "trabajo": "enseña y eleva a otros",
+      "dinero": "abundancia al servicio de otros",
+      "salud": "cuidar la sobrecarga emocional"
+    }
+  }
+]

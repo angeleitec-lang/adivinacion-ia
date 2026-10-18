@@ -1,0 +1,344 @@
+{
+  "signos": [
+    {
+      "nombre": "Aries",
+      "elemento": "fuego",
+      "regente": "Marte",
+      "palabras_clave": [
+        "impulso",
+        "valentía",
+        "inicio",
+        "independencia"
+      ],
+      "rasgos": "impulsivo, pionero, directo; arranca con energía y sin miedo."
+    },
+    {
+      "nombre": "Tauro",
+      "elemento": "tierra",
+      "regente": "Venus",
+      "palabras_clave": [
+        "estabilidad",
+        "sensualidad",
+        "persistencia",
+        "posesión"
+      ],
+      "rasgos": "constante, paciente, amante del placer y la seguridad."
+    },
+    {
+      "nombre": "Géminis",
+      "elemento": "aire",
+      "regente": "Mercurio",
+      "palabras_clave": [
+        "comunicación",
+        "curiosidad",
+        "dualidad",
+        "adaptación"
+      ],
+      "rasgos": "versátil, mental, sociable; procesa el mundo con palabras."
+    },
+    {
+      "nombre": "Cáncer",
+      "elemento": "agua",
+      "regente": "Luna",
+      "palabras_clave": [
+        "emoción",
+        "hogar",
+        "protección",
+        "intuición"
+      ],
+      "rasgos": "sensible, protector, apegado a las raíces y a la familia."
+    },
+    {
+      "nombre": "Leo",
+      "elemento": "fuego",
+      "regente": "Sol",
+      "palabras_clave": [
+        "creatividad",
+        "liderazgo",
+        "orgullo",
+        "generosidad"
+      ],
+      "rasgos": "expresivo, magnánimo, busca brillar y ser reconocido."
+    },
+    {
+      "nombre": "Virgo",
+      "elemento": "tierra",
+      "regente": "Mercurio",
+      "palabras_clave": [
+        "análisis",
+        "servicio",
+        "perfección",
+        "detalle"
+      ],
+      "rasgos": "metódico, crítico, orientado a mejorar y servir."
+    },
+    {
+      "nombre": "Libra",
+      "elemento": "aire",
+      "regente": "Venus",
+      "palabras_clave": [
+        "equilibrio",
+        "relación",
+        "justicia",
+        "armonía"
+      ],
+      "rasgos": "diplomático, esteta, busca pareja y armonía en todo."
+    },
+    {
+      "nombre": "Escorpio",
+      "elemento": "agua",
+      "regente": "Plutón",
+      "palabras_clave": [
+        "intensidad",
+        "transformación",
+        "control",
+        "poder"
+      ],
+      "rasgos": "profundo, magnético, vive las emociones con intensidad."
+    },
+    {
+      "nombre": "Sagitario",
+      "elemento": "fuego",
+      "regente": "Júpiter",
+      "palabras_clave": [
+        "expansión",
+        "optimismo",
+        "búsqueda",
+        "libertad"
+      ],
+      "rasgos": "aventurero, filosófico, busca sentido y horizontes amplios."
+    },
+    {
+      "nombre": "Capricornio",
+      "elemento": "tierra",
+      "regente": "Saturno",
+      "palabras_clave": [
+        "ambición",
+        "disciplina",
+        "estructura",
+        "responsabilidad"
+      ],
+      "rasgos": "tenaz, realista, escala con paciencia hacia la meta."
+    },
+    {
+      "nombre": "Acuario",
+      "elemento": "aire",
+      "regente": "Urano",
+      "palabras_clave": [
+        "innovación",
+        "libertad",
+        "colectivo",
+        "originalidad"
+      ],
+      "rasgos": "independiente, visionario, piensa en el grupo y el futuro."
+    },
+    {
+      "nombre": "Piscis",
+      "elemento": "agua",
+      "regente": "Neptuno",
+      "palabras_clave": [
+        "sensibilidad",
+        "intuición",
+        "disolución",
+        "compasión"
+      ],
+      "rasgos": "empático, soñador, permeable a las emociones del entorno."
+    }
+  ],
+  "planetas": [
+    {
+      "nombre": "Sol",
+      "simboliza": "identidad, vitalidad, propósito",
+      "palabras_clave": [
+        "yo",
+        "voluntad",
+        "vitalidad",
+        "identidad"
+      ]
+    },
+    {
+      "nombre": "Luna",
+      "simboliza": "emociones, instinto, memoria",
+      "palabras_clave": [
+        "emoción",
+        "intuición",
+        "hogar",
+        "inconsciente"
+      ]
+    },
+    {
+      "nombre": "Mercurio",
+      "simboliza": "mente, comunicación, comercio",
+      "palabras_clave": [
+        "comunicación",
+        "razón",
+        "intercambio",
+        "aprendizaje"
+      ]
+    },
+    {
+      "nombre": "Venus",
+      "simboliza": "amor, belleza, valores",
+      "palabras_clave": [
+        "amor",
+        "placer",
+        "estética",
+        "dinero"
+      ]
+    },
+    {
+      "nombre": "Marte",
+      "simboliza": "acción, deseo, conflicto",
+      "palabras_clave": [
+        "acción",
+        "pasión",
+        "energía",
+        "agresividad"
+      ]
+    },
+    {
+      "nombre": "Júpiter",
+      "simboliza": "expansión, suerte, sentido",
+      "palabras_clave": [
+        "crecimiento",
+        "optimismo",
+        "sabiduría",
+        "abundancia"
+      ]
+    },
+    {
+      "nombre": "Saturno",
+      "simboliza": "límites, disciplina, tiempo",
+      "palabras_clave": [
+        "estructura",
+        "responsabilidad",
+        "restricción",
+        "madurez"
+      ]
+    },
+    {
+      "nombre": "Urano",
+      "simboliza": "cambio, libertad, innovación",
+      "palabras_clave": [
+        "ruptura",
+        "libertad",
+        "originalidad",
+        "revolución"
+      ]
+    },
+    {
+      "nombre": "Neptuno",
+      "simboliza": "sueños, ilusión, espiritualidad",
+      "palabras_clave": [
+        "inspiración",
+        "ilusión",
+        "disolución",
+        "misticismo"
+      ]
+    },
+    {
+      "nombre": "Plutón",
+      "simboliza": "transformación, poder, regeneración",
+      "palabras_clave": [
+        "transformación",
+        "poder",
+        "crisis",
+        "renacimiento"
+      ]
+    }
+  ],
+  "casas": [
+    {
+      "numero": 1,
+      "area": "Identidad y apariencia",
+      "significado": "cómo te presentas y cómo inicias las cosas."
+    },
+    {
+      "numero": 2,
+      "area": "Recursos y valores",
+      "significado": "dinero, posesiones y autoestima material."
+    },
+    {
+      "numero": 3,
+      "area": "Comunicación y entorno",
+      "significado": "habla, estudio, hermanos y entorno cercano."
+    },
+    {
+      "numero": 4,
+      "area": "Hogar y raíces",
+      "significado": "familia, base emocional y vida privada."
+    },
+    {
+      "numero": 5,
+      "area": "Creatividad y placer",
+      "significado": "expresión, romance, hijos y diversión."
+    },
+    {
+      "numero": 6,
+      "area": "Trabajo y salud",
+      "significado": "rutina, servicio, hábitos y bienestar."
+    },
+    {
+      "numero": 7,
+      "area": "Pareja y asociaciones",
+      "significado": "relaciones íntimas, socios y contratos."
+    },
+    {
+      "numero": 8,
+      "area": "Transformación y poder compartido",
+      "significado": "herencias, sexo, crisis y regeneración."
+    },
+    {
+      "numero": 9,
+      "area": "Filosofía y viajes",
+      "significado": "creencias, estudios superiores y horizontes."
+    },
+    {
+      "numero": 10,
+      "area": "Carrera y estatus",
+      "significado": "vocación, reputación y metas públicas."
+    },
+    {
+      "numero": 11,
+      "area": "Amistades e ideales",
+      "significado": "grupos, comunidad y proyectos colectivos."
+    },
+    {
+      "numero": 12,
+      "area": "Subconsciente y karma",
+      "significado": "lo oculto, el retiro y las pruebas internas."
+    }
+  ],
+  "aspectos": [
+    {
+      "nombre": "Conjunción",
+      "simbolo": "0°",
+      "orbe": 8,
+      "significado": "los dos planetas funden su energía; intensidad y enfoque."
+    },
+    {
+      "nombre": "Sextil",
+      "simbolo": "60°",
+      "orbe": 6,
+      "significado": "oportunidad y apoyo; se activa con esfuerzo."
+    },
+    {
+      "nombre": "Cuadratura",
+      "simbolo": "90°",
+      "orbe": 7,
+      "significado": "tensión y fricción; exige ajuste y crecimiento."
+    },
+    {
+      "nombre": "Trígono",
+      "simbolo": "120°",
+      "orbe": 8,
+      "significado": "fluidez y talento natural; armonía entre energías."
+    },
+    {
+      "nombre": "Oposición",
+      "simbolo": "180°",
+      "orbe": 8,
+      "significado": "polaridad y confrontación; invita a integrar opuestos."
+    }
+  ]
+}

@@ -1,0 +1,942 @@
+{
+  "mayores": [
+    {
+      "numero": 0,
+      "nombre": "El Loco",
+      "palabras_clave": [
+        "inicio",
+        "espontaneidad",
+        "libertad",
+        "salto de fe"
+      ],
+      "significado": "Nuevos comienzos, soltar el control y confiar en el camino.",
+      "invertida": "Imprudencia, bloqueo o miedo a dar el paso."
+    },
+    {
+      "numero": 1,
+      "nombre": "El Mago",
+      "palabras_clave": [
+        "voluntad",
+        "recursos",
+        "manifestación",
+        "destreza"
+      ],
+      "significado": "Tienes las herramientas y el poder para materializar tus deseos.",
+      "invertida": "Manipulación, dispersión o talento desaprovechado."
+    },
+    {
+      "numero": 2,
+      "nombre": "La Sacerdotisa",
+      "palabras_clave": [
+        "intuición",
+        "misterio",
+        "inconsciente",
+        "silencio"
+      ],
+      "significado": "Escucha tu voz interior; hay sabiduría más allá de lo visible.",
+      "invertida": "Secretos, desconexión de la intuición o información oculta."
+    },
+    {
+      "numero": 3,
+      "nombre": "La Emperatriz",
+      "palabras_clave": [
+        "fertilidad",
+        "abundancia",
+        "cuidado",
+        "creatividad"
+      ],
+      "significado": "Abundancia, crecimiento y nutrición de proyectos y relaciones.",
+      "invertida": "Dependencia, bloqueo creativo o exceso de control."
+    },
+    {
+      "numero": 4,
+      "nombre": "El Emperador",
+      "palabras_clave": [
+        "autoridad",
+        "estructura",
+        "protección",
+        "orden"
+      ],
+      "significado": "Firmeza, liderazgo y construcción de bases sólidas.",
+      "invertida": "Rigidez, abuso de poder o falta de estructura."
+    },
+    {
+      "numero": 5,
+      "nombre": "El Hierofante",
+      "palabras_clave": [
+        "tradición",
+        "enseñanza",
+        "creencias",
+        "institución"
+      ],
+      "significado": "Aprende de la tradición y busca guía en estructuras establecidas.",
+      "invertida": "Dogmatismo, rebeldía o rechazo de las normas."
+    },
+    {
+      "numero": 6,
+      "nombre": "Los Enamorados",
+      "palabras_clave": [
+        "amor",
+        "elección",
+        "unión",
+        "valores"
+      ],
+      "significado": "Unión profunda y una elección importante alineada con tus valores.",
+      "invertida": "Desarmonía, indecisión o conflicto de valores."
+    },
+    {
+      "numero": 7,
+      "nombre": "El Carro",
+      "palabras_clave": [
+        "voluntad",
+        "victoria",
+        "dirección",
+        "control"
+      ],
+      "significado": "Avanza con determinación y mantén las riendas de tu rumbo.",
+      "invertida": "Pérdida de control, estancamiento o dirección dispersa."
+    },
+    {
+      "numero": 8,
+      "nombre": "La Fuerza",
+      "palabras_clave": [
+        "coraje",
+        "autocontrol",
+        "compasión",
+        "resistencia"
+      ],
+      "significado": "La fuerza suave domina: domina el impulso con paciencia.",
+      "invertida": "Debilidad, desgaste o dominio por la ira."
+    },
+    {
+      "numero": 9,
+      "nombre": "El Ermitaño",
+      "palabras_clave": [
+        "introspección",
+        "sabiduría",
+        "soledad",
+        "búsqueda"
+      ],
+      "significado": "Retírate a reflexionar; la respuesta llega en el silencio.",
+      "invertida": "Aislamiento, rechazo o encierro excesivo."
+    },
+    {
+      "numero": 10,
+      "nombre": "La Rueda de la Fortuna",
+      "palabras_clave": [
+        "ciclos",
+        "destino",
+        "cambio",
+        "oportunidad"
+      ],
+      "significado": "Gira la rueda; los ciclos traen cambios y nuevas oportunidades.",
+      "invertida": "Mala racha, resistencia al cambio o retraso."
+    },
+    {
+      "numero": 11,
+      "nombre": "La Justicia",
+      "palabras_clave": [
+        "equidad",
+        "verdad",
+        "consecuencia",
+        "ley"
+      ],
+      "significado": "Actúa con integridad; cada acción tiene su consecuencia.",
+      "invertida": "Injusticia, deshonestidad o cuentas pendientes."
+    },
+    {
+      "numero": 12,
+      "nombre": "El Colgado",
+      "palabras_clave": [
+        "pausa",
+        "sacrificio",
+        "perspectiva",
+        "entrega"
+      ],
+      "significado": "Una pausa necesaria; cambiar de perspectiva ilumina el camino.",
+      "invertida": "Estancamiento, sacrificio inútil o resistencia."
+    },
+    {
+      "numero": 13,
+      "nombre": "La Muerte",
+      "palabras_clave": [
+        "fin",
+        "transformación",
+        "renacimiento",
+        "cierre"
+      ],
+      "significado": "Un ciclo termina para que otro nazca; soltar es transformar.",
+      "invertida": "Resistencia al cambio, estancamiento o miedo a soltar."
+    },
+    {
+      "numero": 14,
+      "nombre": "La Templanza",
+      "palabras_clave": [
+        "equilibrio",
+        "paciencia",
+        "alquimia",
+        "moderación"
+      ],
+      "significado": "Integra los opuestos y avanza con calma y mesura.",
+      "invertida": "Exceso, desequilibrio o impaciencia."
+    },
+    {
+      "numero": 15,
+      "nombre": "El Diablo",
+      "palabras_clave": [
+        "ataduras",
+        "deseo",
+        "sombra",
+        "tentación"
+      ],
+      "significado": "Reconoce tus cadenas y los apegos que te limitan.",
+      "invertida": "Liberación, recuperación o despertar de la sombra."
+    },
+    {
+      "numero": 16,
+      "nombre": "La Torre",
+      "palabras_clave": [
+        "ruptura",
+        "revelación",
+        "caída",
+        "liberación"
+      ],
+      "significado": "Se derrumba lo falso; tras la crisis queda la verdad.",
+      "invertida": "Crisis evitada, miedo al cambio o ruina postergada."
+    },
+    {
+      "numero": 17,
+      "nombre": "La Estrella",
+      "palabras_clave": [
+        "esperanza",
+        "inspiración",
+        "sanación",
+        "fe"
+      ],
+      "significado": "Renace la esperanza; la inspiración guía tu sanación.",
+      "invertida": "Desaliento, pesimismo o pérdida de fe."
+    },
+    {
+      "numero": 18,
+      "nombre": "La Luna",
+      "palabras_clave": [
+        "ilusión",
+        "intuición",
+        "inconsciente",
+        "sueños"
+      ],
+      "significado": "No todo es lo que parece; confía en la intuición en la niebla.",
+      "invertida": "Claridad, confusión disipada o engaño revelado."
+    },
+    {
+      "numero": 19,
+      "nombre": "El Sol",
+      "palabras_clave": [
+        "alegría",
+        "éxito",
+        "vitalidad",
+        "claridad"
+      ],
+      "significado": "Éxito, vitalidad y claridad; todo sale a la luz con alegría.",
+      "invertida": "Felicidad empañada, exceso o falta de entusiasmo."
+    },
+    {
+      "numero": 20,
+      "nombre": "El Juicio",
+      "palabras_clave": [
+        "despertar",
+        "evaluación",
+        "renacimiento",
+        "llamada"
+      ],
+      "significado": "Una llamada a renacer y asumir una nueva etapa de la vida.",
+      "invertida": "Autocrítica, duda o negarse a la llamada."
+    },
+    {
+      "numero": 21,
+      "nombre": "El Mundo",
+      "palabras_clave": [
+        "plenitud",
+        "cierre",
+        "integración",
+        "realización"
+      ],
+      "significado": "Culminación y logro; integras lo aprendido en un todo.",
+      "invertida": "Incompletitud, retraso o falta de cierre."
+    }
+  ],
+  "menores": [
+    {
+      "nombre": "As de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "As",
+      "palabras_clave": [
+        "la acción",
+        "Un comienzo"
+      ],
+      "significado": "Un comienzo y una semilla de potencial en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Dos de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Dos",
+      "palabras_clave": [
+        "la acción",
+        "La dualidad"
+      ],
+      "significado": "La dualidad y una elección a tomar en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Tres de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Tres",
+      "palabras_clave": [
+        "la acción",
+        "El crecimiento"
+      ],
+      "significado": "El crecimiento y la colaboración en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Cuatro de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Cuatro",
+      "palabras_clave": [
+        "la acción",
+        "La estabilidad"
+      ],
+      "significado": "La estabilidad y una pausa para consolidar en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Cinco de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Cinco",
+      "palabras_clave": [
+        "la acción",
+        "El conflicto"
+      ],
+      "significado": "El conflicto y un cambio necesario en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Seis de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Seis",
+      "palabras_clave": [
+        "la acción",
+        "La armonía"
+      ],
+      "significado": "La armonía y el equilibrio recuperado en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Siete de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Siete",
+      "palabras_clave": [
+        "la acción",
+        "La evaluación"
+      ],
+      "significado": "La evaluación y un desafío que pide estrategia en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Ocho de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Ocho",
+      "palabras_clave": [
+        "la acción",
+        "El movimiento"
+      ],
+      "significado": "El movimiento y la maestría en la acción en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Nueve de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Nueve",
+      "palabras_clave": [
+        "la acción",
+        "La culminación"
+      ],
+      "significado": "La culminación y la independencia en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Diez de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Diez",
+      "palabras_clave": [
+        "la acción",
+        "La plenitud"
+      ],
+      "significado": "La plenitud y el cierre de un ciclo en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Sota de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Sota",
+      "palabras_clave": [
+        "la acción",
+        "Un mensaje"
+      ],
+      "significado": "Un mensaje y el aprendizaje de algo nuevo en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Caballo de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Caballo",
+      "palabras_clave": [
+        "la acción",
+        "La acción impetuosa"
+      ],
+      "significado": "La acción impetuosa y el impulso en marcha en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Reina de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Reina",
+      "palabras_clave": [
+        "la acción",
+        "La madurez emocional"
+      ],
+      "significado": "La madurez emocional y el cuidado en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Rey de Bastos",
+      "palo": "Bastos",
+      "elemento": "fuego",
+      "rango": "Rey",
+      "palabras_clave": [
+        "la acción",
+        "La autoridad"
+      ],
+      "significado": "La autoridad y el dominio consolidado en el ámbito de la acción, la pasión, el trabajo y la iniciativa.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "As de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "As",
+      "palabras_clave": [
+        "las emociones",
+        "Un comienzo"
+      ],
+      "significado": "Un comienzo y una semilla de potencial en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Dos de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Dos",
+      "palabras_clave": [
+        "las emociones",
+        "La dualidad"
+      ],
+      "significado": "La dualidad y una elección a tomar en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Tres de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Tres",
+      "palabras_clave": [
+        "las emociones",
+        "El crecimiento"
+      ],
+      "significado": "El crecimiento y la colaboración en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Cuatro de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Cuatro",
+      "palabras_clave": [
+        "las emociones",
+        "La estabilidad"
+      ],
+      "significado": "La estabilidad y una pausa para consolidar en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Cinco de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Cinco",
+      "palabras_clave": [
+        "las emociones",
+        "El conflicto"
+      ],
+      "significado": "El conflicto y un cambio necesario en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Seis de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Seis",
+      "palabras_clave": [
+        "las emociones",
+        "La armonía"
+      ],
+      "significado": "La armonía y el equilibrio recuperado en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Siete de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Siete",
+      "palabras_clave": [
+        "las emociones",
+        "La evaluación"
+      ],
+      "significado": "La evaluación y un desafío que pide estrategia en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Ocho de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Ocho",
+      "palabras_clave": [
+        "las emociones",
+        "El movimiento"
+      ],
+      "significado": "El movimiento y la maestría en la acción en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Nueve de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Nueve",
+      "palabras_clave": [
+        "las emociones",
+        "La culminación"
+      ],
+      "significado": "La culminación y la independencia en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Diez de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Diez",
+      "palabras_clave": [
+        "las emociones",
+        "La plenitud"
+      ],
+      "significado": "La plenitud y el cierre de un ciclo en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Sota de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Sota",
+      "palabras_clave": [
+        "las emociones",
+        "Un mensaje"
+      ],
+      "significado": "Un mensaje y el aprendizaje de algo nuevo en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Caballo de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Caballo",
+      "palabras_clave": [
+        "las emociones",
+        "La acción impetuosa"
+      ],
+      "significado": "La acción impetuosa y el impulso en marcha en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Reina de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Reina",
+      "palabras_clave": [
+        "las emociones",
+        "La madurez emocional"
+      ],
+      "significado": "La madurez emocional y el cuidado en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Rey de Copas",
+      "palo": "Copas",
+      "elemento": "agua",
+      "rango": "Rey",
+      "palabras_clave": [
+        "las emociones",
+        "La autoridad"
+      ],
+      "significado": "La autoridad y el dominio consolidado en el ámbito de las emociones, el amor y las relaciones.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "As de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "As",
+      "palabras_clave": [
+        "la mente",
+        "Un comienzo"
+      ],
+      "significado": "Un comienzo y una semilla de potencial en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Dos de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Dos",
+      "palabras_clave": [
+        "la mente",
+        "La dualidad"
+      ],
+      "significado": "La dualidad y una elección a tomar en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Tres de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Tres",
+      "palabras_clave": [
+        "la mente",
+        "El crecimiento"
+      ],
+      "significado": "El crecimiento y la colaboración en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Cuatro de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Cuatro",
+      "palabras_clave": [
+        "la mente",
+        "La estabilidad"
+      ],
+      "significado": "La estabilidad y una pausa para consolidar en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Cinco de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Cinco",
+      "palabras_clave": [
+        "la mente",
+        "El conflicto"
+      ],
+      "significado": "El conflicto y un cambio necesario en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Seis de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Seis",
+      "palabras_clave": [
+        "la mente",
+        "La armonía"
+      ],
+      "significado": "La armonía y el equilibrio recuperado en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Siete de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Siete",
+      "palabras_clave": [
+        "la mente",
+        "La evaluación"
+      ],
+      "significado": "La evaluación y un desafío que pide estrategia en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Ocho de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Ocho",
+      "palabras_clave": [
+        "la mente",
+        "El movimiento"
+      ],
+      "significado": "El movimiento y la maestría en la acción en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Nueve de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Nueve",
+      "palabras_clave": [
+        "la mente",
+        "La culminación"
+      ],
+      "significado": "La culminación y la independencia en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Diez de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Diez",
+      "palabras_clave": [
+        "la mente",
+        "La plenitud"
+      ],
+      "significado": "La plenitud y el cierre de un ciclo en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Sota de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Sota",
+      "palabras_clave": [
+        "la mente",
+        "Un mensaje"
+      ],
+      "significado": "Un mensaje y el aprendizaje de algo nuevo en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Caballo de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Caballo",
+      "palabras_clave": [
+        "la mente",
+        "La acción impetuosa"
+      ],
+      "significado": "La acción impetuosa y el impulso en marcha en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Reina de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Reina",
+      "palabras_clave": [
+        "la mente",
+        "La madurez emocional"
+      ],
+      "significado": "La madurez emocional y el cuidado en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Rey de Espadas",
+      "palo": "Espadas",
+      "elemento": "aire",
+      "rango": "Rey",
+      "palabras_clave": [
+        "la mente",
+        "La autoridad"
+      ],
+      "significado": "La autoridad y el dominio consolidado en el ámbito de la mente, el conflicto y la verdad.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "As de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "As",
+      "palabras_clave": [
+        "el dinero",
+        "Un comienzo"
+      ],
+      "significado": "Un comienzo y una semilla de potencial en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Dos de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Dos",
+      "palabras_clave": [
+        "el dinero",
+        "La dualidad"
+      ],
+      "significado": "La dualidad y una elección a tomar en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Tres de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Tres",
+      "palabras_clave": [
+        "el dinero",
+        "El crecimiento"
+      ],
+      "significado": "El crecimiento y la colaboración en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Cuatro de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Cuatro",
+      "palabras_clave": [
+        "el dinero",
+        "La estabilidad"
+      ],
+      "significado": "La estabilidad y una pausa para consolidar en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Cinco de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Cinco",
+      "palabras_clave": [
+        "el dinero",
+        "El conflicto"
+      ],
+      "significado": "El conflicto y un cambio necesario en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Seis de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Seis",
+      "palabras_clave": [
+        "el dinero",
+        "La armonía"
+      ],
+      "significado": "La armonía y el equilibrio recuperado en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Siete de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Siete",
+      "palabras_clave": [
+        "el dinero",
+        "La evaluación"
+      ],
+      "significado": "La evaluación y un desafío que pide estrategia en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Ocho de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Ocho",
+      "palabras_clave": [
+        "el dinero",
+        "El movimiento"
+      ],
+      "significado": "El movimiento y la maestría en la acción en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Nueve de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Nueve",
+      "palabras_clave": [
+        "el dinero",
+        "La culminación"
+      ],
+      "significado": "La culminación y la independencia en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Diez de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Diez",
+      "palabras_clave": [
+        "el dinero",
+        "La plenitud"
+      ],
+      "significado": "La plenitud y el cierre de un ciclo en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Sota de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Sota",
+      "palabras_clave": [
+        "el dinero",
+        "Un mensaje"
+      ],
+      "significado": "Un mensaje y el aprendizaje de algo nuevo en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Caballo de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Caballo",
+      "palabras_clave": [
+        "el dinero",
+        "La acción impetuosa"
+      ],
+      "significado": "La acción impetuosa y el impulso en marcha en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Reina de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Reina",
+      "palabras_clave": [
+        "el dinero",
+        "La madurez emocional"
+      ],
+      "significado": "La madurez emocional y el cuidado en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    },
+    {
+      "nombre": "Rey de Oros",
+      "palo": "Oros",
+      "elemento": "tierra",
+      "rango": "Rey",
+      "palabras_clave": [
+        "el dinero",
+        "La autoridad"
+      ],
+      "significado": "La autoridad y el dominio consolidado en el ámbito de el dinero, el cuerpo y lo material.",
+      "invertida": "Energía bloqueada o en exceso dentro de su ámbito."
+    }
+  ]
+}

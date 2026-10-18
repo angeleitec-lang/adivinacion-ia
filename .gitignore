@@ -1,0 +1,25 @@
+# Datos y artefactos pesados (nunca al repo)
+.DS_Store
+**/__pycache__/
+*.pyc
+finetune/.venv/
+finetune/firecrawl/
+finetune/rag/
+finetune/corpus/raw/
+finetune/corpus/raw_scrapy/
+finetune/corpus/docs/
+finetune/corpus/docs_epub/
+finetune/corpus/synthetic/
+finetune/corpus/final/
+finetune/corpus/audit/
+finetune/corpus/*.jsonl
+finetune/corpus/*.jsonl.*
+finetune/corpus/*.progress
+finetune/corpus/*.bak
+finetune/corpus/jobs.db*
+finetune/corpus/manifest.json
+finetune/corpus/synthetic_report.json
+# Coordinación (canales de texto, no se versionan)
+SIGUIENTE.md
+ESTADO.md
+.worktrees/
