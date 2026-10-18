@@ -179,5 +179,45 @@ class Idioma(unittest.TestCase):
         self.assertTrue(bd.es_puro(texto))
 
 
+class BotonesComerciales(unittest.TestCase):
+    """T3.9: clean_body elimina botones de tienda y restos de enlace."""
+
+    def test_boton_ver_productos_bindi(self):
+        texto = ("Amuletos, velas y minerales que cierran el paso a la mala "
+                 "energía_Ver productos →_](https://bindi-online.com/"
+                 "etiqueta-producto/proteccion/)")
+        limpio = bd.clean_body(texto)
+        self.assertNotIn("Ver productos", limpio)
+        self.assertNotIn("bindi-online", limpio)
+        self.assertNotIn("](", limpio)
+        self.assertIn("energía", limpio)
+
+    def test_ver_mas_con_flecha(self):
+        limpio = bd.clean_body("Texto útil Ver más → resto")
+        self.assertNotIn("Ver más", limpio)
+        self.assertNotIn("→", limpio)
+
+    def test_comprar_ahora(self):
+        limpio = bd.clean_body("Un amuleto Comprar ahora mismo")
+        self.assertNotIn("Comprar ahora", limpio)
+
+    def test_leer_mas_guillemet(self):
+        limpio = bd.clean_body("Resumen breve Leer más » y seguimos")
+        self.assertNotIn("Leer más", limpio)
+        self.assertNotIn("»", limpio)
+
+    def test_suscribete(self):
+        limpio = bd.clean_body("*Suscríbete* para recibir más tiradas")
+        self.assertNotIn("Suscríbete", limpio)
+
+    def test_asteriscos_alrededor(self):
+        limpio = bd.clean_body("**Ver productos** y nada más")
+        self.assertNotIn("Ver productos", limpio)
+
+    def test_texto_normal_no_se_toca(self):
+        texto = "La verde luna ilumina el tarot."
+        self.assertEqual(bd.clean_body(texto), texto)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -203,6 +203,15 @@ LINK_RE = re.compile(r"\[([^\]]+)\]\(" + _LINK_TARGET + r"\)")
 EDIT_RESIDUE_RE = re.compile(r'&action=edit(?:&section=\d+)?(?:\s*"[^"]*")?\)?')
 # Líneas que tras limpiar solo contienen _ * > sueltos.
 JUNK_LINE_RE = re.compile(r"[_*> \t]+")
+# Botones de tienda, con o sin _/* alrededor y con o sin flecha →/».
+BUTTON_RE = re.compile(
+    r"[_*]*\s*(?:ver\s+productos|ver\s+m[áa]s|comprar\s+ahora|"
+    r"a[nñ]adir\s+al\s+carrito|suscr[ií]bete|leer\s+m[áa]s)"
+    r"\s*(?:→|»)?\s*[_*]*",
+    re.IGNORECASE,
+)
+# Resto de enlace «](http…)» sin corchete de apertura.
+STRAY_LINK_RE = re.compile(r"\]\((?:https?://|www\.|/)[^)]*\)")
 
 
 def clean_inline(text: str) -> str:
@@ -226,6 +235,8 @@ def clean_body(text: str) -> str:
     text = EDIT_BARE_RE.sub("", text)
     text = LINK_RE.sub(r"\1", text)
     text = EDIT_RESIDUE_RE.sub("", text)
+    text = BUTTON_RE.sub("", text)
+    text = STRAY_LINK_RE.sub("", text)
     text = text.replace(_ESC_OPEN, "").replace(_ESC_CLOSE, "")
     lines = [ln.rstrip() for ln in text.splitlines()]
     out = []
