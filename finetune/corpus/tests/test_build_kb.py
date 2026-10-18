@@ -89,6 +89,18 @@ class TestSotaDeEspadas(unittest.TestCase):
         self.assertIn("De pie y alerta", sota["significado"])
 
 
+class TestLenguajeNeutro(unittest.TestCase):
+    def test_sin_masculino_generico(self):
+        prohibidas = ("vencedor", "herido", "orgulloso", "cansado", "en ti mismo")
+        for carta in build_kb.MAYORES + build_kb.MENORES:
+            textos = [carta["significado"], carta["invertida"]]
+            textos.extend(carta.get("contextos", {}).values())
+            for texto in textos:
+                for palabra in prohibidas:
+                    self.assertNotIn(palabra, texto.lower(),
+                                     f"{carta['nombre']}: {texto}")
+
+
 class TestAstroCoherencia(unittest.TestCase):
     def test_orbes_aspectos(self):
         esperado = {"Conjunción": 6, "Sextil": 5, "Cuadratura": 6, "Trígono": 6, "Oposición": 7}
