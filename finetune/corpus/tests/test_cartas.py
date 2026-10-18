@@ -150,7 +150,7 @@ class ExtraerCartas(unittest.TestCase):
         self.assertEqual(menciones[0]["orientacion"], "derecha")
 
     def test_orientacion_ausente_es_none(self):
-        menciones = cartas.extraer_cartas("hablamos de la muerte y el sol")
+        menciones = cartas.extraer_cartas("hablamos de la muerte y el sol", contextual=False)
         orientaciones = {m["carta"]["nombre"]: m["orientacion"]
                          for m in menciones}
         self.assertEqual(orientaciones["La Muerte"], None)
@@ -158,7 +158,7 @@ class ExtraerCartas(unittest.TestCase):
 
     def test_orden_de_aparicion_y_posicion(self):
         texto = "primero el loco, luego tres de espadas y al final la luna"
-        menciones = cartas.extraer_cartas(texto)
+        menciones = cartas.extraer_cartas(texto, contextual=False)
         self.assertEqual([m["carta"]["nombre"] for m in menciones],
                          ["El Loco", "Tres de Espadas", "La Luna"])
         posiciones = [m["posicion_texto"] for m in menciones]
@@ -166,7 +166,7 @@ class ExtraerCartas(unittest.TestCase):
         self.assertEqual(posiciones[0], cartas.norm(texto).index("el loco"))
 
     def test_ventana_orientacion_no_contamina_siguiente_carta(self):
-        menciones = cartas.extraer_cartas("el loco y la luna invertida")
+        menciones = cartas.extraer_cartas("el loco y la luna invertida", contextual=False)
         self.assertEqual(len(menciones), 2)
         self.assertEqual(menciones[0]["carta"]["nombre"], "El Loco")
         self.assertIsNone(menciones[0]["orientacion"])
@@ -190,6 +190,53 @@ class ExtraerCartas(unittest.TestCase):
 
     def test_no_coincide_dentro_de_palabra(self):
         self.assertEqual(cartas.extraer_cartas("casas y solares bonitos"), [])
+
+    # --- Tests A4.1b: modo contextual para nombres ambiguos ---
+    def test_contextual_frase_cotidiana_sin_cartas(self):
+        """Frase con sol/luna cotidianos no debe detectar cartas."""
+        menciones = cartas.extraer_cartas(
+            "hola bienvenidos hoy el sol sale por la casa y la luna se esconde")
+        self.assertEqual(menciones, [])
+
+    def test_contextual_sol_con_invertido(self):
+        """El sol con 'invertido' si cuenta."""
+        menciones = cartas.extraer_cartas("me salio el sol invertido")
+        self.assertEqual(len(menciones), 1)
+        self.assertEqual(menciones[0]["carta"]["nombre"], "El Sol")
+        self.assertEqual(menciones[0]["orientacion"], "invertida")
+
+    def test_contextual_luna_con_palabra_contexto(self):
+        """La luna con 'carta' y 'representa' cerca si cuenta."""
+        menciones = cartas.extraer_cartas("la carta de la luna representa el miedo")
+        self.assertEqual(len(menciones), 1)
+        self.assertEqual(menciones[0]["carta"]["nombre"], "La Luna")
+
+    def test_contextual_sol_luna_cotidianos_sin_contexto(self):
+        """Sol y luna en contexto meteorologico no cuentan."""
+        menciones = cartas.extraer_cartas("hoy hace sol y la luna esta preciosa")
+        self.assertEqual(menciones, [])
+
+    def test_contextual_varias_cartas_con_algunas_ambiguas(self):
+        """El loco, la torre (ambiguas) + tres de copas (no ambigua) -> 3 cartas."""
+        menciones = cartas.extraer_cartas("saco el loco la torre y el tres de copas")
+        self.assertEqual(len(menciones), 3)
+        nombres = [m["carta"]["nombre"] for m in menciones]
+        self.assertIn("El Loco", nombres)
+        self.assertIn("La Torre", nombres)
+        self.assertIn("Tres de Copas", nombres)
+
+    def test_contextual_menor_sin_contexto_cuenta(self):
+        """Cartas menores con palo (sota de oros) siempre cuentan."""
+        menciones = cartas.extraer_cartas("sota de oros")
+        self.assertEqual(len(menciones), 1)
+        self.assertEqual(menciones[0]["carta"]["nombre"], "Sota de Oros")
+
+    def test_contextual_false_comportamiento_original(self):
+        """Con contextual=False se mantiene comportamiento original."""
+        menciones = cartas.extraer_cartas(
+            "hola bienvenidos hoy el sol sale por la casa", contextual=False)
+        self.assertEqual(len(menciones), 1)
+        self.assertEqual(menciones[0]["carta"]["nombre"], "El Sol")
 
 
 if __name__ == "__main__":

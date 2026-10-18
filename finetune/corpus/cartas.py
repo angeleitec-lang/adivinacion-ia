@@ -252,6 +252,22 @@ def normalizar_carta(texto, mazo="tarot"):
 # Extracción de menciones en un texto
 # ---------------------------------------------------------------------------
 
+# Nombres ambiguos (arcanos mayores cuyo nombre es palabra cotidiana)
+# En modo contextual solo cuentan si tienen indicador de orientación,
+# palabras de contexto tarot cerca, o están cerca de otra carta no ambigua.
+_AMBIGUOS = {
+    "el sol", "la luna", "el mundo", "la fuerza", "el juicio",
+    "la muerte", "la justicia", "la estrella", "el carro", "la torre",
+    "el diablo", "el loco", "el mago", "la templanza", "el colgado",
+    "la emperatriz", "el emperador", "la sacerdotisa", "el ermitaño",
+    "los enamorados", "la rueda de la fortuna", "el hierofante",
+}
+
+_PALABRAS_CONTEXTO = {
+    "carta", "cartas", "arcano", "arcanos", "tarot", "salio",
+    "saco", "aparece", "tirada", "posicion", "significa", "representa",
+}
+
 _MENCION_CACHE: dict = {}
 
 
@@ -290,13 +306,24 @@ def _orientacion(texto, fin, limite, indice_siguiente):
     return None
 
 
-def extraer_cartas(texto, mazo="tarot"):
+def extraer_cartas(texto, mazo="tarot", contextual=True):
     """Menciones en orden de aparición.
 
     Cada elemento es {"carta": entrada del catálogo,
     "orientacion": "derecha"|"invertida"|None,
     "posicion_texto": índice de carácter en el texto normalizado}.
     «invertida/al revés» hasta 4 palabras después del nombre marca invertida.
+
+    Si contextual=True (por defecto), los nombres ambiguos (El Sol, La Luna,
+    El Mundo, La Fuerza, El Juicio, La Muerte, La Justicia, La Estrella,
+    El Carro, La Torre, El Diablo, El Loco, El Mago, La Templanza,
+    El Colgado, La Emperatriz, El Emperador, La Sacerdotisa, El Ermitaño,
+    Los Enamorados, La Rueda de la Fortuna, El Hierofante) solo cuentan si
+    cumplen al menos una condición: (a) van seguidos en ≤4 palabras de
+    invertid*/al revés/al derecho/derecho; (b) hay en ±8 palabras alguna
+    palabra de contexto tarot (carta, arcano, tarot, salió, sale, sacó,
+    aparece, tirada, posición, significa, representa); (c) están a ≤12
+    palabras de otra carta no ambigua ya aceptada.
     """
     consulta = norm(texto)
     if not consulta:
@@ -305,10 +332,49 @@ def extraer_cartas(texto, mazo="tarot"):
     coincidencias = list(regex.finditer(consulta))
     indice = _indice(mazo)
     menciones = []
+    # Para modo contextual: mantener conjunto de posiciones de cartas no ambiguas
+    # aceptadas (índice de palabra en texto normalizado)
+    pos_no_ambiguas = []
+    palabras_texto = consulta.split()
+    
     for i, coinc in enumerate(coincidencias):
         entrada = indice.get(coinc.group(0))
         if entrada is None:
             continue
+        
+        # Modo contextual: verificar si carta ambigua cumple condiciones
+        if contextual:
+            nombre_norm = norm(entrada["nombre"])
+            if nombre_norm in _AMBIGUOS:
+                # Calcular posición en palabras
+                palabra_inicio = len(consulta[:coinc.start()].split())
+                palabra_fin = len(consulta[:coinc.end()].split())
+                
+                # (a) orientación en ≤4 palabras después
+                fin = coinc.end()
+                if i + 1 < len(coincidencias):
+                    limite_palabra = coincidencias[i + 1].start()
+                else:
+                    limite_palabra = min(fin + 60, len(consulta))
+                orientacion = _orientacion(consulta, fin, limite_palabra, None)
+                if orientacion is not None:
+                    pass  # cumple condición (a)
+                else:
+                    # (b) palabras de contexto en ventana ±8 palabras
+                    ini_ventana = max(0, palabra_inicio - 8)
+                    fin_ventana = min(len(palabras_texto), palabra_fin + 8)
+                    ventana_palabras = set(palabras_texto[ini_ventana:fin_ventana])
+                    if not (ventana_palabras & _PALABRAS_CONTEXTO):
+                        # (c) a ≤12 palabras de otra carta no ambigua ya aceptada
+                        cerca_no_ambigua = any(
+                            abs(palabra_inicio - p) <= 12 for p in pos_no_ambiguas)
+                        if not cerca_no_ambigua:
+                            continue  # rechazar esta mención ambigua
+            else:
+                # No ambigua: registrar posición para futuras referencias
+                palabra_inicio = len(consulta[:coinc.start()].split())
+                pos_no_ambiguas.append(palabra_inicio)
+        
         fin = coinc.end()
         if i + 1 < len(coincidencias):
             limite_palabra = coincidencias[i + 1].start()
