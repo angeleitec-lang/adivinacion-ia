@@ -212,15 +212,44 @@ LINK_RE = re.compile(r"\[([^\]]+)\]\(" + _LINK_TARGET + r"\)")
 EDIT_RESIDUE_RE = re.compile(r'&action=edit(?:&section=\d+)?(?:\s*"[^"]*")?\)?')
 # Líneas que tras limpiar solo contienen _ * > sueltos.
 JUNK_LINE_RE = re.compile(r"[_*> \t]+")
-# Botones de tienda, con o sin _/* alrededor y con o sin flecha →/».
-BUTTON_RE = re.compile(
-    r"[_*]*\s*(?:ver\s+productos|ver\s+m[áa]s|comprar\s+ahora|"
-    r"a[nñ]adir\s+al\s+carrito|suscr[ií]bete|leer\s+m[áa]s)"
-    r"\s*(?:→|»)?\s*[_*]*",
+# Reclamos comerciales: se elimina la frase entera que los contiene.
+COMMERCIAL_RE = re.compile(
+    r"(?:ver\s+productos|ver\s+m[áa]s|comprar\s+ahora|"
+    r"a[nñ]adir\s+al\s+carrito|suscr[ií]bete|leer\s+m[áa]s|"
+    r"descarga(?:r)?\s+gratis)",
     re.IGNORECASE,
 )
+COMMERCIAL_END_RE = re.compile(r"[.!?](?=\s|$)|»")
+COMMERCIAL_START_RE = re.compile(r"([.!?»]\s+)|([_*])")
 # Resto de enlace «](http…)» sin corchete de apertura.
 STRAY_LINK_RE = re.compile(r"\]\((?:https?://|www\.|/)[^)]*\)")
+
+
+def _sin_frases_comerciales(text: str) -> str:
+    """Elimina cada frase que contenga un reclamo comercial, desde su inicio
+    hasta el punto, el salto de línea o el cierre de cita."""
+    lineas = []
+    for linea in text.splitlines():
+        piezas = []
+        inicio = 0
+        while True:
+            reclamo = COMMERCIAL_RE.search(linea, inicio)
+            if not reclamo:
+                piezas.append(linea[inicio:])
+                break
+            previo = linea[inicio:reclamo.start()]
+            cortes = list(COMMERCIAL_START_RE.finditer(previo))
+            if cortes:
+                corte = cortes[-1]
+                principio = inicio + (corte.end() if corte.group(1) else corte.start())
+            else:
+                principio = inicio
+            final = COMMERCIAL_END_RE.search(linea, reclamo.end())
+            fin = final.end() if final else len(linea)
+            piezas.append(linea[inicio:principio])
+            inicio = fin
+        lineas.append("".join(piezas))
+    return "\n".join(lineas)
 
 
 def clean_inline(text: str) -> str:
@@ -244,7 +273,7 @@ def clean_body(text: str) -> str:
     text = EDIT_BARE_RE.sub("", text)
     text = LINK_RE.sub(r"\1", text)
     text = EDIT_RESIDUE_RE.sub("", text)
-    text = BUTTON_RE.sub("", text)
+    text = _sin_frases_comerciales(text)
     text = STRAY_LINK_RE.sub("", text)
     text = text.replace(_ESC_OPEN, "").replace(_ESC_CLOSE, "")
     lines = [ln.rstrip() for ln in text.splitlines()]
