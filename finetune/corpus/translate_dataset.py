@@ -79,6 +79,35 @@ def detect_language(text: str) -> str:
     return "mixed"
 
 
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+_PREFIX_TRAD_RE = re.compile(
+    r"^(?:Aqu[ií]\s+est[áa]\s+la\s+traducci[óo]n|Traducci[óo]n)\s*[:：]\s*",
+    re.IGNORECASE,
+)
+
+
+def validar_traduccion(original: str, traducida: str,
+                       finish_reason: str) -> "tuple[str | None, str | None]":
+    """Limpia y valida la respuesta del traductor.
+
+    Devuelve (texto_limpio, None) si es válida, o (None, motivo) si no.
+    """
+    if finish_reason == "length":
+        return None, "respuesta truncada (finish_reason=length)"
+    texto = (traducida or "").strip()
+    texto = _THINK_RE.sub("", texto).strip()
+    texto = _PREFIX_TRAD_RE.sub("", texto, count=1).strip()
+    if not texto:
+        return None, "el resultado quedó vacío"
+    if detect_language(texto) == "en":
+        return None, "la traducción sigue en inglés"
+    if original:
+        ratio = len(texto) / max(1, len(original))
+        if ratio < 0.4 or ratio > 2.5:
+            return None, f"ratio de longitud fuera de rango: {ratio:.2f}"
+    return texto, None
+
+
 def _translate(text: str, base_url: str, model: str, retries: int = 4, timeout: int = 300) -> str:
     payload = {
         "model": model,
@@ -101,7 +130,17 @@ def _translate(text: str, base_url: str, model: str, retries: int = 4, timeout: 
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.load(resp)
-            return data["choices"][0]["message"]["content"].strip()
+            choice = data["choices"][0]
+            limpio, motivo = validar_traduccion(
+                text,
+                choice["message"]["content"],
+                choice.get("finish_reason", ""),
+            )
+            if limpio is None:
+                last_error = motivo
+                time.sleep(2 ** attempt)
+                continue
+            return limpio
         except urllib.error.HTTPError as exc:
             last_error = f"HTTP {exc.code}"
             time.sleep(2 ** attempt)

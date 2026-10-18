@@ -29,5 +29,60 @@ class DetectLanguage(unittest.TestCase):
         self.assertEqual(td.detect_language(""), "unknown")
 
 
+class ValidarTraduccion(unittest.TestCase):
+    def test_vacio(self):
+        texto, motivo = td.validar_traduccion("Some english source text.", "   ", "stop")
+        self.assertIsNone(texto)
+        self.assertIn("vacío", motivo)
+
+    def test_bloque_think_se_quita(self):
+        original = "The moon is beautiful tonight."
+        traducida = "<think>voy a pensar</think>La luna es hermosa esta noche."
+        texto, motivo = td.validar_traduccion(original, traducida, "stop")
+        self.assertIsNone(motivo)
+        self.assertEqual(texto, "La luna es hermosa esta noche.")
+
+    def test_truncada_se_rechaza(self):
+        original = "The moon is beautiful tonight."
+        texto, motivo = td.validar_traduccion(original, "La luna es hermosa", "length")
+        self.assertIsNone(texto)
+        self.assertIn("truncada", motivo)
+
+    def test_sigue_en_ingles(self):
+        original = "The card means change and transformation ahead."
+        texto, motivo = td.validar_traduccion(
+            original, "The card is the tower of change.", "stop")
+        self.assertIsNone(texto)
+        self.assertIn("inglés", motivo)
+
+    def test_ratio_fuera_de_rango(self):
+        original = "word " * 400
+        texto, motivo = td.validar_traduccion(original, "Poco texto.", "stop")
+        self.assertIsNone(texto)
+        self.assertIn("ratio", motivo)
+
+    def test_prefijo_traduccion_recortado(self):
+        original = "Good morning, friend."
+        traducida = "Aquí está la traducción:\n\nBuenos días, amigo."
+        texto, motivo = td.validar_traduccion(original, traducida, "stop")
+        self.assertIsNone(motivo)
+        self.assertEqual(texto, "Buenos días, amigo.")
+
+    def test_prefijo_corto_recortado(self):
+        original = "Good morning, friend."
+        traducida = "Traducción: Buenos días, amigo."
+        texto, motivo = td.validar_traduccion(original, traducida, "stop")
+        self.assertIsNone(motivo)
+        self.assertEqual(texto, "Buenos días, amigo.")
+
+    def test_caso_bueno(self):
+        original = "The card means that you have to look at what is in front of you."
+        traducida = ("La carta significa que tienes que mirar lo que "
+                    "tienes delante.")
+        texto, motivo = td.validar_traduccion(original, traducida, "stop")
+        self.assertIsNone(motivo)
+        self.assertEqual(texto, traducida)
+
+
 if __name__ == "__main__":
     unittest.main()
