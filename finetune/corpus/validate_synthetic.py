@@ -252,6 +252,8 @@ def eco_prompt(prompt: str, answer: str, min_run: int = 25) -> bool:
 def ia_meta(answer: str) -> bool:
     """True si la respuesta delata ser una IA (frases hechas o etiquetas de razonamiento)."""
     raw = answer.lower()
+    if any(marca in raw for marca in ("<think>", "</think>", "<thinking>", "</thinking>")):
+        return True
     if "<|im_start|>" in raw or "<|im_end|>" in raw:
         return True
     na = norm(answer)

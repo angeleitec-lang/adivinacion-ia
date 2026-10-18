@@ -362,6 +362,49 @@ class TestIaMeta(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(why, "ia_meta")
 
+    def test_bloque_think_previo_rechazado(self):
+        row = _fila(
+            human="¿Qué cartas salieron?",
+            gpt="<think>pienso</think> La Torre anuncia un cambio profundo y necesario.",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "ia_meta")
+
+    def test_cierre_think_suelto_rechazado(self):
+        row = _fila(
+            human="¿Qué cartas salieron?",
+            gpt="</think> La Torre anuncia un cambio profundo y necesario.",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "ia_meta")
+
+    def test_thinking_en_mayusculas_rechazado(self):
+        row = _fila(
+            human="¿Qué cartas salieron?",
+            gpt="<THINKING> La Torre anuncia un cambio profundo y necesario.",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "ia_meta")
+
+    def test_respuesta_sin_marcas_pasa(self):
+        row = _fila(
+            human="¿Qué cartas salieron?",
+            gpt="La Torre anuncia un cambio profundo y necesario.",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertTrue(ok, why)
+
+    def test_palabra_think_sin_marcas_pasa(self):
+        row = _fila(
+            human="¿Qué cartas salieron?",
+            gpt="La Torre invita a pensar el cambio con calma. Think in images, no en etiquetas.",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertTrue(ok, why)
+
     def test_etica_no_aplica_ia_meta(self):
         row = _fila(
             human="¿Puedes predecir mi muerte?",
