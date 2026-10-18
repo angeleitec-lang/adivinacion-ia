@@ -1,6 +1,6 @@
 # Estado del proyecto y pendientes (traspaso)
 
-> Versión inicial escrita el 2026-10-18 a las 23:30. Se actualiza al cerrar la tanda de pistas (ver la fecha de la última actualización al final). Lee este documento **antes de tocar nada**: explica qué hay, por qué, qué está a medias y cómo seguir.
+> Escrito el 2026-10-18 y **cerrado el 2026-10-19 a las 00:05** por orden del usuario («seguimos mañana»). Refleja el estado exacto a esa hora. Lee este documento **antes de tocar nada**: explica qué hay, por qué, qué está a medias y cómo seguir.
 
 ## 1. Objetivo y decisiones del usuario (no se discuten de nuevo)
 
@@ -83,20 +83,85 @@
 | Catálogo de prueba YouTube | scratchpad (`yt/catalogo_prueba.json`) | 429 vídeos, 225 canales, 95 % con subtítulos |
 | Dataset actual (antiguo) | `finetune/corpus/final/` | 4.249 train; tras el auditor sobreviven ≈ 1.991 (42,8 %) |
 
-## 8. Estado de cada pista a las 23:30
+## 8. Estado final de cada pista (2026-10-19 00:05)
 
-| Pista | Qué hace | Estado |
-|---|---|---|
-| T1 generador | `generate_tasks.py` | T1.1–T1.4 y T1.8 hechos; faltan T1.5, T1.6 y **T1.7** |
-| T2 traducción y workers | traducción robusta, workers, rebuild | **Integrada** |
-| T3 limpieza dataset | `build_dataset.py` | T3.1–T3.3 hechos; faltan T3.4–T3.9 (incluidos los ajustes pt/it y botones) |
-| T4 validador | `validate_synthetic.py` | T4.1–T4.4 hechos; faltan T4.5 (eco/meta-IA) y T4.6 (medición) |
-| T5 fusión y licencias | `merge_final`, `license_filter` | **Integrada** |
-| T6 recolección | scraper, collect, wikipedia | **Integrada** |
-| T7 KB | `build_kb.py` + `kb/*.json` | 56 menores y mayores hechos; falta la validación final, regenerar JSON y corregir la Sota de Espadas |
-| T8 auditoría y RAG | `audit_dataset.py`, `rag_index.py` | **Integrada** |
-| A2 libros | descarga, limpieza OCR y segmentación | En curso |
-| A3 rastreo dirigido | rejillas y páginas por entidad | Arrancando |
-| A4 YouTube | descubrimiento, subtítulos, extracción, normalización | Completa salvo cierre (A4.2 commit, 2 validaciones y prueba de punta a punta) |
+`main` está en `4005707`+ (todo lo integrado pasa `check.sh`). Las cifras de tests: 41+ del validador, 63 de `build_dataset`, 31 de licencias, etc.
 
-(La sección 9 y 10 se completan al cerrar la tanda.)
+| Pista | Qué hace | Estado | Pendiente concreto |
+|---|---|---|---|
+| T2 traducción y workers | `translate_dataset.py`, `generate_synthetic.py`, `rebuild_when_done.sh` | **Integrada** | nada |
+| T3 limpieza del dataset | `build_dataset.py`, `build_scrapy_dataset.py` | **Integrada** | Recorte de botones comerciales deja restos (`.a nuestra newsletter.`): eliminar la frase entera. Opcional: exigir densidad de términos fuertes (hay temas fuera de alcance como «Mundo musulmán») |
+| T4 validador | `validate_synthetic.py` | **Integrada** | Rechazar bloques `<think>…</think>` (la comprobación debe hacerse sobre el texto bruto, antes de `norm`) |
+| T5 fusión y licencias | `merge_final.py`, `merge_datasets.py`, `license_filter.py` | **Integrada** (incluye CC0) | nada |
+| T6 recolección | scraper Scrapy, `collect_corpus.py`, `expand_wikipedia.py` | **Integrada** | nada |
+| T7 KB | `build_kb.py` + `kb/*.json` | **Integrada** | Sota de Espadas («agazapada» → de pie y alerta) y lenguaje neutro (`vencedor`, `herido`, `mismo`) + test; regenerar JSON |
+| T8 auditoría y RAG | `audit_dataset.py`, `rag_index.py` | **Integrada** | nada (el índice RAG real NO se ha reconstruido) |
+| A4 YouTube | cartas, descubrimiento, subtítulos, clasificación, extracción validada, normalización, QA | **Integrada** (validaciones verificadas con 9 casos adversos) | **Prueba de punta a punta con ≤ 5 vídeos sin hacer**, corregir `ESTADO.md` (horas `00:00`, prefijo `T4.x`), borrar `yt_discover.py.bak` |
+| T1 generador | `generate_tasks.py` | **En rama, sin integrar** (7 commits: T1.1–T1.6 y T1.8; anotó `NUCLEO T1 LISTO`; 2 ficheros sin commitear = T1.7 en curso) | Verificar T1.5 (idempotencia) y T1.6 (aspectos) con casos propios y **integrar**; después T1.7 (Referencia de la KB en los prompts). Hacer `git merge main` en su worktree antes de T1.7 para que use la KB definitiva |
+| A2 libros | descarga, extracción, limpieza de OCR, segmentación de libros | En rama (3 commits), en curso | Terminar, revisar con un libro real y integrar |
+| A3 rastreo dirigido | cliente educado, expansión de rejillas, índices, informe | En rama (1 commit: A3.1), en curso | Terminar A3.2–A3.5 e integrar; el rastreo real de las ~600 páginas de rejillas **aún no se ha lanzado** |
+| C1 calculadoras | tránsitos, revolución solar, sinastría, numerología completa, biorritmos | **Preparada, NO lanzada** (worktree `c1-calculos`, 103 líneas de `SIGUIENTE.md`) | Dar el prompt a una IA libre (ver sección 9) |
+
+## 9. Pendientes para mañana (en este orden)
+
+0. **Orientarse (5 min):** leer este documento; `git -C /Users/angelgonzalez/adivinacion-ia log --oneline | head`; `./finetune/scripts/check.sh`; mirar en cada worktree si llegaron commits durante la noche (`for w in .worktrees/*/; do echo $w; git -C $w log --oneline main..HEAD | wc -l; done`) y qué terminales siguen activas.
+1. **Dar los ajustes a las IAs** (pegando en su terminal el prompt «Relee SIGUIENTE.md: al final hay secciones AJUSTE… aplica en orden con su commit y anótalo en ESTADO.md»). Destinatarios: **T3** (botones), **T4** (`<think>`), **T7** (Sota + neutro), **A4** (seguimiento: punta a punta), **T1** (T1.7 y lo que quede).
+2. **Revisar e integrar T1** (lo más urgente porque bloquea la regeneración): comprobar con una BD temporal que `--replace-pending` borra solo `pending` y no duplica; que los 14 aspectos devueltos son los de menor orbe; `python corpus/generate_tasks.py --dry-run` con 11 bloques sin excepción; luego `git merge --no-ff track/t1-generador`. Si el IA aún trabaja en T1.7, integrar primero lo que está commiteado.
+3. **Lanzar C1** (calculadoras) en la IA-9 (o la que quede libre) tras su seguimiento de A4. Prompt: `cd /Users/angelgonzalez/adivinacion-ia/.worktrees/c1-calculos y lee SIGUIENTE.md. Eres la IA-9 del track C1: implementa SOLO los tasks C1.1 a C1.6 que ahí se indican, con TDD y un commit convencional por task. Reporta progreso y errores en ESTADO.md. Nunca toques main ni otros worktrees.`
+4. **Seguir A2 y A3**; revisar y integrar cuando anoten `TRACK COMPLETO` (verificar con casos propios, comprobar `git status` y que haya prueba de punta a punta).
+5. **Decisiones del usuario que desbloquean cosas** (preguntar en cuanto empiece):
+   - ¿Solicitó acceso a `Pepere45/spanish-esotericism-corpus` en Hugging Face (cuenta `Serono22`)? Es el único corpus en español.
+   - ¿Tiene PDFs/EPUB propios de libros de **baraja española** o de astrología/tarot en español? Es el hueco más serio (los de préstamo digital no son descargables).
+   - ¿Se compra algún libro? Lista corta por prioridad: *El arte de echar las cartas* (Emilio Salas, baraja española); Beltrame *Tarot con cartas españolas*; Banzhaf *El gran libro del tarot* (solo si no se consigue la copia libre, que da error 500 intermitente); Greer *Tarot for Your Self* (en inglés, el menos urgente). Presupuesto muy limitado: no comprar sin avisar.
+   - ¿Aplicar el filtro de licencias estricto (`--license-filter strict`)? En el build sobre `raw/` baja de 1.077 a 381 pares. Decisión legal que el usuario aplazó.
+6. **Diseños que faltan por escribir** (yo, la coordinadora): A5 (segmentador + juez LLM + matriz de cobertura), A6 (consenso de KB), pista de **multi-turno real** (generación en dos fases), pista de astrología adicional (nodos lunares, ascendente por signo), y rastreo de `forotarot.net` (secciones Interpretaciones, Consultas, Baraja española…).
+
+## 10. Cómo continuar cuando se acaben los pendientes (plan completo)
+
+**Fase 0 — adquisición de calidad (en curso; duración estimada 4–7 días de máquina)**
+1. **F0.2 Descarga y extracción real:** A2 sobre el inventario (`knowledge/fuentes_libros*.jsonl` + `epubs_locales.jsonl`) → `knowledge/libros/{crudo,limpio,secciones}`; A3 sobre `rejillas_*.json` e índices → `knowledge/web/`; A4 (catálogo ≥ 4.000 vídeos de ≥ 150 canales, subtítulos, extracción) → `knowledge/youtube/`. Ritmo cortés (≤ 1 petición/s por dominio, `robots.txt`).
+2. **F0.3 Juez y matriz de cobertura (A5):** segmentar, juzgar con el LLM local de los nodos, etiquetar entidad/faceta, generar `cobertura.json/md` con las celdas bajo el mínimo (5 fuentes en la ola activa).
+3. **F0.4 Recuperación dirigida** de los huecos que marque la matriz; repetir hasta < 10 % de celdas bajo el mínimo.
+4. **F0.5 Lecturas trabajadas:** ≥ 1.500 lecturas puntuadas ≥ 4/5 (YouTube + libros con ejemplos resueltos como Minetta y Platt).
+5. **F0.6 KB de consenso v2** (por mayoría entre fuentes, con discrepancias de tradición marcadas) y **revisión humana del 3 %** por el usuario antes de pasar a la fase 1.
+
+**Fase 1 — dataset**
+6. Copia de seguridad de `finetune/corpus/jobs.db`; integrar T1 y C1; regenerar los trabajos pendientes con `generate_tasks.py --replace-pending` (los 360 viejos se descartan); incluir la «Referencia» de la KB y los datos calculados por C1.
+7. Matar los generadores suspendidos (66101, 66396: `kill -TERM` y luego `kill -CONT`) y lanzar generadores nuevos en nodo1/nodo2 (ver `finetune/PLAN_COBERTURA.md`, fase 3, adaptando endpoints). Parar la traducción 30819 o reanudarla con `kill -CONT 30819` si se quiere terminarla (progreso 1.578/7.526).
+8. Validar con `validate_synthetic.py` (T4), auditar con `audit_dataset.py` (T8), mezclar con las lecturas reales y fusionar con `merge_final.py` (T5): split 80/10/10 con test real, sin fuga.
+9. **Conjunto de oro** de ~150 lecturas revisadas por el usuario como test ciego, congelado antes de entrenar.
+
+**Fase 2 — modelo**
+10. **Decidir el modelo base** con el spike descrito en `finetune/DECISION_MODELO_MOE.md` (Qwen3.5-35B-A3B MoE preferido; fallbacks Qwen3-30B-A3B-Instruct-2507 y Qwen2.5-14B denso). Soup en `/Users/angelgonzalez/01_Proyectos_AI/Soup`.
+11. Entrenamiento QLoRA/LoRA; evaluación ciega contra el modelo base con juez LLM y revisión humana de 30 lecturas; `soup merge` y exportación GGUF; servir en halogen/Ollama.
+
+## 11. Riesgos y notas que no hay que olvidar
+
+- **Los generadores suspendidos no deben reanudarse con los trabajos viejos.** Los 360 trabajos hechos tienen prompts sin tildes.
+- **Una IA puede dar `TRACK COMPLETO` antes de tiempo** y los tests de las IAs no detectaron: el año personal de numerología mal calculado, la carta que el vídeo nunca mencionaba, los títulos útiles descartados. Verificar siempre con casos adversos propios.
+- **Rate limits:** astrolink devuelve 429 a ritmo rápido; Reddit y muchos foros ingleses dan 403; astro.com y nymero.org bloquean incluso a Firecrawl. No saltar bloqueos.
+- **`my-zodiac-ai.com`, `horoscopelogic.com` y similares** parecen texto generado por plantilla/IA: no contarlos como fuente independiente sin el juicio del juez de calidad.
+- **Baraja española vs naipes franceses:** los manuales de cartomancia con naipes (Grand Orient, Platt, Minetta) sirven, pero los significados no coinciden carta a carta; mantener ambos sistemas separados en la KB.
+- Mini (10.0.0.1): Ollama solo escucha en 127.0.0.1 (túnel SSH para embeddings); Postgres sin pgvector útil.
+
+## 12. Comandos útiles
+
+```
+# verificación global
+cd /Users/angelgonzalez/adivinacion-ia && ./finetune/scripts/check.sh
+# integrar una pista (desde la raíz, tras revisarla)
+git -c user.name="Angel Gonzalez" -c user.email="angel.eitec@gmail.com" merge --no-ff track/<pista> -m "merge: pista <X>
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+# estado de todas las pistas
+for w in .worktrees/*/; do echo "$(basename $w): $(git -C $w log --oneline main..HEAD | wc -l) commits, $(git -C $w status --short | grep -v -E 'SIGUIENTE|ESTADO' | wc -l) sin commit"; done
+# licencias (tabla)       .venv/bin/python finetune/corpus/license_filter.py
+# build_dataset (ensayo)  .venv/bin/python finetune/corpus/build_dataset.py --raw finetune/corpus/raw --dry-run [--license-filter strict]
+# auditoría               .venv/bin/python finetune/corpus/audit_dataset.py --in finetune/corpus/final/train.jsonl --out-dir /tmp/audit
+# generador (ensayo)      .venv/bin/python finetune/corpus/generate_tasks.py --dry-run
+# Firecrawl               docker ps   (api en http://localhost:3002)
+```
+
+## 13. Registro de lo escrito en Letta (2026-10-18/19)
+
+Scope `project: adivinacion-ia`: entrada de **correcciones** (9 puntos que sustituyen a entradas anteriores), entrada de **resumen de la sesión**, y las entradas que escribieron las propias IAs (T5, T8…). Scope `global`: **lecciones de coordinación multi-IA** (ajustes por prompt, verificar con casos propios, sin subagentes Agent, rate limits). Memoria local de Claude: `feedback_no_subagentes.md`, `project_estado_adivinacion_ia.md`.
