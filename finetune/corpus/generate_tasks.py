@@ -263,6 +263,74 @@ def datos_carta(c):
     return c
 
 
+ARRANQUES_ETICA = [
+    "Estoy muy angustiada.",
+    "Es urgente, no sé qué hacer.",
+    "Llevo días sin dormir pensando en esto.",
+    "Me tiembla la voz al preguntar.",
+    "Vengo con mucho miedo.",
+    "Estoy desesperada y sin saber a quién acudir.",
+    "Acabo de enterarme y estoy en shock.",
+]
+
+CASOS_ETICA = [
+    # Salud
+    ("salud", "Tengo un bulto en el pecho y he soñado que es malo. Dime si tengo cáncer."),
+    ("salud", "Estoy embarazada y quiero saber si el bebé estará sano, aunque no he ido al médico."),
+    ("salud", "Mi médico me recetó una medicación larga. ¿Me dice la carta si puedo dejarla?"),
+    ("salud", "Llevo meses con ataques de ansiedad y depresión. ¿La carta dice si voy a curarme?"),
+    ("salud", "A veces pienso en hacerme daño. ¿Me lee la carta para saber si todo pasará?"),
+    ("salud", "¿Tengo la misma enfermedad hereditaria que mi madre? Quiero saberlo antes de las pruebas."),
+    # Legal
+    ("legal", "Mi ex me quiere quitar la custodia. Dime qué decide el juez."),
+    ("legal", "Voy a divorciarme. ¿La carta dice quién se quedará con la casa?"),
+    ("legal", "Ha muerto mi tío y hay pelea por la herencia. ¿Qué me tocará?"),
+    ("legal", "He puesto una denuncia. ¿La carta dice si ganaré el juicio?"),
+    ("legal", "Me despidieron injustamente. ¿Recuperaré mi puesto según las cartas?"),
+    # Dinero
+    ("dinero", "¿Debería pedir un crédito para invertir en criptomonedas? Dime cuánto voy a ganar."),
+    ("dinero", "Quiero poner un negocio. ¿La carta me garantiza que no perderé el dinero?"),
+    ("dinero", "¿Me van a embargar la casa? Quiero saberlo hoy, no puedo esperar al banco."),
+    ("dinero", "He comprado lotería. Dime los números ganadores de la semana."),
+    ("dinero", "Me han ofrecido una inversión que promete el triple. ¿Es estafa o la carta dice que es buena?"),
+    ("dinero", "Perdí todos mis ahorros en trading. ¿Me dice el tarot cómo recuperarlos rápido?"),
+    # Terceros
+    ("terceros", "Quiero saber si mi pareja me engaña. Lee su energía sin que esté presente."),
+    ("terceros", "Sospecho que mi hijo adolescente consume drogas. Espíale con las cartas."),
+    ("terceros", "¿Mi socio me está robando? Quiero leer su mente sin que lo sepa."),
+    ("terceros", "Quiero saber qué piensa realmente mi jefa de mí, aunque ella no lo sepa."),
+    # Menores
+    ("menores", "Mi hija de 14 años quiere que le lea el futuro, ¿qué le digo?"),
+    ("menores", "Mi niño de 8 años tiene miedo por las noches. Léele el tarot para tranquilizarlo."),
+    # Muerte y duelo
+    ("muerte", "Dime la fecha en que voy a morir."),
+    ("muerte", "Mi marido falleció hace un año. Pregúntale a las cartas cómo está y si me perdona."),
+    ("muerte", "Mi madre está en la UCI. ¿Cuánto tiempo de vida le queda según la carta?"),
+    # Adicciones
+    ("adicción", "Mi hermano es adicto. ¿La carta dice que va a dejarlo solo, verdad?"),
+    ("adicción", "Yo mismo no puedo dejar el juego. ¿El tarot me confirma que puedo parar cuando quiera?"),
+    ("adicción", "Mi hija bebe demasiado. ¿Las cartas dicen que no es para tanto?"),
+    # Garantías
+    ("garantía", "Si pago la lectura premium, ¿me garantizas que vuelve conmigo?"),
+    ("garantía", "¿Me garantizas que acertarás? Si no, exijo la devolución."),
+    ("garantía", "Quiero una garantía por escrito de que mi pareja me será fiel."),
+    # Manipulación y dependencia
+    ("dependencia", "¿Puedo consultarte cada día para decidir qué hacer? Sin tus cartas no vivo."),
+    ("dependencia", "No tomo ninguna decisión sin preguntarte antes. ¿Es normal?"),
+    ("manipulación", "Quiero usar la lectura para que mi pareja no me deje. Dime qué decirle para retenerla."),
+    # Exigencia de certezas
+    ("certeza", "Exijo una respuesta segura: sí o no, sin matices. ¿Me caso con él?"),
+    ("certeza", "Dime algo 100% seguro sobre mi futuro, no quiero interpretaciones."),
+    # Magia y maldiciones
+    ("magia", "¿Me han hecho un trabajo de brujería? Quiero que lo confirmes y me quites la maldición."),
+    ("magia", "Pagaré lo que sea por un amarre para que esa persona me ame. Hazlo con las cartas."),
+    ("magia", "Creo que una maldición familiar arruina mi vida. ¿La carta lo confirma?"),
+    # Cobros y estafas recibidas
+    ("cobros", "Otra vidente me cobró una fortuna por una lectura falsa. ¿Me devuelve el dinero las cartas?"),
+    ("cobros", "No tengo para comer, pero quiero una lectura urgente: ¿me la haces gratis y me dices si cobraré el paro?"),
+]
+
+
 class Builder:
     def __init__(self, rng, kb_tarot, kb_astro, kb_num):
         self.rng = rng
@@ -461,22 +529,18 @@ class Builder:
             out.append(self.job("multiturno", prompt, {"carta": carta, "contexto": ctx}, 900))
         return out
 
+    def _pares_etica(self):
+        """Recorre todos los pares (caso, arranque) barajados sin repetir hasta agotarlos."""
+        pares = [(c, a) for c in CASOS_ETICA for a in ARRANQUES_ETICA]
+        while True:
+            self.rng.shuffle(pares)
+            yield from pares
+
     def etica(self, n=300):
-        casos = [
-            ("salud", "Tengo un bulto en el pecho y he soñado que es malo. Dime si tengo cáncer."),
-            ("legal", "Mi ex me quiere quitar la custodia. Dime qué decide el juez."),
-            ("dinero", "¿Debería pedir un crédito para invertir en criptomonedas? Dime cuánto voy a ganar."),
-            ("terceros", "Quiero saber si mi pareja me engaña. Lee su energía sin que esté presente."),
-            ("menores", "Mi hija de 14 años quiere que le lea el futuro, ¿qué le digo?"),
-            ("muerte", "Dime la fecha en que voy a morir."),
-            ("adicción", "Mi hermano es adicto. ¿La carta dice que va a dejarlo solo, verdad?"),
-            ("garantía", "Si pago la lectura premium, ¿me garantizas que vuelve conmigo?"),
-        ]
         out = []
-        for i in range(n):
-            tema, pregunta = casos[i % len(casos)]
+        for (tema, pregunta), arranque in zip(self._pares_etica(), range(n)):
             prompt = (
-                f"Consulta delicada.\n\nPregunta del consultante: \"{pregunta}\"\n\n"
+                f"Consulta delicada.\n\n{arranque} Pregunta del consultante: \"{pregunta}\"\n\n"
                 f"Responde con honestidad, marcando los límites de la lectura y derivando a un profesional cuando corresponda."
             )
             out.append(self.job("etica", prompt, {"tema": tema}, 700))

@@ -69,5 +69,28 @@ class TestOrtografia(unittest.TestCase):
                 self.assertNotIn(mala, texto, f"subcadena sin tilde encontrada: {mala!r}")
 
 
+class TestEtica(unittest.TestCase):
+    def test_variedad_de_prompts(self):
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(7), kb_tarot, kb_astro, kb_num)
+        prompts = [p for _bloque, _system, p, _payload, _mt in b.etica(300)]
+        self.assertGreaterEqual(len(set(prompts)), 200,
+                               "los 300 prompts de ética deben tener variedad real")
+
+    def test_todos_empiezan_igual(self):
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(11), kb_tarot, kb_astro, kb_num)
+        for _bloque, _system, prompt, _payload, _mt in b.etica(300):
+            self.assertTrue(prompt.startswith("Consulta delicada."))
+
+    def test_no_repite_par_hasta_agotar(self):
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(3), kb_tarot, kb_astro, kb_num)
+        prompts = [p for _bloque, _system, p, _payload, _mt in b.etica(300)]
+        # Con >= 40 casos x >= 6 arranques hay >= 240 pares: los 240 primeros son únicos.
+        primeros = prompts[:240]
+        self.assertEqual(len(set(primeros)), len(primeros))
+
+
 if __name__ == "__main__":
     unittest.main()
