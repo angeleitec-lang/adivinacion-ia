@@ -224,7 +224,7 @@ def translate_file(src: Path, dst: Path, args) -> dict:
                 print(f"  ! error traduciendo: {exc}", file=sys.stderr,
                       flush=True)
                 return {"row": row, "lang": lang, "translated": False,
-                        "error": True, "idx": idx}
+                        "error": True, "motivo": str(exc), "idx": idx}
             _set_answer(row, translated)
             return {"row": row, "lang": lang, "translated": True, "idx": idx}
         return {"row": row, "lang": lang, "translated": False, "idx": idx}
@@ -232,32 +232,94 @@ def translate_file(src: Path, dst: Path, args) -> dict:
     pairs = [(done + i, row, endpoints[(done + i) % len(endpoints)])
              for i, row in enumerate(rows)]
 
+    failed_path = Path(str(dst) + ".failed.jsonl")
     stats = {"total": 0, "translated": 0, "kept": 0, "error": 0, "dropped": 0}
     start = time.time()
-    with dst.open(mode, encoding="utf-8") as out, \
-            ThreadPoolExecutor(max_workers=args.workers) as pool:
-        for i, result in enumerate(pool.map(work, pairs), 1):
-            stats["total"] += 1
-            if result.get("skipped"):
-                stats["dropped"] += 1
-            else:
-                if result.get("error"):
+    fail_fh = None
+    try:
+        with dst.open(mode, encoding="utf-8") as out, \
+                ThreadPoolExecutor(max_workers=args.workers) as pool:
+            for i, result in enumerate(pool.map(work, pairs), 1):
+                stats["total"] += 1
+                if result.get("skipped"):
+                    stats["dropped"] += 1
+                elif result.get("error"):
+                    # El fallo no se escribe en el destino: se registra para
+                    # poder reintentarlo con --retry-failed.
                     stats["error"] += 1
-                elif result["translated"]:
-                    stats["translated"] += 1
+                    if fail_fh is None:
+                        fail_fh = failed_path.open("a", encoding="utf-8")
+                    fail_fh.write(json.dumps(
+                        {"idx": result["idx"], "motivo": result.get("motivo", ""),
+                         "row": result["row"]}, ensure_ascii=False) + "\n")
+                    fail_fh.flush()
                 else:
-                    stats["kept"] += 1
+                    if result["translated"]:
+                        stats["translated"] += 1
+                    else:
+                        stats["kept"] += 1
+                    out.write(json.dumps(result["row"], ensure_ascii=False) + "\n")
+                    out.flush()
+                _write_progress(progress, result["idx"] + 1)
+                if i % 20 == 0 or i == len(rows):
+                    elapsed = time.time() - start
+                    rate = i / elapsed if elapsed else 0
+                    eta = (len(rows) - i) / rate if rate else 0
+                    print(f"  {i}/{len(rows)}  trad={stats['translated']} "
+                          f"keep={stats['kept']} drop={stats['dropped']} "
+                          f"err={stats['error']}  "
+                          f"{rate:.2f} filas/s  ETA {eta/60:.1f} min", flush=True)
+    finally:
+        if fail_fh is not None:
+            fail_fh.close()
+    return stats
+
+
+def retry_failed(dst: Path, args) -> dict:
+    """Reprocesa las filas de <dst>.failed.jsonl y reescribe los fallos restantes."""
+    failed_path = Path(str(dst) + ".failed.jsonl")
+    if not failed_path.exists():
+        print(f"! no hay fallos que reintentar en {failed_path}",
+              file=sys.stderr, flush=True)
+        return {"total": 0, "translated": 0, "error": 0}
+    entries = _load(failed_path)
+    endpoints = getattr(args, "endpoints", None) or [
+        (args.base_url, args.model)
+    ]
+
+    def work(item) -> dict:
+        pos, entry = item
+        row = entry.get("row") or {}
+        answer = _answer_of(row)
+        ep_url, ep_model = endpoints[pos % len(endpoints)]
+        try:
+            translated = _translate(answer, ep_url, ep_model, timeout=args.timeout)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "entry": entry, "motivo": str(exc)}
+        nueva = json.loads(json.dumps(row))
+        _set_answer(nueva, translated)
+        return {"ok": True, "row": nueva}
+
+    stats = {"total": len(entries), "translated": 0, "error": 0}
+    restantes = []
+    with dst.open("a", encoding="utf-8") as out, \
+            ThreadPoolExecutor(max_workers=args.workers) as pool:
+        for result in pool.map(work, list(enumerate(entries))):
+            if result["ok"]:
                 out.write(json.dumps(result["row"], ensure_ascii=False) + "\n")
                 out.flush()
-            _write_progress(progress, result["idx"] + 1)
-            if i % 20 == 0 or i == len(rows):
-                elapsed = time.time() - start
-                rate = i / elapsed if elapsed else 0
-                eta = (len(rows) - i) / rate if rate else 0
-                print(f"  {i}/{len(rows)}  trad={stats['translated']} "
-                      f"keep={stats['kept']} drop={stats['dropped']} "
-                      f"err={stats['error']}  "
-                      f"{rate:.2f} filas/s  ETA {eta/60:.1f} min", flush=True)
+                stats["translated"] += 1
+            else:
+                e = result["entry"]
+                restantes.append({"idx": e.get("idx"),
+                                 "motivo": result["motivo"],
+                                 "row": e.get("row")})
+                stats["error"] += 1
+    tmp = Path(str(failed_path) + ".tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        for e in restantes:
+            fh.write(json.dumps(e, ensure_ascii=False) + "\n")
+    tmp.replace(failed_path)
     return stats
 
 
@@ -275,6 +337,8 @@ def main(argv=None) -> int:
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--retry-failed", action="store_true",
+                        help="Reprocesa solo las filas de <dst>.failed.jsonl.")
     parser.add_argument("--min-en-chars", type=int, default=0,
                         help="No traduce respuestas EN/mixed mas cortas que esto.")
     parser.add_argument("--drop-short-en", action="store_true",
@@ -308,6 +372,14 @@ def main(argv=None) -> int:
             for row in rows:
                 counts[detect_language(_answer_of(row))] += 1
             print(f"{src}: {len(rows)} pares  {counts}")
+        return 0
+
+    if args.retry_failed:
+        for _, dst in targets:
+            print(f"\n== reintentando fallos de {dst}")
+            stats = retry_failed(dst, args)
+            print(f"   total={stats['total']} trad={stats['translated']} "
+                  f"err={stats['error']}")
         return 0
 
     for src, dst in targets:

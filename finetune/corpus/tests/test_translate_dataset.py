@@ -1,11 +1,25 @@
-"""Tests de translate_dataset: detección de idioma y validación de traducción."""
+"""Tests de translate_dataset: detección, validación y gestión de fallos."""
+import json
 import os
 import sys
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import translate_dataset as td
+
+EN_ANSWER = ("The tower card means that the end of a cycle is coming "
+             "soon and you should look inside yourself for answers.")
+
+
+def _fila(respuesta):
+    return {"conversations": [
+        {"from": "human", "value": "Explica en detalle: La Torre."},
+        {"from": "gpt", "value": respuesta},
+    ]}
 
 
 class DetectLanguage(unittest.TestCase):
@@ -82,6 +96,59 @@ class ValidarTraduccion(unittest.TestCase):
         texto, motivo = td.validar_traduccion(original, traducida, "stop")
         self.assertIsNone(motivo)
         self.assertEqual(texto, traducida)
+
+
+class FallosYReintento(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        self.src = root / "train.jsonl"
+        self.dst = root / "train_es.jsonl"
+        self.failed = Path(str(self.dst) + ".failed.jsonl")
+        self.progress = Path(str(self.dst) + ".progress")
+
+    def _argv(self, *extra):
+        return ["--train", str(self.src), "--out-train", str(self.dst),
+                "--only", "train", "--workers", "1", *extra]
+
+    def test_fallo_no_escribe_destino_y_registra(self):
+        self.src.write_text(json.dumps(_fila(EN_ANSWER)) + "\n", encoding="utf-8")
+        with mock.patch.object(td, "_translate",
+                             side_effect=RuntimeError("simulado")):
+            rc = td.main(self._argv())
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.dst.read_text(encoding="utf-8"), "")
+        self.assertTrue(self.failed.exists())
+        entry = json.loads(self.failed.read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual(entry["idx"], 0)
+        self.assertIn("simulado", entry["motivo"])
+        self.assertEqual(entry["row"], _fila(EN_ANSWER))
+        self.assertEqual(self.progress.read_text(encoding="utf-8"), "1")
+
+    def test_retry_failed_recupera(self):
+        self.src.write_text(json.dumps(_fila(EN_ANSWER)) + "\n", encoding="utf-8")
+        with mock.patch.object(td, "_translate",
+                             side_effect=RuntimeError("simulado")):
+            td.main(self._argv())
+        self.assertEqual(self.dst.read_text(encoding="utf-8"), "")
+        trad = ("La carta de la torre significa que el final de un ciclo "
+               "llega pronto y debes mirar dentro de ti.")
+        with mock.patch.object(td, "_translate", return_value=trad):
+            td.main(self._argv("--retry-failed"))
+        lineas = [ln for ln in self.dst.read_text(encoding="utf-8").splitlines()
+                 if ln.strip()]
+        self.assertEqual(len(lineas), 1)
+        self.assertEqual(
+            json.loads(lineas[0])["conversations"][-1]["value"], trad)
+        restante = (self.failed.read_text(encoding="utf-8")
+                    if self.failed.exists() else "")
+        self.assertEqual(restante, "")
+
+    def test_retry_failed_sin_fallos_previos(self):
+        self.src.write_text(json.dumps(_fila(EN_ANSWER)) + "\n", encoding="utf-8")
+        rc = td.main(self._argv("--retry-failed"))
+        self.assertEqual(rc, 0)
 
 
 if __name__ == "__main__":
