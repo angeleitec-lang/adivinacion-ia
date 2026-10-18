@@ -11,9 +11,11 @@ import argparse
 import glob
 import hashlib
 import json
+import random
 import re
 import sys
-from collections import Counter
+import unicodedata
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from translate_dataset import detect_language
@@ -27,8 +29,48 @@ JUNK = (
 
 CARD_RE = re.compile(r"Carta[s]?:\s*([^(\n]+?)\s*(?:\(|\.|$)", re.I)
 SIGN_RE = re.compile(r"(?:Signo solar|Ascendente|Luna|Sol)\s*:?\s*(?:en\s+)?([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)", re.I)
-NUM_RE = re.compile(r"(?:Camino de vida|Número|Destino|Alma|Personalidad|Año personal)\s*:?\s*(\d{1,2})", re.I)
+NUM_RE = re.compile(
+    r"(?:Camino de vida|Número|Destino|Alma|Personalidad|Año personal)"
+    r"(?:\s*\([^)]*\))?\s*:?\s*(\d{1,2})",
+    re.I,
+)
 QUESTION_RE = re.compile(r'Pregunta del consultante:\s*"([^"]+)"', re.I)
+# Marcas del generador antiguo (texto sin tildes): si aparecen, la fila se descarta.
+SIN_TILDES_MARCAS = (
+    "espanol", "que energia", "cual es el tema", "proposito", "astrologa ",
+    "numerologa", "interpretacion", "anio personal", "empatia",
+)
+# Reconoce «Carta: X (o)», «Carta N: X (o)» y líneas de tirada «- posición: X (o)».
+CARTA_LINEA_RE = re.compile(
+    r"(?:Carta(?:\s*\d+)?\s*:|[-•]\s*[^\n:]+?:)\s*([^(\n]+?)\s*\((invertid[ao]|al derecho)\)",
+    re.I,
+)
+ARTICULOS = ("el ", "la ", "los ", "las ", "un ", "una ", "unos ", "unas ")
+
+
+def norm(texto: str) -> str:
+    """Minúsculas, sin tildes (NFKD) y sin signos: base de toda comparación."""
+    texto = unicodedata.normalize("NFKD", texto.lower())
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", texto).split())
+
+
+def _sin_articulo(nombre_norm: str) -> str:
+    for art in ARTICULOS:
+        if nombre_norm.startswith(art):
+            return nombre_norm[len(art):]
+    return nombre_norm
+
+
+def extraer_cartas(prompt: str) -> list:
+    """[(nombre, orientacion)] con orientacion en {"derecho", "invertida"}."""
+    cartas = []
+    for m in CARTA_LINEA_RE.finditer(prompt):
+        nombre = m.group(1).strip().strip(".").strip()
+        orient = "invertida" if m.group(2).lower().startswith("invertid") else "derecho"
+        if nombre and len(nombre) > 2:
+            cartas.append((nombre, orient))
+    return cartas
 
 
 def words(text: str) -> list[str]:
@@ -51,6 +93,79 @@ def near_key(text: str) -> tuple:
     picks = [w[int(len(w) * f)] for f in (0.1, 0.5, 0.9)]
     mids = [w[min(len(w) - 1, int(len(w) * f) + 1)] for f in (0.1, 0.5, 0.9)]
     return tuple(picks + mids)
+
+
+# --- Casi-duplicados: MinHash + LSH (solo stdlib, determinista) ---
+_MHASH_P = (1 << 61) - 1
+_rng = random.Random(20261018)
+_MHASH_A = [_rng.randrange(1, _MHASH_P) for _ in range(64)]
+_MHASH_B = [_rng.randrange(0, _MHASH_P) for _ in range(64)]
+
+
+def shingles(texto: str, k: int = 5) -> set:
+    """Conjunto de hashes estables (hashlib) de k-gramas de palabras normalizadas."""
+    w = norm(texto).split()
+    if not w:
+        return set()
+    if len(w) < k:
+        grams = [" ".join(w)]
+    else:
+        grams = [" ".join(w[i:i + k]) for i in range(len(w) - k + 1)]
+    return {
+        int.from_bytes(hashlib.blake2b(g.encode("utf-8"), digest_size=8).digest(), "big")
+        for g in grams
+    }
+
+
+def minhash(sh: set, n: int = 64) -> tuple:
+    """Firma MinHash con n funciones (a*x + b) % p de constantes fijas."""
+    if not sh:
+        return tuple()
+    return tuple(
+        min((_MHASH_A[i] * x + _MHASH_B[i]) % _MHASH_P for x in sh)
+        for i in range(n)
+    )
+
+
+class IndiceCasiDuplicados:
+    """LSH por bandas (16 bandas x 4 filas) sobre firmas MinHash.
+
+    `buscar` devuelve True si algún candidato alcanza un Jaccard estimado >= 0,9.
+    """
+
+    def __init__(self, n: int = 64, bandas: int = 16, filas: int = 4, umbral: float = 0.9):
+        self.n = n
+        self.bandas = bandas
+        self.filas = filas
+        self.umbral = umbral
+        self.sigs: dict = {}
+        self.cubetas: dict = defaultdict(set)
+
+    def _clave(self, banda: int, sig: tuple) -> bytes:
+        crudo = "|".join(str(x) for x in sig[banda * self.filas:(banda + 1) * self.filas])
+        return hashlib.blake2b(crudo.encode("utf-8"), digest_size=8).digest()
+
+    def add(self, id_: str, texto: str) -> None:
+        sig = minhash(shingles(texto), self.n)
+        self.sigs[id_] = sig
+        for b in range(self.bandas):
+            self.cubetas[(b, self._clave(b, sig))].add(id_)
+
+    def buscar(self, texto: str) -> bool:
+        sig = minhash(shingles(texto), self.n)
+        if not sig:
+            return False
+        candidatos: set = set()
+        for b in range(self.bandas):
+            candidatos |= self.cubetas.get((b, self._clave(b, sig)), set())
+        for cid in candidatos:
+            otra = self.sigs[cid]
+            if len(otra) != len(sig):
+                continue
+            acuerdo = sum(1 for a, c in zip(sig, otra) if a == c) / len(sig)
+            if acuerdo >= self.umbral:
+                return True
+        return False
 
 
 def repetition_ratio(text: str, n: int = 12) -> float:
@@ -76,27 +191,109 @@ def human_of(row: dict) -> str:
     return ""
 
 
-def grounding(prompt: str, answer: str) -> bool:
-    low = answer.lower()
-    checks = []
-    for m in CARD_RE.finditer(prompt):
-        name = m.group(1).strip().strip(".")
-        if name and len(name) > 2:
-            checks.append(name.lower())
-    for m in SIGN_RE.finditer(prompt):
-        checks.append(m.group(1).lower())
-    for m in NUM_RE.finditer(prompt):
-        checks.append(m.group(1))
-    if not checks:
+def system_of(row: dict) -> str:
+    for c in row.get("conversations", []):
+        if c.get("from") == "system":
+            return c.get("value", "")
+    return ""
+
+
+# Marcas que reconocen una carta invertida en la respuesta (texto normalizado).
+INVERT_RECONOC = (
+    "invertid", "al reves", "bloque", "sombra", "resist", "retraso", "interior",
+)
+# Marcas que afirman inversión (para contradecir una carta al derecho).
+INVERT_AFIRMA = ("invertid", "al reves")
+
+
+def orientacion_ok(prompt: str, answer: str) -> bool:
+    """Si el prompt dice (invertida) la respuesta debe reconocerlo; si dice
+    (al derecho) no debe afirmar inversión junto al nombre de la carta."""
+    cartas = extraer_cartas(prompt)
+    if not cartas:
         return True
-    return any(c in low for c in checks)
+    na = norm(answer)
+    for nombre, orient in cartas:
+        token = _sin_articulo(norm(nombre))
+        if not token:
+            continue
+        if orient == "invertida":
+            if not any(marca in na for marca in INVERT_RECONOC):
+                return False
+        else:
+            for m in re.finditer(r"\b" + re.escape(token) + r"\b", na):
+                ventana = na[max(0, m.start() - 30): m.end() + 30]
+                if any(f in ventana for f in INVERT_AFIRMA):
+                    return False
+    return True
 
 
-def validate(row: dict, args) -> tuple[bool, str]:
+IA_META_FRASES = (
+    "como modelo de lenguaje",
+    "como inteligencia artificial",
+    "no tengo acceso a",
+    "no puedo ayudarte con eso",
+)
+
+
+def eco_prompt(prompt: str, answer: str, min_run: int = 25) -> bool:
+    """True si la respuesta copia >= min_run palabras consecutivas del prompt."""
+    pw = norm(prompt).split()
+    aw = norm(answer).split()
+    if len(pw) < min_run or len(aw) < min_run:
+        return False
+    gramas = {tuple(pw[i:i + min_run]) for i in range(len(pw) - min_run + 1)}
+    for i in range(len(aw) - min_run + 1):
+        if tuple(aw[i:i + min_run]) in gramas:
+            return True
+    return False
+
+
+def ia_meta(answer: str) -> bool:
+    """True si la respuesta delata ser una IA (frases hechas o etiquetas de razonamiento)."""
+    raw = answer.lower()
+    if "<|im_start|>" in raw or "<|im_end|>" in raw:
+        return True
+    na = norm(answer)
+    return any(f in na for f in IA_META_FRASES)
+
+
+def _menciona(na: str, token_norm: str) -> bool:
+    return bool(token_norm) and re.search(r"\b" + re.escape(token_norm) + r"\b", na) is not None
+
+
+def grounding(prompt: str, answer: str) -> bool:
+    """Exige que la respuesta mencione todos los datos reconocibles del prompt.
+
+    Cartas: todas. Signos astrológicos y números: al menos 2/3.
+    Sin datos reconocibles -> True (comportamiento heredado).
+    """
+    na = norm(answer)
+    cartas = extraer_cartas(prompt)
+    for nombre, _ in cartas:
+        if not _menciona(na, _sin_articulo(norm(nombre))):
+            return False
+    signos = list(dict.fromkeys(norm(m.group(1)) for m in SIGN_RE.finditer(prompt)))
+    if signos:
+        menc = sum(1 for s in signos if _menciona(na, s))
+        if menc / len(signos) < 2 / 3:
+            return False
+    numeros = list(dict.fromkeys(m.group(1) for m in NUM_RE.finditer(prompt)))
+    if numeros:
+        menc = sum(1 for n in numeros if _menciona(na, n))
+        if menc / len(numeros) < 2 / 3:
+            return False
+    return True
+
+
+def validate(row: dict, args, bloque: str | None = None) -> tuple[bool, str]:
     answer = answer_of(row)
     prompt = human_of(row)
     if not answer or not prompt:
         return False, "sin_turnos"
+    texto_prompt = (system_of(row) + "\n" + prompt).lower()
+    if any(marca in texto_prompt for marca in SIN_TILDES_MARCAS):
+        return False, "prompt_sin_tildes"
     if len(answer) < args.min_chars:
         return False, "corto"
     if len(answer) > args.max_chars:
@@ -116,6 +313,13 @@ def validate(row: dict, args) -> tuple[bool, str]:
             return False, "eco_pregunta"
     if not grounding(prompt, answer):
         return False, "sin_datos_del_prompt"
+    if not orientacion_ok(prompt, answer):
+        return False, "orientacion"
+    if bloque != "etica":
+        if eco_prompt(prompt, answer):
+            return False, "eco_prompt"
+        if ia_meta(answer):
+            return False, "ia_meta"
     return True, "ok"
 
 
@@ -136,7 +340,7 @@ def main(argv=None) -> int:
         return 1
 
     seen_hash: set[str] = set()
-    seen_near: set[tuple] = set()
+    indice = IndiceCasiDuplicados()
     meta: list[dict] = []
     reasons: Counter = Counter()
     per_block: dict[str, dict[str, int]] = {}
@@ -163,7 +367,7 @@ def main(argv=None) -> int:
                         stats["bad"] += 1
                         reasons["json_invalido"] += 1
                         continue
-                    ok, why = validate(row, args)
+                    ok, why = validate(row, args, bloque=block)
                     if not ok:
                         stats["bad"] += 1
                         reasons[why] += 1
@@ -174,14 +378,13 @@ def main(argv=None) -> int:
                         stats["dup"] += 1
                         reasons["duplicado_exacto"] += 1
                         continue
-                    k = near_key(answer)
-                    if k in seen_near:
+                    if indice.buscar(answer):
                         stats["dup"] += 1
                         pairs_dup += 1
                         reasons["duplicado_cercano"] += 1
                         continue
                     seen_hash.add(h)
-                    seen_near.add(k)
+                    indice.add(str(kept), answer)
                     stats["ok"] += 1
                     kept += 1
                     fh.write(json.dumps(row, ensure_ascii=False) + "\n")
