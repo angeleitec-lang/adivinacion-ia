@@ -47,6 +47,9 @@ BOILERPLATE_HEADINGS = {
     "comentarios", "deja un comentario", "noticias",
     "artículos relacionados", "articulos relacionados", "suscríbete",
     "suscribete", "newsletter", "índice", "indice", "tabla de contenidos",
+    "lo que aprenderás", "lo que aprenderas", "curso", "inmersivo",
+    "reserva", "precio", "comprar", "descarga gratis", "preguntas frecuentes",
+    "reseñas", "resenas", "testimonios", "sobre la autora", "sobre el autor",
 }
 
 JUNK_BODY_MARKERS = (
@@ -74,7 +77,10 @@ BAD_TOPIC_RE = re.compile(
     r"|^(referencias?|v[eé]ase tambi[eé]n|enlaces? externos?|bibliograf[ií]a"
     r"|notas?|categor[ií]as?|lecturas? adicionales|fuentes?|galer[ií]a"
     r"|men[uú]|televisi[oó]n|radio|internet|libros?|revistas?"
-    r"|pel[ií]culas?|series?|videojuegos?)\b",
+    r"|pel[ií]culas?|series?|videojuegos?)\b"
+    r"|^(lo que aprender[aá]s|curso|inmersi[oó]n|inmersivo|reserva|precio"
+    r"|comprar|descarga gratis|preguntas frecuentes|rese[ñn]as|testimonios"
+    r"|sobre la autor[ae]|tu propia tirada)\b",
     re.IGNORECASE,
 )
 
@@ -270,6 +276,18 @@ def is_boilerplate(topic: str) -> bool:
     return any(p in BOILERPLATE_HEADINGS for p in parts)
 
 
+def is_bad_topic(topic: str) -> bool:
+    """Rechaza si ALGÚN segmento de la ruta «A > B > C» es una cabecera mala
+    (navegación, referencias o promoción), no solo el inicio."""
+    for part in topic.split(">"):
+        norm = part.strip().lower().strip(".:")
+        if not norm:
+            continue
+        if norm in BOILERPLATE_HEADINGS or BAD_TOPIC_RE.search(norm):
+            return True
+    return False
+
+
 def load_blocked(manifest_path: Path) -> set[str]:
     """Devuelve el conjunto de URLs marcadas como bloqueadas/incompatibles."""
     if not manifest_path.exists():
@@ -306,7 +324,7 @@ def build_pairs(doc: str, md: str, rng: random.Random,
     pairs = []
     for topic, body in split_sections(md):
         topic = clean_inline(topic or humanize(doc))
-        if not topic or is_boilerplate(topic) or BAD_TOPIC_RE.match(topic):
+        if not topic or is_boilerplate(topic) or is_bad_topic(topic):
             continue
         if len(body) < min_chars or len(body) > max_chars:
             continue

@@ -120,5 +120,33 @@ class FiltroDeDominio(unittest.TestCase):
         self.assertEqual(bd.domain_score("oposición y trígono"), (2, 0))
 
 
+class EncabezadosMalos(unittest.TestCase):
+    """T3.3: se comprueba cada segmento de la ruta, no solo el inicio."""
+
+    def test_libro_referencias_rechazado(self):
+        self.assertTrue(bd.is_bad_topic("Libro > Referencias"))
+
+    def test_segmento_malo_al_final_rechazado(self):
+        self.assertTrue(bd.is_bad_topic("Baraja española > Referencias"))
+
+    def test_vase_tambien_al_final_rechazado(self):
+        self.assertTrue(bd.is_bad_topic("Tarot > Véase también"))
+
+    def test_arcanos_loco_aceptado(self):
+        self.assertFalse(bd.is_bad_topic("Los arcanos mayores > El Loco"))
+
+    def test_curso_inmersivo_rechazado(self):
+        self.assertTrue(bd.is_bad_topic("Curso inmersivo"))
+
+    def test_preguntas_frecuentes_rechazado(self):
+        self.assertTrue(bd.is_bad_topic("Preguntas frecuentes"))
+
+    def test_sobre_la_autora_rechazado(self):
+        self.assertTrue(bd.is_bad_topic("Sobre la autora"))
+
+    def test_buen_tema_unico_aceptado(self):
+        self.assertFalse(bd.is_bad_topic("El Mago"))
+
+
 if __name__ == "__main__":
     unittest.main()
