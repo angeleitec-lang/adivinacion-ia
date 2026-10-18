@@ -76,5 +76,49 @@ class LimpiezaResiduosWikipedia(unittest.TestCase):
         self.assertIn("aquí", limpio)
 
 
+class FiltroDeDominio(unittest.TestCase):
+    """T3.2: términos fuertes y débiles; los débiles solos no bastan."""
+
+    def test_domain_hits_sigue_devolviendo_set(self):
+        self.assertIsInstance(bd.domain_hits("tarot y sol"), set)
+
+    def test_domain_score_devuelve_tupla(self):
+        fuertes, debiles = bd.domain_score("tarot y sol")
+        self.assertEqual((fuertes, debiles), (1, 1))
+
+    def test_abuela_no_relevante(self):
+        frase = ("El sol sale por la casa de mi abuela; leo una carta "
+                "mientras mi mano toca la luna del espejo.")
+        self.assertFalse(bd.is_relevant("", frase, "", 2))
+
+    def test_debiles_solos_no_bastan(self):
+        self.assertFalse(bd.is_relevant("", "sol luna casa mano leo", "", 2))
+
+    def test_tarot_relevante(self):
+        frag = ("La Torre invertida es un arcano mayor que, en esta tirada "
+               "del tarot, anuncia un cambio brusco tras el cinco de copas.")
+        self.assertTrue(bd.is_relevant("", frag, "", 2))
+
+    def test_carta_astral_relevante(self):
+        frag = "Sol en Aries en casa 7, trígono a Júpiter."
+        self.assertTrue(bd.is_relevant("", frag, "", 2))
+
+    def test_psicometria_serie_tv_no_relevante(self):
+        frag = ("Psico es una serie de televisión estadounidense de suspense "
+               "estrenada en 2009, protagonizada por una detective que "
+               "resuelve crímenes en una pequeña ciudad.")
+        self.assertFalse(bd.is_relevant("", frag, "", 2))
+
+    def test_min_terms_cero_desactiva(self):
+        self.assertTrue(bd.is_relevant("", "texto sin nada del dominio", "", 0))
+
+    def test_oposicion_sola_no_es_fuerte(self):
+        self.assertEqual(bd.domain_score("oposición"), (0, 0))
+        self.assertFalse(bd.is_relevant("", "oposición", "", 2))
+
+    def test_oposicion_con_otro_fuerte_si_cuenta(self):
+        self.assertEqual(bd.domain_score("oposición y trígono"), (2, 0))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -78,30 +78,60 @@ BAD_TOPIC_RE = re.compile(
     re.IGNORECASE,
 )
 
-DOMAIN_TERMS = (
-    "tarot", "arcano", "arcanos", "carta", "cartas", "baraja", "mazo",
-    "tirada", "tiradas", "tarotista", "cartomancia", "cartomántica",
-    "astrología", "astrologia", "astral", "astrólogo", "signo", "signos",
-    "zodiaco", "zodíaco", "horóscopo", "horoscopo", "ascendente",
-    "descendente", "planeta", "planetas", "casa", "casas", "aspecto",
-    "conjunción", "trígono", "trigono", "cuadratura", "oposición", "sextil",
-    "sol", "luna", "mercurio", "venus", "marte", "júpiter", "jupiter",
-    "saturno", "urano", "neptuno", "plutón", "pluton", "aries", "tauro",
-    "géminis", "geminis", "cáncer", "cancer", "leo", "virgo", "libra",
-    "escorpio", "sagitario", "capricornio", "acuario", "piscis",
-    "numerología", "numerologia", "numerólogo", "camino de vida",
-    "quiromancia", "quiromántica", "palmistry", "palma", "mano", "manos",
-    "línea de la vida", "línea del corazón", "monte de venus",
-    "runa", "runas", "futhark", "iching", "i ching", "hexagrama",
-    "adivinación", "adivinacion", "adivino", "adivina", "oráculo", "oraculo",
-    "lenormand", "kipper", "sibila", "esotérico", "esoterico", "esoterismo",
-    "ocultismo", "mística", "mistica", "destino", "videncia", "vidente",
+# Términos propios del dominio: su sola aparición ya ancla la pregunta.
+STRONG_TERMS = (
+    "tarot", "tarotista", "arcano", "arcanos", "baraja del tarot",
+    "tirada", "tiradas", "cartomancia", "cartomántica",
+    "astrología", "astrologia", "astrólogo", "carta astral", "carta natal",
+    "horóscopo", "horoscopo", "zodiaco", "zodíaco", "ascendente",
+    "descendente", "trígono", "trigono", "sextil", "cuadratura",
+    "conjunción", "oposición", "numerología", "numerologia", "numerólogo",
+    "camino de vida", "quiromancia", "quiromántica", "palmistry",
+    "línea de la vida", "línea del corazón", "línea de la cabeza",
+    "monte de venus", "runa", "runas", "futhark", "iching", "i ching",
+    "hexagrama", "lenormand", "kipper", "sibila", "adivinación",
+    "adivinacion", "oráculo", "oraculo", "esoterismo", "ocultismo",
+    "videncia", "vidente",
 )
+# Términos cotidianos que solo cobran sentido con anclaje fuerte.
+WEAK_TERMS = (
+    "carta", "cartas", "baraja", "mazo", "astral", "signo", "signos",
+    "planeta", "planetas", "casa", "casas", "aspecto", "sol", "luna",
+    "mercurio", "venus", "marte", "júpiter", "jupiter", "saturno",
+    "urano", "neptuno", "plutón", "pluton", "aries", "tauro", "géminis",
+    "geminis", "cáncer", "cancer", "leo", "virgo", "libra", "escorpio",
+    "sagitario", "capricornio", "acuario", "piscis", "palma", "mano",
+    "manos", "adivino", "adivina", "esotérico", "esoterico", "mística",
+    "mistica", "destino",
+)
+DOMAIN_TERMS = STRONG_TERMS + WEAK_TERMS
 
 DOMAIN_RE = re.compile(
     r"\b(" + "|".join(re.escape(t) for t in DOMAIN_TERMS) + r")\b",
     re.IGNORECASE,
 )
+STRONG_RE = re.compile(
+    r"\b(" + "|".join(re.escape(t) for t in STRONG_TERMS) + r")\b",
+    re.IGNORECASE,
+)
+WEAK_RE = re.compile(
+    r"\b(" + "|".join(re.escape(t) for t in WEAK_TERMS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _strong_raw(text: str) -> set[str]:
+    return {m.group(1).lower() for m in STRONG_RE.finditer(text or "")}
+
+
+def _weak_set(text: str) -> set[str]:
+    return {m.group(1).lower() for m in WEAK_RE.finditer(text or "")}
+
+
+def _strong_set(text: str) -> set[str]:
+    """Fuertes de un texto; «oposición» sola no cuenta como fuerte."""
+    s = _strong_raw(text)
+    return set() if s == {"oposición"} else s
 
 
 def domain_hits(text: str) -> set[str]:
@@ -109,14 +139,22 @@ def domain_hits(text: str) -> set[str]:
     return {m.group(1).lower() for m in DOMAIN_RE.finditer(text or "")}
 
 
+def domain_score(text: str) -> tuple[int, int]:
+    """(fuertes, débiles) del dominio en un texto."""
+    return (len(_strong_set(text)), len(_weak_set(text)))
+
+
 def is_relevant(topic: str, body: str, doc: str, min_terms: int = 2) -> bool:
-    """Exige anclaje real al dominio para evitar preguntas genéricas."""
+    """Relevante si fuertes >= min_terms, o fuertes >= 1 y débiles >= min_terms.
+    Los débiles solos nunca bastan; min_terms <= 0 desactiva el filtro."""
     if min_terms <= 0:
         return True
-    hits = domain_hits(body) | domain_hits(topic)
-    if len(hits) >= min_terms:
-        return True
-    return bool(hits) and bool(domain_hits(doc))
+    fuertes_set = _strong_raw(body) | _strong_raw(topic)
+    if fuertes_set == {"oposición"}:
+        fuertes_set = set()
+    fuertes = len(fuertes_set)
+    debiles = len(_weak_set(body) | _weak_set(topic))
+    return fuertes >= min_terms or (fuertes >= 1 and debiles >= min_terms)
 
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
