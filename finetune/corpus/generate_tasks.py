@@ -505,6 +505,8 @@ class Builder:
         return out
 
     def multiturno(self, n=800):
+        """Simula la continuación en un solo turno; un multi-turno real requiere
+        generación en dos fases (pendiente)."""
         out = []
         for _ in range(n):
             ctx = self.rng.choice(CONTEXTOS)
@@ -518,8 +520,8 @@ class Builder:
                 "¿Qué señal debería observar para saber si voy bien?",
             ])
             previo = (
-                f"En la lectura anterior salió {carta_txt(carta)} en contexto de {ctx}. "
-                f"Te preguntaste: \"{preg1}\"."
+                f"En la consulta anterior salió {carta_txt(carta)} en contexto de {ctx}; "
+                f"el consultante preguntó: «{preg1}»"
             )
             prompt = (
                 f"Continuación de una consulta de tarot.\n\n{previo}\n\n"

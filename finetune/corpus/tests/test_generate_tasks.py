@@ -69,6 +69,21 @@ class TestOrtografia(unittest.TestCase):
                 self.assertNotIn(mala, texto, f"subcadena sin tilde encontrada: {mala!r}")
 
 
+class TestMultiturno(unittest.TestCase):
+    def test_sin_te_preguntaste(self):
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(5), kb_tarot, kb_astro, kb_num)
+        for _bloque, _system, prompt, _payload, _mt in b.multiturno(50):
+            self.assertNotIn("Te preguntaste", prompt)
+
+    def test_previo_honesto(self):
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(5), kb_tarot, kb_astro, kb_num)
+        for _bloque, _system, prompt, _payload, _mt in b.multiturno(10):
+            self.assertIn("En la consulta anterior salió", prompt)
+            self.assertIn("el consultante preguntó: «", prompt)
+
+
 class TestEtica(unittest.TestCase):
     def test_variedad_de_prompts(self):
         kb_tarot, kb_astro, kb_num = kbs_para_test()
