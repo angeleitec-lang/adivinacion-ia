@@ -241,5 +241,55 @@ class TestCasiDuplicados(unittest.TestCase):
         self.assertTrue(i1.buscar(CASI_IGUAL))
 
 
+import argparse
+
+
+def _args(**kw):
+    d = {"min_chars": 40, "max_chars": 12000, "max_repetition": 0.12}
+    d.update(kw)
+    return argparse.Namespace(**d)
+
+
+def _fila(system="", human="", gpt="La Torre invertida anuncia un derrumbe necesario en tu vida sentimental."):
+    conv = []
+    if system:
+        conv.append({"from": "system", "value": system})
+    if human:
+        conv.append({"from": "human", "value": human})
+    conv.append({"from": "gpt", "value": gpt})
+    return {"conversations": conv}
+
+
+class TestPromptSinTildes(unittest.TestCase):
+    def test_system_antiguo_rechazado(self):
+        row = _fila(
+            system="Eres una tarotista, astrologa y numerologa profesional con empatia.",
+            human="Tirada de una carta.\n\nCarta: La Torre (invertida).",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "prompt_sin_tildes")
+
+    def test_human_antiguo_rechazado(self):
+        row = _fila(
+            system="Eres una tarotista con experiencia.",
+            human='Carta: La Torre (invertida).\nPregunta: "Que energia hay hoy?"',
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "prompt_sin_tildes")
+
+    def test_fila_nueva_con_tildes_pasa(self):
+        row = _fila(
+            system="Eres una tarotista, astróloga y numeróloga profesional con empatía.",
+            human=(
+                "Tirada de una carta.\n\nCarta: La Torre (invertida).\nContexto: amor.\n"
+                'Pregunta del consultante: "¿Qué energía hay en mi vida sentimental ahora mismo?"'
+            ),
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertTrue(ok, why)
+
+
 if __name__ == "__main__":
     unittest.main()

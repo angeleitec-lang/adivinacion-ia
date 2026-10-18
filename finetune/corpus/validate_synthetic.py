@@ -35,6 +35,11 @@ NUM_RE = re.compile(
     re.I,
 )
 QUESTION_RE = re.compile(r'Pregunta del consultante:\s*"([^"]+)"', re.I)
+# Marcas del generador antiguo (texto sin tildes): si aparecen, la fila se descarta.
+SIN_TILDES_MARCAS = (
+    "espanol", "que energia", "cual es el tema", "proposito", "astrologa ",
+    "numerologa", "interpretacion", "anio personal", "empatia",
+)
 # Reconoce «Carta: X (o)», «Carta N: X (o)» y líneas de tirada «- posición: X (o)».
 CARTA_LINEA_RE = re.compile(
     r"(?:Carta(?:\s*\d+)?\s*:|[-•]\s*[^\n:]+?:)\s*([^(\n]+?)\s*\((invertid[ao]|al derecho)\)",
@@ -186,6 +191,13 @@ def human_of(row: dict) -> str:
     return ""
 
 
+def system_of(row: dict) -> str:
+    for c in row.get("conversations", []):
+        if c.get("from") == "system":
+            return c.get("value", "")
+    return ""
+
+
 # Marcas que reconocen una carta invertida en la respuesta (texto normalizado).
 INVERT_RECONOC = (
     "invertid", "al reves", "bloque", "sombra", "resist", "retraso", "interior",
@@ -249,6 +261,9 @@ def validate(row: dict, args) -> tuple[bool, str]:
     prompt = human_of(row)
     if not answer or not prompt:
         return False, "sin_turnos"
+    texto_prompt = (system_of(row) + "\n" + prompt).lower()
+    if any(marca in texto_prompt for marca in SIN_TILDES_MARCAS):
+        return False, "prompt_sin_tildes"
     if len(answer) < args.min_chars:
         return False, "corto"
     if len(answer) > args.max_chars:
