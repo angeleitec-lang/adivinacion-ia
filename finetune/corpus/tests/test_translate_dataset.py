@@ -151,5 +151,97 @@ class FallosYReintento(unittest.TestCase):
         self.assertEqual(rc, 0)
 
 
+class ExtraerTema(unittest.TestCase):
+    def test_cuatro_plantillas(self):
+        casos = [
+            ("Explica en detalle: la luna llena.",
+             "Explica en detalle: ", "la luna llena", "."),
+            ("¿Qué significa el tres?",
+             "¿Qué significa ", "el tres", "?"),
+            ("Como experta en adivinación, desarróllame los sueños.",
+             "Como experta en adivinación, desarróllame ", "los sueños", "."),
+            ("Explícame el tarot de forma clara y completa.",
+             "Explícame ", "el tarot", " de forma clara y completa."),
+        ]
+        for prompt, pref, tema, suf in casos:
+            self.assertEqual(td.extraer_tema(prompt), (pref, tema, suf))
+
+    def test_prompt_desconocido(self):
+        self.assertIsNone(td.extraer_tema("Háblame de lo que quieras."))
+
+
+class TraducirPrompts(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        self.src = root / "train.jsonl"
+        self.dst = root / "train_es.jsonl"
+
+    def _argv(self, *extra):
+        return ["--train", str(self.src), "--out-train", str(self.dst),
+                "--only", "train", "--workers", "1", *extra]
+
+    def test_recompone_prompt_con_tema_ingles(self):
+        fila = {"conversations": [
+            {"from": "human",
+             "value": "Explica en detalle: The Lily Meaning and Combinations."},
+            {"from": "gpt", "value": EN_ANSWER},
+        ]}
+        self.src.write_text(json.dumps(fila) + "\n", encoding="utf-8")
+        trad_tema = "El significado y las combinaciones del Lilio"
+        trad_resp = ("La carta de la torre significa que el final de un ciclo "
+                    "llega pronto y debes mirar dentro de ti mismo ahora.")
+
+        def fake(t, *a, **k):
+            if "Lily" in t:
+                return trad_tema
+            return trad_resp
+
+        with mock.patch.object(td, "_translate", side_effect=fake):
+            td.main(self._argv("--translate-prompts"))
+        fila_out = json.loads(
+            self.dst.read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual(
+            fila_out["conversations"][0]["value"],
+            "Explica en detalle: " + trad_tema + ".")
+        self.assertEqual(fila_out["conversations"][1]["value"], trad_resp)
+
+    def test_tema_espanol_no_se_traduce(self):
+        fila = {"conversations": [
+            {"from": "human", "value": "¿Qué significa la luna?"},
+            {"from": "gpt", "value": EN_ANSWER},
+        ]}
+        self.src.write_text(json.dumps(fila) + "\n", encoding="utf-8")
+        trad_resp = ("La carta de la torre significa que el final de un ciclo "
+                    "llega pronto y debes mirar dentro de ti mismo ahora.")
+        with mock.patch.object(td, "_translate",
+                             return_value=trad_resp) as m:
+            td.main(self._argv("--translate-prompts"))
+        self.assertEqual(m.call_count, 1)
+        fila_out = json.loads(
+            self.dst.read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual(fila_out["conversations"][0]["value"],
+                        "¿Qué significa la luna?")
+
+    def test_sin_flag_no_toca_el_prompt(self):
+        fila = {"conversations": [
+            {"from": "human",
+             "value": "Explica en detalle: The Lily Meaning and Combinations."},
+            {"from": "gpt", "value": EN_ANSWER},
+        ]}
+        self.src.write_text(json.dumps(fila) + "\n", encoding="utf-8")
+        trad_resp = ("La carta de la torre significa que el final de un ciclo "
+                    "llega pronto y debes mirar dentro de ti mismo ahora.")
+        with mock.patch.object(td, "_translate",
+                             return_value=trad_resp) as m:
+            td.main(self._argv())
+        self.assertEqual(m.call_count, 1)
+        fila_out = json.loads(
+            self.dst.read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual(fila_out["conversations"][0]["value"],
+                        "Explica en detalle: The Lily Meaning and Combinations.")
+
+
 if __name__ == "__main__":
     unittest.main()

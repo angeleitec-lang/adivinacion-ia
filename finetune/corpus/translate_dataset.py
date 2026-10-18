@@ -160,6 +160,50 @@ def _load(path: Path) -> list[dict]:
     return rows
 
 
+PLANTILLAS_PROMPT = [
+    "Explica en detalle: {topic}.",
+    "¿Qué significa {topic}?",
+    "Como experta en adivinación, desarróllame {topic}.",
+    "Explícame {topic} de forma clara y completa.",
+]
+
+
+def extraer_tema(prompt: str):
+    """Reconoce las plantillas españolas de prompt y devuelve (prefijo, tema, sufijo).
+
+    Devuelve None si el prompt no encaja en ninguna plantilla.
+    """
+    texto = (prompt or "").strip()
+    for plantilla in PLANTILLAS_PROMPT:
+        prefijo, sufijo = plantilla.split("{topic}", 1)
+        patron = re.escape(prefijo) + r"(?P<tema>.+?)" + re.escape(sufijo)
+        m = re.fullmatch(patron, texto, re.DOTALL)
+        if m:
+            return prefijo, m.group("tema"), sufijo
+    return None
+
+
+def _tema_es_ingles(tema: str) -> bool:
+    if detect_language(tema) != "en":
+        return False
+    hits = sum(1 for w in _WORD_RE.findall(tema) if w.lower() in EN_WORDS)
+    return hits >= 2
+
+
+def _human_of(row: dict) -> str:
+    for turn in row.get("conversations", []):
+        if turn.get("from") == "human":
+            return turn.get("value", "")
+    return ""
+
+
+def _set_human(row: dict, value: str) -> None:
+    for turn in row.get("conversations", []):
+        if turn.get("from") == "human":
+            turn["value"] = value
+            return
+
+
 def _answer_of(row: dict) -> str:
     for turn in row.get("conversations", []):
         if turn.get("from") == "gpt":
@@ -209,6 +253,20 @@ def translate_file(src: Path, dst: Path, args) -> dict:
 
     def work(item) -> dict:
         idx, row, (ep_url, ep_model) = item
+        if getattr(args, "translate_prompts", False):
+            partes = extraer_tema(_human_of(row))
+            if partes and _tema_es_ingles(partes[1]):
+                prefijo, tema, sufijo = partes
+                try:
+                    tema_es = _translate(tema, ep_url, ep_model,
+                                        timeout=args.timeout)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"  ! error traduciendo tema: {exc}", file=sys.stderr,
+                          flush=True)
+                    return {"row": row, "lang": detect_language(_answer_of(row)),
+                            "translated": False, "error": True,
+                            "motivo": f"tema: {exc}", "idx": idx}
+                _set_human(row, prefijo + tema_es + sufijo)
         answer = _answer_of(row)
         lang = detect_language(answer)
         if lang in ("en", "mixed"):
@@ -339,6 +397,8 @@ def main(argv=None) -> int:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--retry-failed", action="store_true",
                         help="Reprocesa solo las filas de <dst>.failed.jsonl.")
+    parser.add_argument("--translate-prompts", action="store_true",
+                        help="Traduce tambien el tema del prompt si esta en ingles.")
     parser.add_argument("--min-en-chars", type=int, default=0,
                         help="No traduce respuestas EN/mixed mas cortas que esto.")
     parser.add_argument("--drop-short-en", action="store_true",
