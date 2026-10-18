@@ -13,21 +13,29 @@ El modelo debe, en este orden:
 
 Hallazgo de la auditoría: lo que hay hoy son sobre todo textos *enciclopédicos* (Wikipedia, blogs). Eso enseña a recitar, no a leer. Hace falta (a) **conocimiento contrastado** por entidad y (b) **lecturas trabajadas** de calidad (la pieza más escasa y valiosa).
 
-## 2. Principio: adquisición dirigida por una matriz de cobertura
+## 2. Alcance real (según `tecnicasCartomancia.md`) y matriz de cobertura
 
-En lugar de «rastrear y ver qué sale», se define la lista exacta de **entidades** y **facetas** que el modelo debe dominar, y se mide para cada una cuántas fuentes independientes de calidad la cubren. Hasta que no se alcanza el mínimo, se sigue buscando.
+El mapa del proyecto cubre **cinco familias y unas 35 técnicas**. La adquisición se dirige por una **matriz de cobertura**: la lista exacta de *entidades* y *facetas* que el modelo debe dominar, y para cada una cuántas fuentes independientes de calidad la respaldan. Mientras una celda esté por debajo de su mínimo, se sigue buscando. Orden de magnitud: **≈ 5.000–6.000 celdas** (entidad × faceta).
 
-| Dominio (V1) | Entidades | Facetas por entidad | Mínimo de fuentes independientes |
-|---|---|---|---|
-| Tarot | 78 cartas | significado general, derecha/invertida, amor, trabajo, dinero, salud, espiritual, simbolismo de la imagen, correspondencias (elemento, astro, cábala), consejo | **6** |
-| Tarot | tiradas (1, 2, 3, herradura, relación, sí/no, Cruz Celta 10, año 12 meses) | significado de cada posición, orden de lectura, ejemplo resuelto | **4** |
-| Tarot | combinaciones | pares y tríos habituales, lectura de palos y arcanos dominantes | **3** |
-| Astrología | 12 signos; 10 planetas × 12 signos (120); 10 planetas × 12 casas (120); Ascendente × 12; aspectos (5) × pares de planetas; nodos; tránsitos básicos; sinastría | descripción, luz y sombra, consejo | **4** (≥ 1 clásica + ≥ 2 modernas) |
-| Numerología | 1–9, 11, 22, 33 × posiciones (camino de vida, destino, alma, personalidad, año personal, compatibilidad) | descripción, luz y sombra, amor, trabajo, método de cálculo | **5** |
-| **Fase 2** Quiromancia | líneas mayores/menores, montes, formas de mano, dedos | descripción, variantes, advertencias | 4 |
-| **Fase 3** Otros | runas (24), I Ching (64), Lenormand (36), baraja española (40), astrología china | igual | 3 |
+| Familia | Técnicas y entidades | Fuente de verdad en el producto |
+|---|---|---|
+| **Cartomancia** | Tarot 78 cartas (RWS como base + variantes Marsella y Thoth); Lenormand 36 (+ 630 combinaciones de pares, Gran Tablero); Kipper 36 (por casas); Sibilla 52; baraja española 40/48; naipes comunes 52; cartas gitanas; oráculos modernos (genérico) | azar (tirada real) |
+| **Quiromancia** | 4 líneas mayores, 4 menores, 7 montes, 4 formas de mano, dedos y falanges, dermatoglifos, onicomancia, cada rasgo con sus variantes (larga, rota, isla, cadena…) | imagen (visión por computador, fase 2) |
+| **Astrología** | Occidental: carta natal (10 planetas × 12 signos = 120, × 12 casas = 120), Ascendente, nodos, 5 aspectos × 45 pares (225), tránsitos, revolución solar, progresiones secundarias, sinastría, horaria. **Jyotish**: 12 rashis, 9 grahas, 27 nakshatras, 12 bhavas, dashas. **China**: 12 animales × 5 elementos, BaZi (10 troncos, 12 ramas, 4 pilares) | cálculo astronómico |
+| **Numerología** | 12 números (1–9, 11, 22, 33) × 6 posiciones (camino de vida, destino, alma, personalidad, año y mes personal), compatibilidad (81 pares), biorritmos (cálculo) | cálculo aritmético |
+| **Otras** | I Ching (64 hexagramas, 8 trigramas, 384 líneas móviles, métodos); runas (24 del Futhark antiguo + variantes, tiradas); cafeomancia, tasseografía, cristalomancia, péndulo (catálogos de símbolos y método) | azar o ritual |
 
-El estado de la matriz vive en `finetune/corpus/knowledge/cobertura.json` (lo actualiza el etiquetador de fuentes; `cobertura.md` es el informe legible con las celdas por debajo del mínimo).
+**Facetas por entidad** (según el tipo): significado general, luz y sombra, derecha/invertida o variantes, amor, trabajo, dinero, salud, espiritual, simbolismo, correspondencias (elemento, astro, cábala), consejo práctico y ejemplo de uso. **Mínimo de fuentes independientes por celda**, según la ola:
+
+| Ola | Contenido | Mínimo |
+|---|---|---|
+| **1** (máxima demanda en español) | Tarot (RWS + Marsella), baraja española, astrología occidental (natal, tránsitos, sinastría, revolución solar), numerología, biorritmos | **5** (≥ 1 clásica y ≥ 2 modernas, ≥ 1 en español) |
+| **2** | Lenormand, Kipper, Sibilla, naipes comunes, cartas gitanas, quiromancia, I Ching, runas, astrología china/BaZi, Jyotish, progresiones y horaria | **4** |
+| **3** | Cafeomancia, tasseografía, cristalomancia, péndulo, onicomancia, dermatoglifos, oráculos modernos | **3** |
+
+El estado vive en `finetune/corpus/knowledge/cobertura.json`; `cobertura.md` lista las celdas bajo el mínimo.
+
+**Consecuencia técnica:** las familias «de cálculo» exigen calculadoras deterministas para generar datos correctos (hoy solo existen natal occidental y numerología básica). Hay que construir, con tests contra valores de referencia: tránsitos, revolución solar, progresiones secundarias, horaria, Jyotish (zodiaco sideral con ayanamsa Lahiri, nakshatras, dashas Vimshottari), BaZi (calendario lunisolar con el límite del año nuevo chino), biorritmos, tiradas de I Ching y runas con semilla. El modelo recibe esos datos ya calculados en el prompt.
 
 ## 3. Fuentes por niveles (prioridad de calidad)
 
@@ -68,15 +76,15 @@ KB de consenso (+ RAG sobre las unidades buenas) → generación sintética de l
 | Fase | Contenido | Entregable | Criterio |
 |---|---|---|---|
 | **F0.0** | Herramientas: corregir el scraper (bug «cart», pista T6), traducción (T2), instalar `yt-dlp`; arrancar si hace falta Firecrawl solo para páginas con JavaScript | scraper y traductor corregidos con tests | `check.sh` verde |
-| **F0.1** | Inventario curado de fuentes: lista de libros (nivel A/B) con identificador de archive.org/Gutenberg y comprobación de texto limpio; lista de sitios (nivel C) con muestra evaluada; plan de foros y canales (nivel D) | `knowledge/fuentes.jsonl` con nivel, URL, idioma, tamaño, nota de calidad | ≥ 60 libros verificados, ≥ 15 sitios evaluados |
+| **F0.1** | Inventario curado de fuentes **por familia**: libros (nivel A/B) con identificador y comprobación de texto limpio; sitios (nivel C) con muestra evaluada; foros y canales (nivel D) | `knowledge/fuentes.jsonl` con nivel, familia, URL, idioma, tamaño, nota de calidad | ≥ 150 libros verificados y ≥ 40 sitios evaluados entre todas las familias; cada celda de la ola 1 con candidatas suficientes |
 | **F0.2** | Descarga y extracción limpia de nivel A/B + C | `knowledge/raw/<nivel>/…` + manifiesto con hash | tasa de OCR roto < 3 % por libro |
 | **F0.3** | Segmentación, juez LLM, etiquetado de entidades | `cobertura.json/md` | informe con las celdas bajo el mínimo |
 | **F0.4** | Recuperación dirigida a los huecos (búsquedas específicas por entidad faltante) | huecos < 10 % de las celdas | repetir hasta cumplir |
 | **F0.5** | Lecturas trabajadas (nivel D): foros + subtítulos + ejemplos de libros | `knowledge/lecturas/` | ≥ 1.500 lecturas puntuadas ≥ 4/5 |
 | **F0.6** | KB de consenso + revisión humana del 3 % | `kb/` v2 + `muestras.md` | aprobación del usuario |
 
-Duración estimada: **3–6 días** de trabajo de máquina (descargas y OCR en segundo plano; juez LLM en los dos nodos; el cuello de botella es el juez y la traducción).
+Duración estimada: **1–2 semanas** para completar las tres olas (la ola 1 en 3–5 días). Descargas y OCR corren en segundo plano; el cuello de botella es el juez LLM y la traducción. Las olas 2 y 3 no empiezan hasta que la ola 1 cumpla sus mínimos y el usuario apruebe las muestras.
 
 ## 7. Cómo se reparte (protocolo multi-IA)
 
-La coordinadora (Claude) investiga, define esquemas y revisa; las IAs locales ejecutan tareas acotadas con ficheros disjuntos. Las pistas T1–T8 ya preparadas siguen vigentes; **se lanzan primero T6 (scraper) y T2 (traducción)** porque son herramientas de esta fase. El resto se pospone hasta cerrar F0. Nuevas pistas previstas: A1 inventario de fuentes, A2 descargador/extractor de libros (OCR), A3 rastreador por entidad (nivel C), A4 foros y subtítulos (nivel D), A5 segmentador + juez LLM + matriz de cobertura, A6 consenso de KB.
+La coordinadora (Claude) investiga, define esquemas y revisa; las IAs locales ejecutan tareas acotadas con ficheros disjuntos. Las pistas T1–T8 ya preparadas siguen vigentes; **se lanzan primero T6 (scraper) y T2 (traducción)** porque son herramientas de esta fase. El resto se pospone hasta cerrar F0. Nuevas pistas previstas: A1 inventario de fuentes por familia, A2 descargador/extractor de libros (OCR), A3 rastreador por entidad (nivel C), A4 foros y subtítulos (nivel D), A5 segmentador + juez LLM + matriz de cobertura, A6 consenso de KB, y C1–C4 calculadoras deterministas (transitos/revolución/progresiones; Jyotish; BaZi y calendario chino; biorritmos, I Ching y runas).
