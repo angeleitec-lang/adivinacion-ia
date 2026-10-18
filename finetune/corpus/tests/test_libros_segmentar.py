@@ -91,3 +91,72 @@ class FusionYTroceado(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TitulosUtiles(unittest.TestCase):
+    def test_sin_encabezados_usa_titulos_sinteticos_unicos(self):
+        relleno = ("Párrafo de relleno para forzar el troceado. " * 80).strip()
+        texto = "\n\n".join([relleno] * 6)
+        secciones = segmentar(texto, "general")
+        titulos = [s["titulo"] for s in secciones]
+        self.assertGreaterEqual(len(titulos), 2)
+        self.assertTrue(all(t.startswith("Sección ") for t in titulos))
+        self.assertEqual(len(titulos), len(set(titulos)))
+        self.assertNotIn("Introducción", titulos)
+
+    def test_introduccion_solo_si_el_texto_lo_dice(self):
+        texto = "Introducción\n\n" + cuerpo(30)
+        secciones = segmentar(texto, "general")
+        self.assertEqual(secciones[0]["titulo"], "Introducción")
+
+    def test_titulo_no_acaba_en_preposicion(self):
+        texto = ("CAPÍTULO 1 UNA FRASE MUY LARGA QUE TERMINA EN DE\n\n"
+                 + cuerpo(30))
+        secciones = segmentar(texto, "general")
+        titulo = secciones[0]["titulo"]
+        self.assertLessEqual(len(titulo), 80)
+        self.assertFalse(titulo.lower().endswith(" de"))
+
+
+class Cartas(unittest.TestCase):
+    def _titulos(self, texto, familia="tarot"):
+        return [s["titulo"] for s in segmentar(texto, familia)]
+
+    def test_mayor_en_ingles_con_articulo(self):
+        self.assertIn("The Fool", self._titulos("THE FOOL\n\n" + cuerpo(30)))
+
+    def test_mayor_numerado(self):
+        self.assertIn("The Fool", self._titulos("0 THE FOOL\n\n" + cuerpo(30)))
+        self.assertIn("La Muerte",
+                      self._titulos("XIII. La Muerte\n\n" + cuerpo(30), "tarot"))
+
+    def test_menor_en_ingles_y_espanol(self):
+        self.assertIn("Ace of Cups",
+                      self._titulos("Ace of Cups\n\n" + cuerpo(30)))
+        self.assertIn("As de Copas",
+                      self._titulos("As de Copas\n\n" + cuerpo(30), "tarot"))
+
+    def test_carta_en_linea_con_cabecera(self):
+        texto = ("Chapter 1. Wands\n\n" + cuerpo(30) +
+                 "\n\nFigure 5 QUEEN The Queen represents the receptive "
+                 "quality. " + cuerpo(30) + "\n\nFigure 6 KING The King "
+                 "represents authority. " + cuerpo(30))
+        titulos = self._titulos(texto)
+        self.assertIn("Queen of Wands", titulos)
+        self.assertIn("King of Wands", titulos)
+
+    def test_clave_numerada(self):
+        self.assertIn("The Fool",
+                      self._titulos("Key 0 represents the beginning. "
+                                    + cuerpo(30)))
+
+    def test_familia_astrologia_en_ingles(self):
+        titulos = self._titulos("Taurus\n\n" + cuerpo(30), "astrologia")
+        self.assertIn("Taurus", titulos)
+
+    def test_numerologia_11_22_33(self):
+        texto = ("11\n\n" + cuerpo(30) + "\n\n22\n\n" + cuerpo(30) +
+                 "\n\n33\n\n" + cuerpo(30))
+        titulos = self._titulos(texto, "numerologia")
+        for numero in ("11", "22", "33"):
+            self.assertIn(numero, titulos)

@@ -2,10 +2,11 @@
 
 `segmentar(texto_limpio, familia, id_libro="")` detecta encabezados (markdown,
 CHAPTER/CAPÍTULO, numeración seguida de título en mayúsculas y líneas cortas en
-mayúsculas) y, en tarot/baraja/astrología/numerología, también entidades (arcanos
-mayores, signos, planetas y números del 1 al 9). Las secciones de menos de 400
-caracteres se funden con la anterior y las de más de 12.000 se parten por
-párrafos con 300 caracteres de solape.
+mayúsculas) y, en tarot/baraja/astrología/numerología, también entidades: las 78
+cartas, signos, planetas y los números 1-9/11/22/33. Las secciones de menos de
+400 caracteres sin encabezado se funden con la anterior; las de más de 12.000 se
+parten por párrafos con 300 caracteres de solape. Los títulos nunca superan 80
+caracteres ni acaban en preposición o artículo.
 """
 import re
 import unicodedata
@@ -16,33 +17,83 @@ SOLAPE = 300
 
 try:
     from cartas import normalizar_carta
-except ImportError:  # el módulo cartas aún no existe en esta rama
+except ImportError:  # si el catálogo no está disponible, se usa la lista propia
     normalizar_carta = None
 
-ARCANOS_MAYORES = (
-    "El Loco", "El Mago", "La Sacerdotisa", "La Emperatriz", "El Emperador",
-    "El Hierofante", "El Sumo Sacerdote", "El Papa", "Los Enamorados",
-    "El Carro", "La Fuerza", "La Justicia", "El Ermitaño",
-    "La Rueda de la Fortuna", "El Colgado", "La Muerte", "La Templanza",
-    "El Diablo", "La Torre", "La Estrella", "La Luna", "El Sol", "El Juicio",
-    "El Mundo",
+MAYORES_ES = (
+    ("El Loco", 1), ("El Necio", 1), ("El Mago", 2), ("La Sacerdotisa", 3),
+    ("La Papisa", 3), ("La Emperatriz", 4), ("El Emperador", 5),
+    ("El Hierofante", 6), ("El Papa", 6), ("El Sumo Sacerdote", 6),
+    ("Los Enamorados", 7), ("El Enamorado", 7), ("Los Amantes", 7),
+    ("El Carro", 8), ("La Fuerza", 9), ("La Fortaleza", 9), ("El Ermitaño", 10),
+    ("El Eremita", 10), ("La Rueda de la Fortuna", 11), ("La Rueda", 11),
+    ("La Justicia", 12), ("El Colgado", 13), ("El Ahorcado", 13),
+    ("La Muerte", 14), ("La Templanza", 15), ("El Diablo", 16),
+    ("La Torre", 17), ("La Estrella", 18), ("La Luna", 19), ("El Sol", 20),
+    ("El Juicio", 21), ("El Juicio Final", 21), ("El Mundo", 22),
 )
 
-SIGNOS = (
-    "Aries", "Tauro", "Géminis", "Cáncer", "Leo", "Virgo", "Libra",
-    "Escorpio", "Sagitario", "Capricornio", "Acuario", "Piscis",
+MAYORES_EN = (
+    ("The Fool", 1), ("The Magician", 2), ("The High Priestess", 3),
+    ("The Empress", 4), ("The Emperor", 5), ("The Hierophant", 6),
+    ("The Lovers", 7), ("The Chariot", 8), ("Strength", 9), ("Fortitude", 9),
+    ("The Hermit", 10), ("Wheel of Fortune", 11), ("Justice", 12),
+    ("The Hanged Man", 13), ("Death", 14), ("Temperance", 15),
+    ("The Devil", 16), ("The Tower", 17), ("The Star", 18), ("The Moon", 19),
+    ("The Sun", 20), ("Judgement", 21), ("Judgment", 21), ("The World", 22),
 )
 
-PLANETAS = (
-    "Sol", "Luna", "Mercurio", "Venus", "Marte", "Júpiter", "Saturno",
-    "Urano", "Neptuno", "Plutón",
+NOMBRES_MAYORES_EN = (
+    "The Fool", "The Magician", "The High Priestess", "The Empress",
+    "The Emperor", "The Hierophant", "The Lovers", "The Chariot", "Strength",
+    "The Hermit", "Wheel of Fortune", "Justice", "The Hanged Man", "Death",
+    "Temperance", "The Devil", "The Tower", "The Star", "The Moon", "The Sun",
+    "Judgement", "The World",
 )
+
+RANGOS_EN = {"Ace": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5, "Six": 6,
+             "Seven": 7, "Eight": 8, "Nine": 9, "Ten": 10, "Page": 11,
+             "Knight": 12, "Queen": 13, "King": 14}
+RANGOS_ES = {"As": 1, "Dos": 2, "Tres": 3, "Cuatro": 4, "Cinco": 5,
+             "Seis": 6, "Siete": 7, "Ocho": 8, "Nueve": 9, "Diez": 10,
+             "Sota": 11, "Caballero": 12, "Reina": 13, "Rey": 14}
+PALOS_EN = {"Wands": ("bastos", "Wands"), "Cups": ("copas", "Cups"),
+            "Swords": ("espadas", "Swords"),
+            "Pentacles": ("oros", "Pentacles"), "Coins": ("oros", "Coins")}
+PALOS_ES = {"Bastos": ("bastos", "Bastos"), "Copas": ("copas", "Copas"),
+            "Espadas": ("espadas", "Espadas"), "Oros": ("oros", "Oros")}
+
+SIGNOS = ("Aries", "Tauro", "Géminis", "Cáncer", "Leo", "Virgo", "Libra",
+          "Escorpio", "Sagitario", "Capricornio", "Acuario", "Piscis",
+          "Taurus", "Gemini", "Cancer", "Scorpio", "Sagittarius",
+          "Capricorn", "Aquarius", "Pisces")
+PLANETAS = ("Sol", "Luna", "Mercurio", "Venus", "Marte", "Júpiter", "Saturno",
+            "Urano", "Neptuno", "Plutón", "Sun", "Moon", "Mercury", "Mars",
+            "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto")
+NUMEROS_NUMEROLOGIA = {str(n) for n in range(1, 10)} | {"11", "22", "33"}
 
 FAMILIAS_ENTIDADES = {"tarot", "baraja", "astrologia", "numerologia"}
+FAMILIAS_CARTAS = {"tarot", "baraja"}
 
 CAPITULO_RE = re.compile(r"^(?:cap[ií]tulo|chapter)\b", re.IGNORECASE)
 NUMERADO_RE = re.compile(r"^(?:[IVXLCDM]+|\d{1,3})[.)-]?\s+(.+)$")
-NUMERO_SUELTO_RE = re.compile(r"^[1-9]$")
+NUMERO_CARD_RE = re.compile(r"^\s*(?:\d{1,2}|[IVXLCDM]+)[.)\-:]?\s+")
+RANGO_UP_RE = re.compile(
+    r"(?<!\w)(%s)(?=\s+[A-ZÁÉÍÓÚÑ¿¡(])"
+    % "|".join(sorted([r.upper() for r in list(RANGOS_EN) + list(RANGOS_ES)],
+                      key=len, reverse=True)))
+KEY_RE = re.compile(r"\bKey\s+(\d{1,2}|[IVXL]+)\b", re.IGNORECASE)
+SUIT_CAP_RE = re.compile(
+    r"\b(?:chapter|cap[ií]tulo)\s+\d+\W{0,6}"
+    r"(wands|cups|s\s*words|pentacles|bastos|copas|espadas|oros)\b",
+    re.IGNORECASE)
+SUIT_LINEA_RE = re.compile(
+    r"^\s*(wands|cups|s\s*words|pentacles|bastos|copas|espadas|oros)\b",
+    re.IGNORECASE)
+
+_STOPWORDS_FINAL = set(
+    "de del la el los las un una unos unas y o u en con por para a al que su "
+    "sus the of and a an in on with for to at by from or as but is are".split())
 
 
 def _sin_tildes(texto):
@@ -63,21 +114,74 @@ def _clave_entidad(nombre):
     if normalizar_carta is not None:
         try:
             valor = normalizar_carta(nombre)
-            if isinstance(valor, str) and valor:
-                return _clave(valor)
+            if isinstance(valor, dict) and valor.get("nombre"):
+                return _clave(valor["nombre"])
         except Exception:
             pass
     return _clave(nombre)
 
 
-ENTIDADES = {
-    "tarot": {_clave(n) for n in ARCANOS_MAYORES},
-    "astrologia": {_clave(n) for n in SIGNOS + PLANETAS},
+def _registrar(alias, clave, display, alias_originales, alias_carta):
+    alias_carta.setdefault(_clave(alias), (clave, display))
+    alias_originales.append(alias)
+
+
+def _construir_alias():
+    originales = []
+    alias = {}
+    for nombre, numero in MAYORES_ES + MAYORES_EN:
+        _registrar(nombre, "tarot-mayor-%02d" % numero, nombre, originales,
+                   alias)
+    for rango, numero in RANGOS_EN.items():
+        for palo, (clave_palo, display_palo) in PALOS_EN.items():
+            _registrar("%s of %s" % (rango, palo),
+                       "tarot-%s-%02d" % (clave_palo, numero),
+                       "%s of %s" % (rango, display_palo),
+                       originales, alias)
+    for rango, numero in RANGOS_ES.items():
+        for palo, (clave_palo, display_palo) in PALOS_ES.items():
+            _registrar("%s de %s" % (rango, palo),
+                       "tarot-%s-%02d" % (clave_palo, numero),
+                       "%s de %s" % (rango, display_palo),
+                       originales, alias)
+    return alias, originales
+
+
+ALIAS_CARTA, _ALIAS_ORIGINALES = _construir_alias()
+_ALIAS_UP = {a.upper(): datos for a, datos in
+             ((a, ALIAS_CARTA[_clave(a)]) for a in _ALIAS_ORIGINALES)}
+_RE_ALIAS_UP = re.compile(
+    r"(?<!\w)(%s)(?!\w)"
+    % "|".join(sorted([re.escape(a) for a in _ALIAS_UP], key=len, reverse=True)))
+_RE_ALIAS = re.compile(
+    r"(?<!\w)(%s)(?!\w)"
+    % "|".join(sorted([re.escape(a) for a in _ALIAS_ORIGINALES],
+                      key=len, reverse=True)),
+    re.IGNORECASE)
+RANGO_UP_EN = {r.upper(): (r, n) for r, n in RANGOS_EN.items()}
+RANGO_UP_ES = {r.upper(): (r, n) for r, n in RANGOS_ES.items()}
+_SUIT_CANON = {
+    "wands": ("bastos", "Wands"), "cups": ("copas", "Cups"),
+    "swords": ("espadas", "Swords"), "pentacles": ("oros", "Pentacles"),
+    "coins": ("oros", "Coins"), "bastos": ("bastos", "Bastos"),
+    "copas": ("copas", "Copas"), "espadas": ("espadas", "Espadas"),
+    "oros": ("oros", "Oros"),
 }
 
 
 def _quitar_markdown(linea):
     return re.sub(r"^#+\s*", "", linea).strip()
+
+
+def _limpiar_titulo(titulo):
+    texto = " ".join((titulo or "").split())
+    if len(texto) > 80:
+        texto = texto[:80].rsplit(" ", 1)[0]
+    palabras = texto.split()
+    while palabras and _clave(palabras[-1]) in _STOPWORDS_FINAL:
+        palabras.pop()
+    texto = " ".join(palabras).strip(" .,;:-—")
+    return texto or None
 
 
 def _es_mayusculas(texto):
@@ -87,41 +191,157 @@ def _es_mayusculas(texto):
     return sum(1 for c in letras if c.isupper()) / len(letras) >= 0.80
 
 
+def _parece_cabecera(prefijo):
+    texto = prefijo.strip()
+    if not texto:
+        return True
+    if len(texto) > 70:
+        return False
+    letras = [c for c in texto if c.isalpha()]
+    mayusculas = sum(1 for c in letras if c.isupper())
+    return (bool(re.search(r"\d", texto)) or "Figure" in texto
+            or "Fig." in texto
+            or (letras and mayusculas / len(letras) >= 0.60))
+
+
+def _suit_de_linea(linea):
+    match = SUIT_CAP_RE.search(linea) or SUIT_LINEA_RE.match(linea)
+    if not match:
+        return None
+    clave = re.sub(r"\s+", "", match.group(1).lower())
+    return _SUIT_CANON.get(clave)
+
+
+def _numero_romano(texto):
+    if texto.isdigit():
+        return int(texto)
+    valores = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
+    total = 0
+    previo = 0
+    for caracter in reversed(texto.upper()):
+        valor = valores.get(caracter, 0)
+        total = total - valor if valor < previo else total + valor
+        previo = max(previo, valor)
+    return total
+
+
+def _eventos_de_linea(linea, familia, suit):
+    if _familia_norm(familia) not in FAMILIAS_CARTAS:
+        return []
+    eventos = []
+
+    for match in _RE_ALIAS_UP.finditer(linea):
+        clave, display = _ALIAS_UP[match.group(1).upper()]
+        eventos.append((match.start(), match.end(), clave, display))
+
+    if suit:
+        for match in RANGO_UP_RE.finditer(linea):
+            token = match.group(1).upper()
+            if token in RANGO_UP_EN:
+                rango, numero = RANGO_UP_EN[token]
+                display = "%s of %s" % (rango, suit[1])
+            else:
+                rango, numero = RANGO_UP_ES[token]
+                display = "%s de %s" % (rango, suit[0].capitalize())
+            eventos.append((match.start(), match.end(),
+                            "tarot-%s-%02d" % (suit[0], numero), display))
+
+    for match in _RE_ALIAS.finditer(linea):
+        prefijo = linea[:match.start()]
+        if not _parece_cabecera(prefijo):
+            continue
+        clave, display = ALIAS_CARTA[_clave(match.group(1))]
+        eventos.append((match.start(), match.end(), clave, display))
+
+    for match in KEY_RE.finditer(linea):
+        numero = _numero_romano(match.group(1))
+        if 0 <= numero <= 21:
+            eventos.append((match.start(), match.end(),
+                            "tarot-mayor-%02d" % (numero + 1),
+                            NOMBRES_MAYORES_EN[numero]))
+
+    eventos.sort(key=lambda e: (e[0], -(e[1] - e[0])))
+    return eventos
+
+
+def _preprocesar_cartas(texto, familia):
+    """Marca con «# » los encabezados de carta que van dentro de una línea."""
+    salida = []
+    vistos = set()
+    suit = None
+    for linea in texto.splitlines():
+        suit_linea = _suit_de_linea(linea)
+        if suit_linea:
+            suit = suit_linea
+        eventos = _eventos_de_linea(linea, familia, suit)
+        if not eventos:
+            salida.append(linea)
+            continue
+        cursor = 0
+        hubo = False
+        for inicio, fin, clave, display in eventos:
+            if clave in vistos or inicio < cursor:
+                continue
+            prefijo = linea[cursor:inicio]
+            if prefijo.strip() and not _parece_cabecera(prefijo):
+                salida.append(prefijo.strip())
+            salida.append("# " + display)
+            vistos.add(clave)
+            cursor = fin
+            hubo = True
+        resto = linea[cursor:]
+        if resto.strip():
+            salida.append(resto.strip())
+        elif not hubo:
+            salida.append(linea)
+    return "\n".join(salida)
+
+
+def _dice_introduccion(texto):
+    for linea in texto.splitlines():
+        if linea.strip():
+            return _clave(linea).startswith("introduccion")
+    return False
+
+
 def _titulo_de_linea(linea, familia):
     """Título si la línea es un encabezado; None en caso contrario."""
     texto = linea.strip()
     if not texto:
         return None
     if texto.startswith("#"):
-        titulo = _quitar_markdown(texto)
-        if titulo:
-            return titulo
+        return _limpiar_titulo(_quitar_markdown(texto))
 
     sin_marca = _quitar_markdown(texto)
     if CAPITULO_RE.match(sin_marca):
-        return sin_marca
+        return _limpiar_titulo(sin_marca)
 
-    if _familia_norm(familia) in FAMILIAS_ENTIDADES:
-        if _familia_norm(familia) in ENTIDADES:
-            if _clave_entidad(sin_marca) in ENTIDADES[_familia_norm(familia)]:
-                return sin_marca
-        if (_familia_norm(familia) == "numerologia"
-                and NUMERO_SUELTO_RE.match(sin_marca)):
-            return sin_marca
+    familia_norm = _familia_norm(familia)
+    if familia_norm in FAMILIAS_ENTIDADES:
+        limpio = NUMERO_CARD_RE.sub("", sin_marca)
+        if familia_norm in FAMILIAS_CARTAS and _clave(limpio) in ALIAS_CARTA:
+            return _limpiar_titulo(ALIAS_CARTA[_clave(limpio)][1])
+        if familia_norm == "astrologia":
+            if _clave_entidad(limpio) in {_clave(n)
+                                          for n in SIGNOS + PLANETAS}:
+                return _limpiar_titulo(limpio)
+        if (familia_norm == "numerologia"
+                and limpio in NUMEROS_NUMEROLOGIA):
+            return limpio
 
     numerado = NUMERADO_RE.match(sin_marca)
     if numerado and _es_mayusculas(numerado.group(1)):
-        return sin_marca
+        return _limpiar_titulo(sin_marca)
 
     if len(sin_marca) <= 80 and _es_mayusculas(sin_marca):
-        return sin_marca
+        return _limpiar_titulo(sin_marca)
     return None
 
 
 def _secciones_crudas(texto, familia):
     secciones = []
     actual = []
-    titulo = "Introducción"
+    titulo = None
     for linea in texto.splitlines():
         candidato = _titulo_de_linea(linea, familia)
         if candidato is not None:
@@ -138,10 +358,27 @@ def _secciones_crudas(texto, familia):
     return secciones
 
 
-def _fundir_cortas(secciones):
+def _titulo_protegido(titulo, familia):
+    """No se funde un encabezado de carta, signo, planeta o número."""
+    if not titulo:
+        return False
+    familia_norm = _familia_norm(familia)
+    if familia_norm in FAMILIAS_CARTAS and carta_de_titulo(titulo, familia):
+        return True
+    if familia_norm == "astrologia":
+        return _clave(titulo) in {_clave(n) for n in SIGNOS + PLANETAS}
+    if familia_norm == "numerologia":
+        return titulo.strip() in NUMEROS_NUMEROLOGIA
+    return False
+
+
+def _fundir_cortas(secciones, familia):
+    """Funde las secciones cortas con la anterior salvo encabezados de entidad."""
     resultado = []
     for seccion in secciones:
-        if resultado and len(seccion["texto"]) < MIN_SECCION:
+        corta = len(seccion["texto"]) < MIN_SECCION
+        if (resultado and corta
+                and not _titulo_protegido(seccion["titulo"], familia)):
             previa = resultado[-1]
             if seccion["texto"]:
                 previa["texto"] = (previa["texto"] + "\n\n"
@@ -187,6 +424,31 @@ def _partir_largo(texto):
     return partes
 
 
+def _titulo_sintetico(texto, posicion):
+    primeras = re.findall(r"\S+", texto)[:8]
+    base = " ".join(primeras)
+    return (_limpiar_titulo("Sección %d — %s" % (posicion, base))
+            or "Sección %d" % posicion)
+
+
+def carta_de_titulo(titulo, familia="tarot"):
+    """Clave de carta (p. ej. «tarot-mayor-01») si el título es una carta."""
+    if not titulo or _familia_norm(familia) not in FAMILIAS_CARTAS:
+        return None
+    limpio = NUMERO_CARD_RE.sub("", _quitar_markdown(titulo))
+    datos = ALIAS_CARTA.get(_clave(limpio))
+    if datos:
+        return datos[0]
+    if normalizar_carta is not None:
+        try:
+            entrada = normalizar_carta(limpio)
+            if entrada:
+                return entrada["id"]
+        except Exception:
+            pass
+    return None
+
+
 def segmentar(texto_limpio, familia, id_libro=""):
     """Devuelve las secciones de un libro limpio, en orden.
 
@@ -195,20 +457,30 @@ def segmentar(texto_limpio, familia, id_libro=""):
     """
     if not texto_limpio or not texto_limpio.strip():
         return []
-    crudas = _fundir_cortas(_secciones_crudas(texto_limpio, familia))
-    secciones = []
+    texto = _preprocesar_cartas(texto_limpio, familia)
+    crudas = _fundir_cortas(_secciones_crudas(texto, familia), familia)
+    partes = []
     for cruda in crudas:
         for parte in _partir_largo(cruda["texto"]):
-            if not parte.strip():
-                continue
-            secciones.append({
-                "titulo": cruda["titulo"],
-                "texto": parte,
-                "chars": len(parte),
-            })
-    for posicion, seccion in enumerate(secciones):
-        seccion["seccion"] = posicion + 1
-        seccion["posicion"] = posicion
-        seccion["id_libro"] = id_libro
-    orden = ("seccion", "titulo", "texto", "chars", "id_libro", "posicion")
-    return [{clave: seccion[clave] for clave in orden} for seccion in secciones]
+            if parte.strip():
+                partes.append({"titulo": cruda["titulo"], "texto": parte})
+    secciones = []
+    for posicion, parte in enumerate(partes):
+        if parte["titulo"]:
+            titulo = _limpiar_titulo(parte["titulo"])
+        else:
+            titulo = None
+        if titulo is None:
+            if posicion == 0 and _dice_introduccion(parte["texto"]):
+                titulo = "Introducción"
+            else:
+                titulo = _titulo_sintetico(parte["texto"], posicion + 1)
+        secciones.append({
+            "seccion": posicion + 1,
+            "titulo": titulo,
+            "texto": parte["texto"],
+            "chars": len(parte["texto"]),
+            "id_libro": id_libro,
+            "posicion": posicion,
+        })
+    return secciones
