@@ -20,6 +20,7 @@ que `build_dataset.py` puede saltarse las URLs bloqueadas o incompatibles.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -129,8 +130,12 @@ def save_page(markdown: str, source_url: str, raw_dir: Path) -> str | None:
     slug = slug_of(source_url or "")
     target = raw_dir / domain / f"{slug}.md"
     if target.exists():
-        short = abs(hash(source_url)) % 0xFFFF
-        target = raw_dir / domain / f"{slug}_{short:04x}.md"
+        if target.read_text(encoding="utf-8") == markdown:
+            return str(target.relative_to(raw_dir))
+        short = hashlib.sha1((source_url or "").encode("utf-8")).hexdigest()[:4]
+        target = raw_dir / domain / f"{slug}_{short}.md"
+        if target.exists() and target.read_text(encoding="utf-8") == markdown:
+            return str(target.relative_to(raw_dir))
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(markdown, encoding="utf-8")
     return str(target.relative_to(raw_dir))
