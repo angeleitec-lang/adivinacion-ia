@@ -54,5 +54,33 @@ class TestMenoresEscritos(unittest.TestCase):
             self.assertEqual(c["elemento"], ELEMENTO_PALO[c["palo"]])
 
 
+class TestMayoresConContextos(unittest.TestCase):
+    def setUp(self):
+        self.mayores = build_kb.MAYORES
+
+    def test_veintidos_mayores(self):
+        self.assertEqual(len(self.mayores), 22)
+
+    def test_contextos_completos(self):
+        for c in self.mayores:
+            ctx = c.get("contextos", {})
+            for k in CLAVES_CONTEXTO:
+                self.assertTrue(ctx.get(k), f"{c['nombre']}: falta contexto {k}")
+
+    def test_invertidas_unicas_entre_mayores(self):
+        invertidas = [c["invertida"] for c in self.mayores]
+        self.assertEqual(len(invertidas), len(set(invertidas)))
+
+    def test_la_fuerza_sin_repetición(self):
+        fuerza = next(c for c in self.mayores if c["nombre"] == "La Fuerza")
+        self.assertNotIn("domina: domina", fuerza["significado"])
+
+    def test_numeracion_fuerza_y_justicia(self):
+        fuerza = next(c for c in self.mayores if c["nombre"] == "La Fuerza")
+        justicia = next(c for c in self.mayores if c["nombre"] == "La Justicia")
+        self.assertEqual(fuerza["numero"], 8)
+        self.assertEqual(justicia["numero"], 11)
+
+
 if __name__ == "__main__":
     unittest.main()
