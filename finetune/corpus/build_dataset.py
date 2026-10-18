@@ -216,7 +216,12 @@ JUNK_LINE_RE = re.compile(r"[_*> \t]+")
 COMMERCIAL_RE = re.compile(
     r"(?:ver\s+productos|ver\s+m[áa]s|comprar\s+ahora|"
     r"a[nñ]adir\s+al\s+carrito|suscr[ií]bete|leer\s+m[áa]s|"
-    r"descarga(?:r)?\s+gratis)",
+    r"descarga(?:r)?\s+gratis|"
+    r"(?:compra|compre|comprar|adquiere|consigue|pide)\b"
+    r"(?=[^.!?»\n]*(?:(?:nuestro|nuestra|nuestros|nuestras|tu|tus)\b|"
+    r"\d+(?:[.,]\d+)?\s*(?:€|euros?|\$|USD)\b))|"
+    r"(?:lee\s+tambi[ée]n|lee\s+m[áa]s|te\s+puede\s+interesar|"
+    r"art[ií]culos\s+relacionados)\s*:)",
     re.IGNORECASE,
 )
 COMMERCIAL_END_RE = re.compile(r"[.!?](?=\s|$)|»")
