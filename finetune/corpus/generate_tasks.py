@@ -270,6 +270,111 @@ def carta_txt(c):
     return f"{c['nombre']} ({orient})"
 
 
+CABECERA_REFERENCIA = ("Referencia (significados de la tradición; "
+                      "úsalos como base y no inventes otros):")
+
+
+def _norm(s):
+    return unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode().lower()
+
+
+def referencia_tarot(cartas, kb_cartas, contexto=None):
+    """Bloque de referencia con significados reales de la KB (funciona sin 'contextos')."""
+    por_nombre = {_norm(c["nombre"]): c for c in kb_cartas}
+    lineas = []
+    for c in cartas:
+        kb = por_nombre.get(_norm(c["nombre"]))
+        if not kb:
+            continue
+        if c.get("invertida"):
+            texto = kb.get("invertida") or kb.get("significado", "")
+            orient = "invertida"
+        else:
+            texto = kb.get("significado", "")
+            orient = "al derecho"
+        linea = f"- {c['nombre']} ({orient}): {texto}."
+        if contexto:
+            ctx_txt = (kb.get("contextos") or {}).get(contexto)
+            if ctx_txt:
+                linea += f" En {contexto}: {ctx_txt}."
+        claves = ", ".join(kb.get("palabras_clave", []))
+        if claves:
+            linea += f" Palabras clave: {claves}."
+        lineas.append(linea)
+    if not lineas:
+        return ""
+    return CABECERA_REFERENCIA + "\n" + "\n".join(lineas)
+
+
+def referencia_astro(carta, kb_astro):
+    """Referencia de signos (elemento, regente, claves), simbolismo planetario y casas."""
+    signos = {_norm(s["nombre"]): s for s in kb_astro.get("signos", [])}
+    planetas_kb = {_norm(p["nombre"]): p for p in kb_astro.get("planetas", [])}
+    casas = {str(h.get("numero")): h for h in kb_astro.get("casas", [])}
+    lineas = []
+    for etiqueta, signo in (
+        ("Sol", carta["planetas"].get("Sol", {}).get("signo")),
+        ("Luna", carta["planetas"].get("Luna", {}).get("signo")),
+        ("Ascendente", carta.get("ascendente", {}).get("signo")),
+    ):
+        s = signos.get(_norm(signo)) if signo else None
+        if s:
+            claves = ", ".join(s.get("palabras_clave", []))
+            lineas.append(
+                f"- {etiqueta} en {signo}: elemento {s.get('elemento', 'sin dato')}, "
+                f"regente {s.get('regente', 'sin dato')}, palabras clave: {claves}."
+            )
+    for nombre, datos in carta["planetas"].items():
+        p = planetas_kb.get(_norm(nombre))
+        if p and p.get("simboliza"):
+            lineas.append(f"- {nombre}: {p['simboliza']}.")
+    for nombre in ("Sol", "Luna", "Venus"):
+        datos = carta["planetas"].get(nombre)
+        if datos:
+            h = casas.get(str(datos.get("casa")))
+            if h and h.get("area"):
+                lineas.append(f"- Casa {datos['casa']} de {nombre}: {h['area']}.")
+    if not lineas:
+        return ""
+    return CABECERA_REFERENCIA + "\n" + "\n".join(lineas)
+
+
+def referencia_numerologia(fecha, nombre, kb_num):
+    """Referencia de palabras clave y áreas de cada número calculado."""
+    por_numero = {e.get("numero"): e for e in kb_num}
+    voc, con = vocales_consonantes(nombre)
+    valores = [
+        ("camino de vida", camino_de_vida(fecha)),
+        ("destino/expresión", reducir(letras_valor(nombre))),
+        ("alma (vocales)", reducir(voc)),
+        ("personalidad (consonantes)", reducir(con)),
+        ("año personal", anio_personal(fecha)),
+    ]
+    lineas = []
+    for etiqueta, n in valores:
+        e = por_numero.get(n)
+        if not e:
+            continue
+        claves = ", ".join(e.get("palabras_clave", []))
+        areas = e.get("areas") or {}
+        area_txt = "; ".join(f"{k}: {v}" for k, v in areas.items())
+        linea = f"- {n} en {etiqueta}: {claves}."
+        if area_txt:
+            linea += f" Áreas: {area_txt}."
+        lineas.append(linea)
+    if not lineas:
+        return ""
+    return CABECERA_REFERENCIA + "\n" + "\n".join(lineas)
+
+
+def unir_con_referencia(cuerpo, referencia, instruccion):
+    partes = [cuerpo]
+    if referencia:
+        partes.append(referencia)
+    partes.append(instruccion)
+    return "\n\n".join(partes)
+
+
 def datos_carta(c):
     return c
 
@@ -372,11 +477,12 @@ class Builder:
                 for inv in (False, True):
                     carta = {"nombre": c["nombre"], "invertida": inv}
                     preg = self.rng.choice(PREGUNTAS[ctx])
-                    prompt = (
+                    prompt = unir_con_referencia(
                         f"Tirada de una carta de tarot.\n\n"
                         f"Carta: {carta_txt(carta)}.\nContexto: {ctx}.\n"
-                        f'Pregunta del consultante: "{preg}"\n\n'
-                        f"Interpreta la carta para esta persona, en el contexto indicado."
+                        f'Pregunta del consultante: "{preg}"',
+                        referencia_tarot([carta], self.cartas, ctx),
+                        "Interpreta la carta para esta persona, en el contexto indicado.",
                     )
                     out.append(self.job("tarot_1", prompt, {"carta": carta, "contexto": ctx}))
         return out
@@ -387,11 +493,12 @@ class Builder:
             ctx = self.rng.choice(CONTEXTOS)
             cartas = self.tirada(2)
             preg = self.rng.choice(PREGUNTAS[ctx])
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Tirada de dos cartas de tarot.\n\n"
                 f"Carta 1: {carta_txt(cartas[0])}.\nCarta 2: {carta_txt(cartas[1])}.\n"
-                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"\n\n"
-                f"Interpreta la combinación de las dos cartas."
+                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"",
+                referencia_tarot(cartas, self.cartas, ctx),
+                "Interpreta la combinación de las dos cartas.",
             )
             out.append(self.job("tarot_2", prompt, {"cartas": cartas, "contexto": ctx}))
         return out
@@ -404,10 +511,11 @@ class Builder:
             cartas = self.tirada(3)
             preg = self.rng.choice(PREGUNTAS[ctx])
             lineas = "\n".join(f"- {p}: {carta_txt(c)}" for p, c in zip(pos, cartas))
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Tirada de tres cartas (pasado, presente y futuro).\n\n{lineas}\n"
-                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"\n\n"
-                f"Interpreta la tirada completa, relacionando las tres posiciones."
+                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"",
+                referencia_tarot(cartas, self.cartas, ctx),
+                "Interpreta la tirada completa, relacionando las tres posiciones.",
             )
             out.append(self.job("tarot_3", prompt, {"cartas": cartas, "contexto": ctx}))
         return out
@@ -421,10 +529,11 @@ class Builder:
             cartas = self.tirada(10)
             preg = self.rng.choice(PREGUNTAS[ctx])
             lineas = "\n".join(f"- {p}: {carta_txt(c)}" for p, c in zip(pos, cartas))
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Tirada de la Cruz Celta (diez cartas).\n\n{lineas}\n"
-                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"\n\n"
-                f"Interpreta la tirada completa."
+                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"",
+                referencia_tarot(cartas, self.cartas, ctx),
+                "Interpreta la tirada completa.",
             )
             out.append(self.job("cruz_celta", prompt, {"cartas": cartas, "contexto": ctx}, 1600))
         return out
@@ -435,11 +544,12 @@ class Builder:
             carta = self.tirada(1)[0]
             ctx = self.rng.choice(CONTEXTOS)
             preg = self.rng.choice(PREGUNTAS[ctx])
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Consulta de tarot con una carta.\n\n"
                 f"Carta: {carta_txt(carta)}.\n"
-                f'Pregunta del consultante: "{preg}"\n\n'
-                f"Responde a la pregunta a partir de la carta."
+                f'Pregunta del consultante: "{preg}"',
+                referencia_tarot([carta], self.cartas, ctx),
+                "Responde a la pregunta a partir de la carta.",
             )
             out.append(self.job("tarot_pregunta", prompt, {"carta": carta, "contexto": ctx}))
         return out
@@ -450,10 +560,11 @@ class Builder:
             fecha, hora, ciudad, pais, lat, lon, tz = self.nacimiento()
             c = calcular_carta(fecha, hora, lat, lon, tz)
             foco = self.rng.choice(FOCOS_ASTRO)
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Lectura de carta natal.\n\n{fmt_carta(c, ciudad, pais)}\n\n"
-                f'Pregunta del consultante: "¿Qué dice mi carta sobre mi {foco}?"\n\n'
-                f"Interpreta la carta natal centrándote en ese ámbito."
+                f'Pregunta del consultante: "¿Qué dice mi carta sobre mi {foco}?"',
+                referencia_astro(c, self.astro),
+                "Interpreta la carta natal centrándote en ese ámbito.",
             )
             out.append(self.job("astro_natal", prompt, {"carta": c, "foco": foco, "ciudad": ciudad}, 1400))
         return out
@@ -466,11 +577,19 @@ class Builder:
             a = calcular_carta(f1, h1, la1, lo1, tz1)
             b = calcular_carta(f2, h2, la2, lo2, tz2)
             foco = self.rng.choice(FOCOS_SIN)
-            prompt = (
+            refs = []
+            ref_a = referencia_astro(a, self.astro)
+            ref_b = referencia_astro(b, self.astro)
+            if ref_a:
+                refs.append("Referencia de la persona A:\n" + ref_a)
+            if ref_b:
+                refs.append("Referencia de la persona B:\n" + ref_b)
+            prompt = unir_con_referencia(
                 f"Estudio de sinastria entre dos cartas natales.\n\n"
                 f"Persona A: {fmt_carta(a, c1, p1)}\n\nPersona B: {fmt_carta(b, c2, p2)}\n\n"
-                f'Pregunta: "¿Qué nos dice la sinastria sobre nuestra {foco}?"\n\n'
-                f"Compara ambas cartas e interpreta la relación."
+                f'Pregunta: "¿Qué nos dice la sinastria sobre nuestra {foco}?"',
+                "\n\n".join(refs),
+                "Compara ambas cartas e interpreta la relación.",
             )
             out.append(self.job("sinastria", prompt, {"a": a, "b": b, "foco": foco}, 1600))
         return out
@@ -481,10 +600,11 @@ class Builder:
             fecha, _, _, _, _, _, _ = self.nacimiento()
             nombre = self.rng.choice(NOMBRES)
             foco = self.rng.choice(["camino de vida", "propósito", "año personal", "talentos", "relaciones"])
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Lectura numerológica.\n\n{fmt_numerologia(fecha, nombre)}\n\n"
-                f'Pregunta del consultante: "¿Qué me dice la numerología sobre mi {foco}?"\n\n'
-                f"Interpreta los números calculados."
+                f'Pregunta del consultante: "¿Qué me dice la numerología sobre mi {foco}?"',
+                referencia_numerologia(fecha, nombre, self.num),
+                "Interpreta los números calculados.",
             )
             out.append(self.job("numerologia", prompt, {"fecha": fecha, "nombre": nombre, "foco": foco}))
         return out
@@ -501,13 +621,19 @@ class Builder:
             lineas = "\n".join(
                 f"- {p}: {carta_txt(card)}" for p, card in zip(["pasado", "presente", "futuro"], cartas)
             )
-            prompt = (
+            refs = [r for r in (
+                referencia_astro(c, self.astro),
+                referencia_tarot(cartas, self.cartas, ctx),
+                referencia_numerologia(fecha, nombre, self.num),
+            ) if r]
+            prompt = unir_con_referencia(
                 f"Lectura completa: carta natal, tarot y numerología.\n\n"
                 f"Consultante: {nombre}.\n{fmt_carta(c, ciudad, pais)}\n\n"
                 f"Tirada de tres cartas:\n{lineas}\n\n"
                 f"{fmt_numerologia(fecha, nombre)}\n\n"
-                f'Pregunta del consultante: "{preg}"\n\n'
-                f"Integra las tres técnicas en una lectura coherente y personalizada."
+                f'Pregunta del consultante: "{preg}"',
+                "\n\n".join(refs),
+                "Integra las tres técnicas en una lectura coherente y personalizada.",
             )
             out.append(self.job("lectura_completa", prompt, {
                 "carta": c, "cartas": cartas, "fecha": fecha, "nombre": nombre,
@@ -534,10 +660,11 @@ class Builder:
                 f"En la consulta anterior salió {carta_txt(carta)} en contexto de {ctx}; "
                 f"el consultante preguntó: «{preg1}»"
             )
-            prompt = (
+            prompt = unir_con_referencia(
                 f"Continuación de una consulta de tarot.\n\n{previo}\n\n"
-                f'Nueva pregunta del consultante: "{seguimiento}"\n\n'
-                f"Responde solo a la nueva pregunta, manteniendo el hilo de la lectura."
+                f'Nueva pregunta del consultante: "{seguimiento}"',
+                referencia_tarot([carta], self.cartas, ctx),
+                "Responde solo a la nueva pregunta, manteniendo el hilo de la lectura.",
             )
             out.append(self.job("multiturno", prompt, {"carta": carta, "contexto": ctx}, 900))
         return out

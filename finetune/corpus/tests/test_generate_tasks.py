@@ -69,6 +69,54 @@ class TestOrtografia(unittest.TestCase):
                 self.assertNotIn(mala, texto, f"subcadena sin tilde encontrada: {mala!r}")
 
 
+class TestReferenciaKB(unittest.TestCase):
+    def test_tarot_1_contiene_significado_de_la_kb(self):
+        import json
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(9), kb_tarot, kb_astro, kb_num)
+        job = b.tarot_1()[0]
+        prompt = job[2]
+        carta = json.loads(job[3])["carta"]
+        kb_c = next(c for c in b.cartas if c["nombre"] == carta["nombre"])
+        self.assertIn("Referencia (significados de la tradición", prompt)
+        esperado = kb_c["invertida"] if carta["invertida"] else kb_c["significado"]
+        self.assertIn(esperado, prompt)
+
+    def test_kb_sin_contextos_no_rompe(self):
+        b = gt.Builder(random.Random(2), kb_tarot_minima(),
+                      {"signos": [], "planetas": [], "casas": []}, [])
+        lotes = [b.tarot_1(), b.tarot_2(3), b.tarot_3(3), b.cruz_celta(1),
+                 b.tarot_pregunta(3), b.multiturno(3)]
+        for lote in lotes:
+            for _bl, _sys, prompt, _pl, _mt in lote:
+                self.assertIsInstance(prompt, str)
+
+    def test_astro_natal_contiene_regente_del_signo_solar(self):
+        import json
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(4), kb_tarot, kb_astro, kb_num)
+        job = b.astro_natal(1)[0]
+        prompt = job[2]
+        carta = json.loads(job[3])["carta"]
+        signo_sol = carta["planetas"]["Sol"]["signo"]
+        regente = next(s for s in kb_astro["signos"] if s["nombre"] == signo_sol)["regente"]
+        self.assertIn(regente, prompt)
+
+    def test_numerologia_contiene_claves_del_camino_de_vida(self):
+        import json
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        if not kb_num:
+            self.skipTest("sin KB de numerología")
+        b = gt.Builder(random.Random(6), kb_tarot, kb_astro, kb_num)
+        job = b.numerologia(1)[0]
+        prompt = job[2]
+        payload = json.loads(job[3])
+        cv = gt.camino_de_vida(payload["fecha"])
+        entrada = next(e for e in kb_num if e.get("numero") == cv)
+        clave = entrada["palabras_clave"][0]
+        self.assertIn(clave, prompt)
+
+
 class TestAspectos(unittest.TestCase):
     def test_mejores_aspectos_orden_y_corte(self):
         orbes = [5.5, 0.3, 2.2, 4.1, 1.0, 3.3, 0.7, 6.0, 2.8, 1.5, 4.9, 0.1, 3.9, 2.0, 5.0, 0.5]
