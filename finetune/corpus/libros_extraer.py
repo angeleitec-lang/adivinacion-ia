@@ -37,6 +37,59 @@ def _plano(el):
     return "".join(partes)
 
 
+def _es_bloque(tag):
+    return tag in BLOQUES or tag in ("h1", "h2", "h3", "h4", "h5", "h6")
+
+
+def _bloques_cuerpo(cuerpo):
+    """Bloques de texto de <body> en orden de documento.
+
+    Incluye el texto suelto y el de nodos en línea (`b`, `span`, `font`…) que
+    no van dentro de un `<p>`/`<div>`; así los avisos de OCR de los EPUB no se
+    pierden y quedan en su propia línea.
+    """
+    bloques = []
+    buffer = []
+
+    def volcar():
+        texto = " ".join("".join(buffer).split())
+        if texto:
+            bloques.append(texto)
+        buffer.clear()
+
+    def recorrer(nodo):
+        if nodo.text:
+            buffer.append(nodo.text)
+        for hijo in nodo:
+            loc = _local(hijo.tag)
+            if loc in ("script", "style", "nav"):
+                pass
+            elif loc in ("h1", "h2", "h3", "h4"):
+                volcar()
+                texto = " ".join(_plano(hijo).split())
+                if texto:
+                    bloques.append("#" * int(loc[1]) + " " + texto)
+            elif _es_bloque(loc):
+                volcar()
+                if any(_es_bloque(_local(x.tag)) for x in hijo):
+                    recorrer(hijo)
+                    volcar()
+                else:
+                    texto = " ".join(_plano(hijo).split())
+                    if texto:
+                        bloques.append(texto)
+            else:
+                texto = _plano(hijo)
+                if texto:
+                    buffer.append(texto)
+            if hijo.tail:
+                buffer.append(hijo.tail)
+
+    recorrer(cuerpo)
+    volcar()
+    return bloques
+
+
 def _orden_spine(zf):
     """Nombres dentro del zip en el orden del spine; None si no hay OPF."""
     try:
@@ -109,17 +162,7 @@ def epub_a_texto(ruta):
                 cuerpo = arbol.find(".//body")
             if cuerpo is None:
                 cuerpo = arbol
-            bloques = []
-            for hijo in cuerpo:
-                loc = _local(hijo.tag)
-                if loc in ("h1", "h2", "h3", "h4"):
-                    t = _plano(hijo).strip()
-                    if t:
-                        bloques.append("#" * int(loc[1]) + " " + t)
-                elif loc in BLOQUES or loc in ("h5", "h6"):
-                    t = _plano(hijo).strip()
-                    if t:
-                        bloques.append(t)
+            bloques = _bloques_cuerpo(cuerpo)
             if not bloques:
                 t = _plano(cuerpo).strip()
                 if t:

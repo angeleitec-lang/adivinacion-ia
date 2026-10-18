@@ -122,3 +122,41 @@ class EpubATexto(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AvisosOcr(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def _extraer(self, cuerpo):
+        html = ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>P</title>'
+                '</head><body>%s</body></html>' % cuerpo)
+        ruta = os.path.join(self.tmp.name, "pagina.epub")
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip")
+            zf.writestr("page_1.xhtml", html)
+        with open(ruta, "wb") as fh:
+            fh.write(buf.getvalue())
+        texto, _ = epub_a_texto(ruta)
+        return texto
+
+    def test_aviso_en_bajo_body_conserva_su_linea(self):
+        aviso = ("The text on this page is estimated to be only 20.89% "
+                 "accurate")
+        texto = self._extraer("<b>%s</b><p>Texto real.</p>" % aviso)
+        self.assertIn(aviso, texto)
+        self.assertTrue(any(linea.strip() == aviso
+                            for linea in texto.splitlines()))
+        self.assertIn("Texto real.", texto)
+
+    def test_conserva_span_font_y_texto_suelto(self):
+        texto = self._extraer(
+            'Texto suelto. <span>Con span.</span>'
+            '<font>Y font.</font><p>Párrafo.</p>')
+        self.assertIn("Texto suelto.", texto)
+        self.assertIn("Con span.", texto)
+        self.assertIn("Y font.", texto)
+        self.assertIn("Párrafo.", texto)
+        self.assertEqual(texto.count("Con span."), 1)
