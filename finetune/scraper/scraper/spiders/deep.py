@@ -142,6 +142,11 @@ class DeepSpider(scrapy.Spider):
         if "html" not in content_type.lower():
             return
 
+        lang_raw = response.xpath("//html/@lang").get()
+        lang = lang_raw.strip().lower().split("-")[0] if lang_raw else None
+        if lang and lang not in {"es", "en"}:
+            return
+
         is_new = url not in self.prior
         if is_new and self.per_domain.get(domain, 0) >= self.pages_per_domain:
             return
@@ -176,6 +181,7 @@ class DeepSpider(scrapy.Spider):
                     "domain": domain,
                     "title": title,
                     "depth": depth,
+                    "lang": lang,
                     "text": text,
                 }
 

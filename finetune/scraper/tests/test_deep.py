@@ -1,6 +1,45 @@
+import tempfile
 import unittest
 
+import scrapy
+from scrapy.http import HtmlResponse
+
 from scraper.spiders import deep
+
+PARRAFOS_ES = (
+    "El tarot es una baraja de setenta y ocho cartas dividida en arcanos "
+    "mayores y menores que se usa para la introspección y la lectura del futuro.",
+    "Cada carta simboliza una situación vital y se interpreta según su "
+    "posición en la tirada y su relación con las cartas vecinas del tapete.",
+    "Los arcanos mayores representan arquetipos universales como El Loco, "
+    "La Sacerdotisa o La Rueda de la Fortuna, base de toda la baraja moderna.",
+)
+
+PARRAFOS_IT = (
+    "Il tarocco è un mazzo di settantotto carte diviso in arcani maggiori e "
+    "minori che si usa per l'introspezione e la lettura del futuro.",
+    "Ogni carta simboleggia una situazione vitale e si interpreta secondo la "
+    "sua posizione nella stesa e il suo rapporto con le carte vicine del tavolo.",
+    "Gli arcani maggiori rappresentano archetipi universali come Il Matto, "
+    "La Papessa o La Ruota della Fortuna, base di tutta la moderna.",
+)
+
+
+def _pagina(lang, titulo, parrafos):
+    atributo = f' lang="{lang}"' if lang else ""
+    cuerpo = "".join(f"<p>{p}</p>" for p in parrafos)
+    return (
+        f"<html{atributo}><head><title>{titulo}</title></head>"
+        f"<body><article><h1>{titulo}</h1>{cuerpo}</article></body></html>"
+    )
+
+
+def _spider():
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".txt", delete=False, encoding="utf-8"
+    ) as fh:
+        fh.write("https://ejemplo.com/\n")
+    return deep.DeepSpider(seeds=fh.name, prior="")
 
 
 class TestTituloDescartable(unittest.TestCase):
@@ -56,6 +95,42 @@ class TestRutaCrawleable(unittest.TestCase):
     def test_is_crawlable_es_alias_de_ruta_crawleable(self):
         self.assertTrue(deep.is_crawlable("https://ejemplo.com/carta-astral/"))
         self.assertFalse(deep.is_crawlable("https://ejemplo.com/cart/"))
+
+
+class TestIdiomaDePagina(unittest.TestCase):
+    def setUp(self):
+        self.spider = _spider()
+
+    def _parse(self, body, url):
+        request = scrapy.Request(url, meta={"depth": 0})
+        resp = HtmlResponse(
+            url=url,
+            request=request,
+            headers={"Content-Type": "text/html; charset=utf-8"},
+            body=body.encode("utf-8"),
+            encoding="utf-8",
+        )
+        return [i for i in self.spider.parse(resp) if isinstance(i, dict)]
+
+    def test_italiana_descartada(self):
+        body = _pagina("it", "Il tarocco e i suoi significati", PARRAFOS_IT)
+        self.assertEqual(self._parse(body, "https://ejemplo.com/pagina"), [])
+
+    def test_control_sin_lang_si_extrae(self):
+        body = _pagina(None, "El tarot y sus significados", PARRAFOS_ES)
+        self.assertEqual(len(self._parse(body, "https://ejemplo.com/control")), 1)
+
+    def test_es_mx_aceptada_con_lang_normalizado(self):
+        body = _pagina("es-MX", "El tarot y sus significados", PARRAFOS_ES)
+        items = self._parse(body, "https://ejemplo.com/guia")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["lang"], "es")
+
+    def test_sin_lang_aceptada(self):
+        body = _pagina(None, "El tarot y sus significados", PARRAFOS_ES)
+        items = self._parse(body, "https://ejemplo.com/otro")
+        self.assertEqual(len(items), 1)
+        self.assertIsNone(items[0]["lang"])
 
 
 if __name__ == "__main__":
