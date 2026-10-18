@@ -278,6 +278,15 @@ def _norm(s):
     return unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode().lower()
 
 
+def unir(frases):
+    """Une fragmentos con '. ' y un único punto final."""
+    limpias = [str(f).strip().rstrip(".").strip() for f in frases]
+    limpias = [f for f in limpias if f]
+    if not limpias:
+        return ""
+    return ". ".join(limpias) + "."
+
+
 def referencia_tarot(cartas, kb_cartas, contexto=None):
     """Bloque de referencia con significados reales de la KB (funciona sin 'contextos')."""
     por_nombre = {_norm(c["nombre"]): c for c in kb_cartas}
@@ -292,15 +301,15 @@ def referencia_tarot(cartas, kb_cartas, contexto=None):
         else:
             texto = kb.get("significado", "")
             orient = "al derecho"
-        linea = f"- {c['nombre']} ({orient}): {texto}."
+        frases = [f"- {c['nombre']} ({orient}): {texto}"]
         if contexto:
             ctx_txt = (kb.get("contextos") or {}).get(contexto)
             if ctx_txt:
-                linea += f" En {contexto}: {ctx_txt}."
+                frases.append(f"En {contexto}: {ctx_txt}")
         claves = ", ".join(kb.get("palabras_clave", []))
         if claves:
-            linea += f" Palabras clave: {claves}."
-        lineas.append(linea)
+            frases.append(f"Palabras clave: {claves}")
+        lineas.append(unir(frases))
     if not lineas:
         return ""
     return CABECERA_REFERENCIA + "\n" + "\n".join(lineas)

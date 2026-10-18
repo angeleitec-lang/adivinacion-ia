@@ -258,5 +258,52 @@ class TestEtica(unittest.TestCase):
         self.assertEqual(len(set(primeros)), len(primeros))
 
 
+class TestReferenciaSinDoblePunto(unittest.TestCase):
+    def _lineas_referencia(self, prompt):
+        en_referencia = False
+        for linea in prompt.splitlines():
+            if linea.startswith("Referencia ("):
+                en_referencia = True
+                continue
+            if en_referencia:
+                if not linea.strip():
+                    en_referencia = False
+                elif linea.startswith("- "):
+                    yield linea
+
+    def test_ninguna_linea_de_referencia_con_doble_punto_en_los_11_bloques(self):
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(12), kb_tarot, kb_astro, kb_num)
+        lotes = [
+            ("tarot_1", lambda: b.tarot_1()[:20]),
+            ("tarot_2", lambda: b.tarot_2(20)),
+            ("tarot_3", lambda: b.tarot_3(20)),
+            ("cruz_celta", lambda: b.cruz_celta(20)),
+            ("tarot_pregunta", lambda: b.tarot_pregunta(20)),
+            ("astro_natal", lambda: b.astro_natal(20)),
+            ("sinastria", lambda: b.sinastria(20)),
+            ("numerologia", lambda: b.numerologia(20)),
+            ("lectura_completa", lambda: b.lectura_completa(20)),
+            ("multiturno", lambda: b.multiturno(20)),
+            ("etica", lambda: b.etica(20)),
+        ]
+        bloques = set()
+        total = 0
+        for nombre, generar in lotes:
+            lote = generar()
+            self.assertTrue(lote, f"el bloque {nombre} no generó trabajos")
+            for job in lote:
+                bloques.add(job[0])
+                total += 1
+                for linea in self._lineas_referencia(job[2]):
+                    self.assertNotIn("..", linea, f"{nombre}: {linea}")
+        self.assertEqual(bloques, {
+            "tarot_1", "tarot_2", "tarot_3", "cruz_celta", "tarot_pregunta",
+            "astro_natal", "sinastria", "numerologia", "lectura_completa",
+            "multiturno", "etica",
+        })
+        self.assertGreaterEqual(total, 200)
+
+
 if __name__ == "__main__":
     unittest.main()
