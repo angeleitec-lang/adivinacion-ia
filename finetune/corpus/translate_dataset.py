@@ -38,6 +38,7 @@ ES_WORDS = {
     "otras", "otra", "él", "tanto", "esa", "estos", "mucho", "quienes",
     "nada", "muchos", "cual", "poco", "ella", "estar", "estas", "algunas",
     "algo", "nosotros", "tiene", "tienen", "hace", "ser", "cada", "solo",
+    "no",
 }
 
 EN_WORDS = {
@@ -46,9 +47,9 @@ EN_WORDS = {
     "had", "by", "but", "not", "what", "all", "were", "we", "when", "your",
     "can", "said", "there", "use", "an", "each", "which", "she", "do",
     "how", "their", "if", "will", "up", "other", "about", "out", "many",
-    "then", "them", "these", "so", "some", "her", "would", "make", "like",
+    "then", "them", "these", "some", "her", "would", "make", "like",
     "him", "into", "time", "has", "look", "two", "more", "write", "go",
-    "see", "number", "no", "way", "could", "people", "my", "than", "first",
+    "see", "number", "way", "could", "people", "my", "than", "first",
     "been", "call", "who", "its", "now", "find", "long", "down", "day",
     "did", "get", "come", "made", "may", "part", "should", "upon", "must",
     "such", "through", "only", "own", "same", "those", "which", "while",
