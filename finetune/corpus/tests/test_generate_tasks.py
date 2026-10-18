@@ -69,6 +69,34 @@ class TestOrtografia(unittest.TestCase):
                 self.assertNotIn(mala, texto, f"subcadena sin tilde encontrada: {mala!r}")
 
 
+class TestNumerologiaCalculo(unittest.TestCase):
+    def test_anio_personal_manual(self):
+        self.assertEqual(gt.anio_personal("1963-11-06"), 9)   # 6+11+10=27→9
+        self.assertEqual(gt.anio_personal("1990-03-15"), 1)   # 6+3+1=10→1
+        self.assertEqual(gt.anio_personal("2000-12-31"), 8)   # 4+3+1=8
+        self.assertEqual(gt.anio_personal("1985-07-04"), 3)   # 4+7+1=12→3
+
+    def test_camino_de_vida_manual(self):
+        self.assertEqual(gt.camino_de_vida("1963-11-06"), 9)  # 11+6+1=18→9
+        self.assertEqual(gt.camino_de_vida("1960-02-29"), 2)  # 2+11+7=20→2
+        self.assertEqual(gt.camino_de_vida("1992-11-29"), 7)  # 11+11+3=25→7
+
+    def test_rangos_200_fechas(self):
+        rng = random.Random(42)
+        for _ in range(200):
+            f = f"{rng.randint(1950, 2005)}-{rng.randint(1, 12):02d}-{rng.randint(1, 28):02d}"
+            ap = gt.anio_personal(f)
+            self.assertIn(ap, range(1, 10), f"anio_personal fuera de 1..9 en {f}: {ap}")
+            cv = gt.camino_de_vida(f)
+            self.assertIn(cv, list(range(1, 10)) + [11, 22, 33],
+                          f"camino_de_vida inválido en {f}: {cv}")
+
+    def test_fmt_muestra_valor_corregido(self):
+        texto = gt.fmt_numerologia("1963-11-06", "María López")
+        self.assertIn("Año personal 2026: 9", texto)
+        self.assertIn("Camino de vida: 9", texto)
+
+
 class TestMultiturno(unittest.TestCase):
     def test_sin_te_preguntaste(self):
         kb_tarot, kb_astro, kb_num = kbs_para_test()

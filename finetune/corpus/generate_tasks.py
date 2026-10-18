@@ -218,7 +218,9 @@ def digitos(fecha):
 
 
 def camino_de_vida(fecha):
-    return reducir(digitos(fecha))
+    """Reduce por componentes conservando maestros (11, 22, 33) en cada uno."""
+    _a, m, d = fecha.split("-")
+    return reducir(reducir(int(d)) + reducir(int(m)) + reducir(digitos(_a)))
 
 
 def letras_valor(nombre):
@@ -238,8 +240,12 @@ def vocales_consonantes(nombre):
 
 
 def anio_personal(fecha, anio=2026):
-    d, m, _ = fecha.split("-")
-    return reducir(int(d) + int(m) + digitos(str(anio)))
+    """Año personal: el resultado se reduce siempre a 1-9 (no conserva maestros)."""
+    _a, m, d = fecha.split("-")
+    total = reducir(int(d)) + reducir(int(m)) + reducir(digitos(str(anio)))
+    while total > 9:
+        total = sum(int(ch) for ch in str(total))
+    return total
 
 
 def fmt_numerologia(fecha, nombre):
