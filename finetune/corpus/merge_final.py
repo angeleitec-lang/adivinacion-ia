@@ -19,6 +19,31 @@ from validate_synthetic import answer_of, sha
 from build_dataset import BAD_TOPIC_RE, domain_hits
 
 
+def extraer_tema(human: str) -> str:
+    """Extrae el tema real del prompt, tolerando las plantillas de INSTRUCTION_TEMPLATES.
+
+    Si hay «:» toma lo posterior; si coincide con una plantilla conocida
+    («¿Qué significa X?», «Háblame de X.», «Explícame X de forma…», «…desarróllame X.»)
+    toma X; si no puede extraer, devuelve la frase completa.
+    """
+    t = (human or "").strip()
+    if ":" in t:
+        t = t.split(":", 1)[1].strip()
+    else:
+        patrones = (
+            r"^¿?Qu[eé]\s+significa\s+(.+?)\??$",
+            r"^H[áa]blame\s+(?:del\s+|de\s+)(.+?)[.?]?$",
+            r"^Expl[íi]came\s+(.+?)\s+de\s+forma\s+.+$",
+            r"^.*desarr[oó]llame\s+(.+?)[.?]?$",
+        )
+        for pat in patrones:
+            m = re.match(pat, t, re.IGNORECASE)
+            if m:
+                t = m.group(1)
+                break
+    return t.strip().rstrip(".?").strip()
+
+
 def is_junk_pair(row: dict, min_terms: int = 2) -> bool:
     """Descarta prompts genéricos de secciones inyectadas o sin anclaje."""
     human = ""
@@ -29,8 +54,12 @@ def is_junk_pair(row: dict, min_terms: int = 2) -> bool:
     answer = answer_of(row)
     if re.search(r"secci[oó]n\s*\d+|§\s*\d+", human, re.IGNORECASE):
         return True
-    if BAD_TOPIC_RE.search(human):
+    tema = extraer_tema(human)
+    if len(tema) <= 2:
         return True
+    for segmento in tema.split(" > "):
+        if BAD_TOPIC_RE.search(segmento.strip()):
+            return True
     if min_terms > 0 and len(domain_hits(human) | domain_hits(answer)) < min_terms:
         return True
     return False
