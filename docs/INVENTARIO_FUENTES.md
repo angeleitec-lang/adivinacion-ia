@@ -100,3 +100,21 @@ Los 76 sitios de prioridad media están en el JSONL; muchos son blogs o aplicaci
 - **Nivel D (lecturas trabajadas):** foros (Aeclectic Tarot Forum, r/tarotreadings) y canales de YouTube de tarotistas en español (hace falta instalar `yt-dlp`).
 - **Libros en español del propio usuario:** si tienes PDFs o EPUB de Jodorowsky, Pollack en español, manuales de baraja española o astrología psicológica, son la mejor fuente que falta.
 - Verificar el texto real de los EPUB ya descargados en `docs_epub` que sí son útiles (unos 25).
+
+## Hugging Face: ¿existe algo parecido? (revisión del 2026-10-18)
+
+Búsquedas con el CLI `hf` de modelos y datasets de tarot, astrología, horóscopo, numerología, quiromancia, cartomancia y esoterismo. **No hay nada comparable a lo que queremos hacer**: lo más descargado tiene cientos de descargas, casi todo es pequeño, en inglés, de plantilla o de astrología védica.
+
+**Modelos** (todos pequeños y sin evaluación publicada): `TinyLlama-1.1B-Tarot-Chat`, `tarot-qwen2.5-7b`, `vedic-astrology-14b`, `kp-astrology-llama-8b`, `astrology-qwen-finetuned`, `gpt-oss-20b-turkish-astrology`. Los «Esoteric*» son mezclas de rol, no modelos de lectura.
+
+**Datasets útiles como contraste o base estructurada:**
+
+| Dataset | Contenido | Licencia | Uso |
+|---|---|---|---|
+| `Tarotoo/tarotoo-tarot-card-meanings` | 78 cartas, 22 campos: derecha/invertida, amor, carrera, espiritual, elemento, planeta, signo, sí/no | MIT | Contraste de la KB (en inglés) |
+| `StarTarotOnline/tarot-rws-historical-meanings` | 78 cartas con los significados de Waite (*Pictorial Key*) y sección de origen | CC BY 4.0 | Contraste y trazabilidad |
+| `Pepere45/spanish-esotericism-corpus` | Corpus **en español**, entre 1.000 y 10.000 filas, ficheros «HQ» | otra | **Acceso restringido (solicitud manual)**; solicitar acceso con la cuenta HF `Serono22` |
+
+**Datasets que sirven de contraejemplo** (confirman el hueco): `Dendory/tarot` (5.770 lecturas de un párrafo generadas con ChatGPT a partir de 3 cartas al azar), `11-47/The_Prophet_Tarot_Zodiac_50K` (respuestas de plantilla, con textos como «placeholder for brevity»), `AmareshHebbar/numerology_pythagorean-sft` (más de 100.000 filas de numerología con hechos calculados y reglas recuperadas, pero respuestas cortas de regla y marcadas `rule_matched`). Lo valioso de este último es el **diseño** (hechos calculados + reglas recuperadas + citas), que coincide con nuestro enfoque.
+
+No existen datasets de quiromancia ni de Lenormand/cartomancia española utilizables.
