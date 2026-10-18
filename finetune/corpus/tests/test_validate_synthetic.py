@@ -291,5 +291,85 @@ class TestPromptSinTildes(unittest.TestCase):
         self.assertTrue(ok, why)
 
 
+REFERENCIA = (
+    "Referencia (tarot): La Torre simboliza rupturas necesarias, el fin de "
+    "estructuras agrietadas y la liberación de lo que ya no sostiene en la "
+    "vida del consultante y de sus apegos más antiguos."
+)
+COPIA_25 = (
+    "La Torre simboliza rupturas necesarias, el fin de estructuras agrietadas "
+    "y la liberación de lo que ya no sostiene en la vida del consultante y de "
+    "sus apegos más antiguos."
+)
+
+
+class TestEcoPrompt(unittest.TestCase):
+    def test_copia_larga_rechazada(self):
+        row = _fila(human=REFERENCIA, gpt=COPIA_25 + " Por eso conviene pausar y observar.")
+        ok, why = vs.validate(row, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "eco_prompt")
+
+    def test_copia_corta_pasa(self):
+        row = _fila(
+            human=REFERENCIA,
+            gpt="La Torre simboliza rupturas necesarias, pero tu caso pide otro enfoque "
+                "más sereno y personal.",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertTrue(ok, why)
+
+    def test_etica_no_aplica_eco(self):
+        row = _fila(human=REFERENCIA, gpt=COPIA_25)
+        ok, why = vs.validate(row, _args(), bloque="etica")
+        self.assertNotEqual(why, "eco_prompt")
+
+    def test_prompt_corto_no_aplica_eco(self):
+        row = _fila(
+            human="Carta: La Torre.",
+            gpt="La Torre. La Torre. La Torre anuncia un final necesario que deja espacio "
+                "para empezar de nuevo con calma y claridad.",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertNotEqual(why, "eco_prompt")
+
+
+class TestIaMeta(unittest.TestCase):
+    def test_como_modelo_de_lenguaje(self):
+        row = _fila(
+            human="Háblame del amor.",
+            gpt="Lo siento, pero como modelo de lenguaje no tengo opiniones propias.",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "ia_meta")
+
+    def test_no_tengo_acceso(self):
+        row = _fila(
+            human="¿Qué cartas salieron?",
+            gpt="No tengo acceso a datos en tiempo real, pero interpreto lo que me das.",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "ia_meta")
+
+    def test_etiquetas_think(self):
+        row = _fila(
+            human="¿Qué cartas salieron?",
+            gpt="<|im_start|> pienso <|im_end|> La Torre anuncia un cambio profundo y necesario.",
+        )
+        ok, why = vs.validate(row, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "ia_meta")
+
+    def test_etica_no_aplica_ia_meta(self):
+        row = _fila(
+            human="¿Puedes predecir mi muerte?",
+            gpt="Como modelo de lenguaje no puedo ayudarte con eso: consulta a un profesional.",
+        )
+        ok, why = vs.validate(row, _args(), bloque="etica")
+        self.assertTrue(ok, why)
+
+
 if __name__ == "__main__":
     unittest.main()

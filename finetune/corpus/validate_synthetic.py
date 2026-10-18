@@ -228,6 +228,36 @@ def orientacion_ok(prompt: str, answer: str) -> bool:
     return True
 
 
+IA_META_FRASES = (
+    "como modelo de lenguaje",
+    "como inteligencia artificial",
+    "no tengo acceso a",
+    "no puedo ayudarte con eso",
+)
+
+
+def eco_prompt(prompt: str, answer: str, min_run: int = 25) -> bool:
+    """True si la respuesta copia >= min_run palabras consecutivas del prompt."""
+    pw = norm(prompt).split()
+    aw = norm(answer).split()
+    if len(pw) < min_run or len(aw) < min_run:
+        return False
+    gramas = {tuple(pw[i:i + min_run]) for i in range(len(pw) - min_run + 1)}
+    for i in range(len(aw) - min_run + 1):
+        if tuple(aw[i:i + min_run]) in gramas:
+            return True
+    return False
+
+
+def ia_meta(answer: str) -> bool:
+    """True si la respuesta delata ser una IA (frases hechas o etiquetas de razonamiento)."""
+    raw = answer.lower()
+    if "<|im_start|>" in raw or "<|im_end|>" in raw:
+        return True
+    na = norm(answer)
+    return any(f in na for f in IA_META_FRASES)
+
+
 def _menciona(na: str, token_norm: str) -> bool:
     return bool(token_norm) and re.search(r"\b" + re.escape(token_norm) + r"\b", na) is not None
 
@@ -256,7 +286,7 @@ def grounding(prompt: str, answer: str) -> bool:
     return True
 
 
-def validate(row: dict, args) -> tuple[bool, str]:
+def validate(row: dict, args, bloque: str | None = None) -> tuple[bool, str]:
     answer = answer_of(row)
     prompt = human_of(row)
     if not answer or not prompt:
@@ -285,6 +315,11 @@ def validate(row: dict, args) -> tuple[bool, str]:
         return False, "sin_datos_del_prompt"
     if not orientacion_ok(prompt, answer):
         return False, "orientacion"
+    if bloque != "etica":
+        if eco_prompt(prompt, answer):
+            return False, "eco_prompt"
+        if ia_meta(answer):
+            return False, "ia_meta"
     return True, "ok"
 
 
@@ -332,7 +367,7 @@ def main(argv=None) -> int:
                         stats["bad"] += 1
                         reasons["json_invalido"] += 1
                         continue
-                    ok, why = validate(row, args)
+                    ok, why = validate(row, args, bloque=block)
                     if not ok:
                         stats["bad"] += 1
                         reasons[why] += 1
