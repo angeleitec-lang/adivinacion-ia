@@ -69,6 +69,61 @@ class TestOrtografia(unittest.TestCase):
                 self.assertNotIn(mala, texto, f"subcadena sin tilde encontrada: {mala!r}")
 
 
+class TestInsercionIdempotente(unittest.TestCase):
+    def _filas(self):
+        return [
+            ("alfa", "sys", "p1", "{}", 100),
+            ("alfa", "sys", "p2", "{}", 100),
+            ("beta", "sys", "p3", "{}", 200),
+        ]
+
+    def _con(self):
+        import sqlite3
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        self.addCleanup(os.unlink, tmp.name)
+        con = sqlite3.connect(tmp.name)
+        gt.crear_tabla(con)
+        return con
+
+    def test_segunda_ejecucion_sin_flag_no_duplica(self):
+        import io
+        import contextlib
+        con = self._con()
+        gt.insertar_jobs(con, self._filas(), replace_pending=False)
+        n1 = con.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            gt.insertar_jobs(con, self._filas(), replace_pending=False)
+        n2 = con.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        self.assertEqual((n1, n2), (3, 3))
+        self.assertIn("bloque alfa: ya existe (2 filas), omitido", buf.getvalue())
+        self.assertIn("bloque beta: ya existe (1 filas), omitido", buf.getvalue())
+
+    def test_flag_sustituye_solo_pending(self):
+        con = self._con()
+        gt.insertar_jobs(con, self._filas(), replace_pending=False)
+        con.execute("UPDATE jobs SET status='done' WHERE prompt='p1'")
+        con.commit()
+        gt.insertar_jobs(con, [("alfa", "sys", "nuevo1", "{}", 100)], replace_pending=True)
+        alfa = con.execute("SELECT prompt, status FROM jobs WHERE bloque='alfa' ORDER BY id").fetchall()
+        self.assertIn(("p1", "done"), alfa)
+        self.assertIn(("nuevo1", "pending"), alfa)
+        self.assertNotIn(("p2", "pending"), alfa)
+
+    def test_done_y_otros_bloques_sobreviven(self):
+        con = self._con()
+        gt.insertar_jobs(con, self._filas(), replace_pending=False)
+        con.execute("UPDATE jobs SET status='done' WHERE bloque='alfa'")
+        con.execute("UPDATE jobs SET status='running' WHERE bloque='beta'")
+        con.commit()
+        gt.insertar_jobs(con, self._filas(), replace_pending=True)
+        self.assertEqual(con.execute("SELECT COUNT(*) FROM jobs WHERE status='done'").fetchone()[0], 2)
+        self.assertEqual(con.execute("SELECT COUNT(*) FROM jobs WHERE status='running'").fetchone()[0], 1)
+        self.assertEqual(con.execute("SELECT COUNT(*) FROM jobs WHERE bloque='beta' AND status='pending'").fetchone()[0], 1)
+
+
 class TestNumerologiaCalculo(unittest.TestCase):
     def test_anio_personal_manual(self):
         self.assertEqual(gt.anio_personal("1963-11-06"), 9)   # 6+11+10=27→9

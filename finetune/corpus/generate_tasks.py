@@ -588,23 +588,7 @@ def build_all(builder, only=None, scale=1.0):
     return filas
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(description="Genera la matriz de jobs sintéticos.")
-    ap.add_argument("--db", default=str(ROOT / "corpus" / "jobs.db"))
-    ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--only", default=None)
-    ap.add_argument("--scale", type=float, default=1.0)
-    ap.add_argument("--dry-run", action="store_true")
-    args = ap.parse_args(argv)
-
-    rng = random.Random(args.seed)
-    builder = Builder(rng, load_kb("tarot.json"), load_kb("astrologia.json"), load_kb("numerologia.json"))
-    filas = build_all(builder, args.only, args.scale)
-    print(f"TOTAL jobs: {len(filas)}")
-    if args.dry_run:
-        return 0
-
-    con = sqlite3.connect(args.db)
+def crear_tabla(con):
     con.execute("PRAGMA journal_mode=WAL")
     con.execute(
         """CREATE TABLE IF NOT EXISTS jobs (
@@ -621,13 +605,68 @@ def main(argv=None):
             updated_at TEXT
         )"""
     )
-    con.executemany(
-        "INSERT INTO jobs (bloque, system, prompt, payload, max_tokens) VALUES (?,?,?,?,?)",
-        filas,
-    )
-    con.commit()
+
+
+def insertar_jobs(con, filas, replace_pending=False):
+    """Inserta jobs por bloque de forma idempotente dentro de una transacción.
+
+    Sin replace_pending: si el bloque ya tiene filas en la BD, se omite entero.
+    Con replace_pending: se borran solo las filas 'pending' de ese bloque y se
+    insertan las nuevas; done/running/failed no se tocan.
+    """
+    bloques = []
+    for f in filas:
+        if f[0] not in bloques:
+            bloques.append(f[0])
+    con.execute("BEGIN IMMEDIATE")
+    try:
+        insertadas = 0
+        for bloque in bloques:
+            existentes = con.execute(
+                "SELECT COUNT(*) FROM jobs WHERE bloque=?", (bloque,)
+            ).fetchone()[0]
+            if existentes and not replace_pending:
+                print(f"bloque {bloque}: ya existe ({existentes} filas), omitido")
+                continue
+            if replace_pending:
+                con.execute("DELETE FROM jobs WHERE bloque=? AND status='pending'", (bloque,))
+            grupo = [f for f in filas if f[0] == bloque]
+            con.executemany(
+                "INSERT INTO jobs (bloque, system, prompt, payload, max_tokens) VALUES (?,?,?,?,?)",
+                grupo,
+            )
+            insertadas += len(grupo)
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    return insertadas
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Genera la matriz de jobs sintéticos.")
+    ap.add_argument("--db", default=str(ROOT / "corpus" / "jobs.db"))
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--only", default=None)
+    ap.add_argument("--scale", type=float, default=1.0)
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--replace-pending", action="store_true",
+                   help="sustituye solo los jobs pendientes del bloque al regenerar")
+    args = ap.parse_args(argv)
+
+    rng = random.Random(args.seed)
+    builder = Builder(rng, load_kb("tarot.json"), load_kb("astrologia.json"), load_kb("numerologia.json"))
+    filas = build_all(builder, args.only, args.scale)
+    print(f"TOTAL jobs: {len(filas)}")
+    if args.dry_run:
+        return 0
+
+    con = sqlite3.connect(args.db)
+    crear_tabla(con)
+    insertadas = insertar_jobs(con, filas, replace_pending=args.replace_pending)
     n = con.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-    print(f"Insertados {len(filas)} jobs. Total en DB: {n}")
+    print(f"Insertados {insertadas} jobs. Total en DB: {n}")
+    con.close()
     return 0
 
 
