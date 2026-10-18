@@ -23,3 +23,6 @@ finetune/corpus/synthetic_report.json
 SIGUIENTE.md
 ESTADO.md
 .worktrees/
+
+# Datos de YouTube (subtítulos y derivados; pesados y con procedencia)
+finetune/knowledge/youtube/
