@@ -157,5 +157,31 @@ class Duplicados(unittest.TestCase):
         self.assertNotIn("duplicado", res[1]["motivos"])
 
 
+class Informe(unittest.TestCase):
+    def test_informe_basico(self):
+        filas = [
+            fila("¿Qué me dice El Loco en mi tirada sobre el trabajo?", RESPUESTA_TAROT),
+            fila("Sección 3: Historia de la imprenta",
+                 "La imprenta de tipos móviles se difundió por Europa durante el siglo XV y "
+                 "transformó la producción de libros y el comercio de las ideas."),
+        ]
+        res = aud.auditar_pares(filas)
+        informe = aud.construir_informe(res, 0.6)
+        self.assertEqual(informe["total"], 2)
+        self.assertEqual(informe["aceptados"], 1)
+        self.assertEqual(informe["rechazados"], 1)
+        self.assertIn("bloques", informe)
+        self.assertIn("cobertura", informe)
+        self.assertIn("arcanos", informe["cobertura"])
+        self.assertEqual(len(informe["cobertura"]["arcanos"]), 22)
+        self.assertEqual(len(informe["cobertura"]["signos"]), 12)
+        self.assertEqual(len(informe["cobertura"]["numeros"]), 9)
+        self.assertIn("ejemplos_aceptados", informe)
+        self.assertIn("ejemplos_rechazados", informe)
+        md = aud.informe_md(informe)
+        self.assertIn("Informe de auditoría", md)
+        self.assertIn("cobertura", md.lower())
+
+
 if __name__ == "__main__":
     unittest.main()

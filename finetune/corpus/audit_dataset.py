@@ -330,6 +330,145 @@ def auditar_pares(filas: list[dict], min_score: float = 0.6,
     return resultados
 
 
+def _percentil(vals: list[int], p: float) -> float:
+    if not vals:
+        return 0.0
+    s = sorted(vals)
+    k = min(len(s) - 1, max(0, int(round(p / 100 * (len(s) - 1)))))
+    return float(s[k])
+
+
+def construir_informe(resultados: list[dict], min_score: float, seed: int = 42) -> dict:
+    """Informe global en español: bloques, cobertura, longitudes y ejemplos."""
+    aceptados = [r for r in resultados if r["aceptado"]]
+    rechazados = [r for r in resultados if not r["aceptado"]]
+
+    bloques: dict[str, dict] = {}
+    for r in resultados:
+        b = bloques.setdefault(r["bloque"], {
+            "total": 0, "supervivientes": 0, "motivos": Counter(), "tipos": Counter()})
+        b["total"] += 1
+        b["tipos"][r["tipo"]] += 1
+        if r["aceptado"]:
+            b["supervivientes"] += 1
+        else:
+            for m in r["motivos"]:
+                b["motivos"][m] += 1
+    for b in bloques.values():
+        b["pct"] = round(100.0 * b["supervivientes"] / b["total"], 1) if b["total"] else 0.0
+        b["motivos"] = dict(b["motivos"].most_common())
+        b["tipos"] = dict(b["tipos"])
+
+    cobertura: dict[str, dict[str, int]] = {"arcanos": {}, "signos": {}, "numeros": {}}
+    for r in aceptados:
+        prompt, respuesta = extraer(r["fila"])
+        t = (prompt + " " + respuesta).lower()
+        for a in ARCANOS_MAYORES:
+            cobertura["arcanos"][a] = cobertura["arcanos"].get(a, 0) + (1 if a.lower() in t else 0)
+        for s in SIGNOS:
+            cobertura["signos"][s] = cobertura["signos"].get(s, 0) + (1 if s.lower() in t else 0)
+        for d, palabra in NUMEROS.items():
+            cobertura["numeros"][d] = cobertura["numeros"].get(d, 0) + (
+                1 if (d in t or palabra in t) else 0)
+    huecos = {k: sorted(n for n, c in v.items() if c < 10) for k, v in cobertura.items()}
+
+    longitudes = [len(extraer(r["fila"])[1]) for r in aceptados]
+    rnd = random.Random(seed)
+    ej_ok = rnd.sample(aceptados, min(10, len(aceptados)))
+    ej_no = rnd.sample(rechazados, min(10, len(rechazados)))
+
+    return {
+        "umbral": min_score,
+        "total": len(resultados),
+        "aceptados": len(aceptados),
+        "rechazados": len(rechazados),
+        "pct_supervivencia": round(100.0 * len(aceptados) / len(resultados), 1) if resultados else 0.0,
+        "bloques": bloques,
+        "cobertura": cobertura,
+        "huecos": huecos,
+        "longitudes": {
+            "min": min(longitudes) if longitudes else 0,
+            "p10": _percentil(longitudes, 10),
+            "mediana": _percentil(longitudes, 50),
+            "media": round(sum(longitudes) / len(longitudes), 1) if longitudes else 0.0,
+            "p90": _percentil(longitudes, 90),
+            "max": max(longitudes) if longitudes else 0,
+        },
+        "ejemplos_aceptados": [
+            {"prompt": extraer(r["fila"])[0][:160], "score": round(r["score"], 3),
+             "bloque": r["bloque"], "tipo": r["tipo"]} for r in ej_ok
+        ],
+        "ejemplos_rechazados": [
+            {"prompt": extraer(r["fila"])[0][:160], "score": round(r["score"], 3),
+             "motivos": r["motivos"], "bloque": r["bloque"]} for r in ej_no
+        ],
+    }
+
+
+def informe_md(informe: dict) -> str:
+    """Versión markdown del informe, en español."""
+    lineas = [
+        "# Informe de auditoría del dataset",
+        "",
+        f"- **Total de pares:** {informe['total']}",
+        f"- **Supervivientes (score ≥ {informe['umbral']}):** {informe['aceptados']} "
+        f"({informe['pct_supervivencia']} %)",
+        f"- **Rechazados:** {informe['rechazados']}",
+        "",
+        "## Reparto por bloque",
+        "",
+        "| Bloque | Total | Supervivientes | % | Motivos más frecuentes |",
+        "|---|---|---|---|---|",
+    ]
+    for nombre, b in sorted(informe["bloques"].items(), key=lambda kv: -kv[1]["total"]):
+        motivos = ", ".join(f"{m} ({c})" for m, c in list(b["motivos"].items())[:5]) or "—"
+        lineas.append(f"| {nombre} | {b['total']} | {b['supervivientes']} | {b['pct']} % | {motivos} |")
+    tipos = Counter()
+    for b in informe["bloques"].values():
+        tipos.update(b["tipos"])
+    lineas += [
+        "",
+        "## Tipo de par (objetivo del modelo: hacer lecturas)",
+        "",
+        "| Tipo | Pares |",
+        "|---|---|",
+    ]
+    for t in ("lectura", "enciclopedico", "otros"):
+        lineas.append(f"| {t} | {tipos.get(t, 0)} |")
+    lineas += ["", "## Cobertura de supervivientes", ""]
+    for grupo, etiqueta in (("arcanos", "22 arcanos mayores"), ("signos", "12 signos"),
+                          ("numeros", "números 1-9")):
+        counts = informe["cobertura"][grupo]
+        faltan = informe["huecos"].get(grupo, [])
+        resumen = ", ".join(f"{n}: {c}" for n, c in counts.items())
+        lineas.append(f"### {etiqueta}")
+        lineas.append("")
+        lineas.append(resumen)
+        lineas.append("")
+        if faltan:
+            lineas.append(f"**Huecos (< 10 pares):** {', '.join(faltan)}")
+        else:
+            lineas.append("Sin huecos: todos cubiertos con 10 o más pares.")
+        lineas.append("")
+    lg = informe["longitudes"]
+    lineas += [
+        "## Distribución de longitudes de respuesta (aceptados)",
+        "",
+        f"min {lg['min']} · p10 {lg['p10']:.0f} · mediana {lg['mediana']:.0f} · "
+        f"media {lg['media']} · p90 {lg['p90']:.0f} · max {lg['max']}",
+        "",
+        "## 10 ejemplos aceptados",
+        "",
+    ]
+    for e in informe["ejemplos_aceptados"]:
+        lineas.append(f"- [{e['score']}] ({e['bloque']}/{e['tipo']}) {e['prompt']}")
+    lineas += ["", "## 10 ejemplos rechazados", ""]
+    for e in informe["ejemplos_rechazados"]:
+        lineas.append(f"- [{e['score']}] ({e['bloque']}) {', '.join(e['motivos'])} — {e['prompt']}")
+    lineas.append("")
+    return "\n".join(lineas)
+
+
 def leer_jsonl(ruta: Path) -> list[dict]:
     filas = []
     with ruta.open(encoding="utf-8") as f:
@@ -337,3 +476,59 @@ def leer_jsonl(ruta: Path) -> list[dict]:
             if linea.strip():
                 filas.append(json.loads(linea))
     return filas
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Auditoría de calidad del dataset ShareGPT.")
+    ap.add_argument("--in", dest="ins", action="append", required=True, type=Path,
+                   help="fichero .jsonl de entrada (repetible)")
+    ap.add_argument("--out-dir", type=Path, required=True)
+    ap.add_argument("--min-score", type=float, default=0.6)
+    ap.add_argument("--license", default="", choices=["", "strict"],
+                   help="strict: aplica license_filter.is_allowed si el módulo existe")
+    ap.add_argument("--seed", type=int, default=42)
+    args = ap.parse_args(argv)
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    todas: list[dict] = []
+    origenes: list[str] = []
+    for inp in args.ins:
+        filas = leer_jsonl(inp)
+        todas.extend(filas)
+        origenes.extend([inp.stem] * len(filas))
+
+    resultados = auditar_pares(todas, args.min_score, args.license or None)
+
+    limpias: dict[str, list[dict]] = {}
+    rechazadas: dict[str, list[dict]] = {}
+    for origen, r in zip(origenes, resultados):
+        if r["aceptado"]:
+            limpias.setdefault(origen, []).append(r["fila"])
+        else:
+            copia = dict(r["fila"])
+            copia["_score"] = round(r["score"], 3)
+            copia["_reasons"] = r["motivos"]
+            rechazadas.setdefault(origen, []).append(copia)
+    escritos = set()
+    for origen in origenes:
+        if origen in escritos:
+            continue
+        escritos.add(origen)
+        with (args.out_dir / f"{origen}.clean.jsonl").open("w", encoding="utf-8") as f:
+            for fila in limpias.get(origen, []):
+                f.write(json.dumps(fila, ensure_ascii=False) + "\n")
+        with (args.out_dir / f"{origen}.rejected.jsonl").open("w", encoding="utf-8") as f:
+            for fila in rechazadas.get(origen, []):
+                f.write(json.dumps(fila, ensure_ascii=False) + "\n")
+
+    informe = construir_informe(resultados, args.min_score, args.seed)
+    (args.out_dir / "report.json").write_text(
+        json.dumps(informe, ensure_ascii=False, indent=2), encoding="utf-8")
+    (args.out_dir / "report.md").write_text(informe_md(informe), encoding="utf-8")
+    print(f"[ok] {informe['aceptados']}/{informe['total']} pares superviven "
+          f"({informe['pct_supervivencia']} %) -> {args.out_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
