@@ -240,5 +240,54 @@ class SinastriaTests(unittest.TestCase):
         self.assertLessEqual(len(res["aspectos_relevantes"]), 5)
 
 
+@unittest.skipUnless(SWISSEPH_AVAILABLE, "swisseph no disponible")
+class NodosLunaresTests(unittest.TestCase):
+    def test_nodos_presentes_con_campos(self):
+        """La carta incluye 'nodos' con Nodo Norte y Nodo Sur y sus campos."""
+        res = carta_natal("1990-06-15", "12:00", -12.0464, -77.0428, "America/Lima")
+        self.assertIn("nodos", res)
+        self.assertEqual(len(res["nodos"]), 2)
+        nombres = [n["nombre"] for n in res["nodos"]]
+        self.assertEqual(nombres, ["Nodo Norte", "Nodo Sur"])
+        for n in res["nodos"]:
+            for campo in ["signo", "grado", "minuto", "casa", "lon"]:
+                self.assertIn(campo, n)
+
+    def test_nodo_norte_medio_2000_01_01_12ut(self):
+        """Nodo Norte medio el 2000-01-01 12:00 UT ~ 125.04 grados (Leo 5)."""
+        res = carta_natal("2000-01-01", "12:00", 40.4168, -3.7038, "UTC")
+        norte = next(n for n in res["nodos"] if n["nombre"] == "Nodo Norte")
+        self.assertAlmostEqual(norte["lon"], 125.04, delta=0.01)
+        self.assertEqual(norte["signo"], "Leo")
+        self.assertEqual(norte["grado"], 5)
+
+    def test_nodo_sur_es_opuesto(self):
+        """Nodo Sur = (Nodo Norte + 180) % 360."""
+        res = carta_natal("2000-01-01", "12:00", 40.4168, -3.7038, "UTC")
+        norte = next(n for n in res["nodos"] if n["nombre"] == "Nodo Norte")
+        sur = next(n for n in res["nodos"] if n["nombre"] == "Nodo Sur")
+        self.assertAlmostEqual((norte["lon"] + 180.0) % 360.0, sur["lon"], delta=0.001)
+
+    def test_contraste_independiente_segunda_fecha(self):
+        """El 2025-06-15 12:00 UT el nodo coincide con swe.calc_ut y con Meeus."""
+        res = carta_natal("2025-06-15", "12:00", 40.4168, -3.7038, "UTC")
+        norte = next(n for n in res["nodos"] if n["nombre"] == "Nodo Norte")
+        jd = swe.julday(2025, 6, 15, 12.0)
+        lon_swe = swe.calc_ut(jd, swe.MEAN_NODE, swe.FLG_SWIEPH)[0][0] % 360.0
+        self.assertAlmostEqual(norte["lon"], lon_swe, delta=0.001)
+        from datetime import date
+        d = (date(2025, 6, 15) - date(2000, 1, 1)).days
+        lon_meeus = (125.04452 - 0.05295377 * d) % 360.0
+        self.assertAlmostEqual(norte["lon"], lon_meeus, delta=0.01)
+
+    def test_nodos_no_entran_en_aspectos(self):
+        """Los nodos no generan aspectos entre planetas de la carta natal."""
+        res = carta_natal("1990-06-15", "12:00", -12.0464, -77.0428, "America/Lima")
+        nombres_nodos = {"Nodo Norte", "Nodo Sur"}
+        for a in res["aspectos"]:
+            self.assertNotIn(a["planeta_a"], nombres_nodos)
+            self.assertNotIn(a["planeta_b"], nombres_nodos)
+
+
 if __name__ == "__main__":
     unittest.main()
