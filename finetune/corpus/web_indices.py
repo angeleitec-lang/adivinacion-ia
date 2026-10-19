@@ -2,7 +2,7 @@
 """Descubrimiento de páginas desde índices configurables (A3.4).
 
 Para sitios con una página por carta/número pero sin patrón de URL fijo,
-separte de una página índice y se siguen los enlaces que cumplan una
+se parte de una página índice y se siguen los enlaces que cumplan una
 regex configurable.
 """
 
@@ -59,16 +59,15 @@ def _extraer_enlaces(html: str, base_url: str, dominio: Optional[str] = None) ->
         if href.startswith("#"):
             continue
         url_norm = _normalizar_url(base_url, href)
-        # Descartar si tras quitar fragmento la URL es la misma que base_url
+        # Quitar el fragmento #… antes de comparar y deduplicar
+        url_norm = url_norm.split("#")[0]
+        # Descartar si la URL es la propia página índice
         base_sin_fragmento = base_url.split("#")[0]
         if url_norm == base_sin_fragmento:
             continue
         # Filtrar esquemas no deseados
         if url_norm.startswith(("mailto:", "tel:", "javascript:", "data:")):
             continue
-        # Quita el fragmento #… de las URLs resultantes
-        if "#" in url_norm.split("?")[0]:
-            url_norm = url_norm.split("#")[0]
         if dominio is None or _mismo_dominio(url_norm, dominio):
             enlaces.append(url_norm)
     return enlaces

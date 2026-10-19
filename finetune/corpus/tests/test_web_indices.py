@@ -4,11 +4,13 @@ import os
 import re
 import sys
 import unittest
+from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import re
+import web_indices
 from web_indices import (
     cargar_config,
     seguir_indice,
@@ -84,6 +86,33 @@ class UtilidadesTests(unittest.TestCase):
         urls = ["a", "b", "a", "c", "b"]
         self.assertEqual(_deduplicar_urls(urls), ["a", "b", "c"])
 
+    def test_propia_pagina_con_fragmento_se_descarta(self):
+        """T30.3: href que apunta a la propia página índice con #fragmento no debe salir."""
+        html = """<html><body>
+        <a href="/cartas/#top">Arriba</a>
+        <a href="/cartas/loco.html">El Loco</a>
+        </body></html>"""
+        urls = _extraer_enlaces(html, "https://site.com/cartas/", "site.com")
+        self.assertNotIn("https://site.com/cartas/", urls)
+        self.assertIn("https://site.com/cartas/loco.html", urls)
+
+    def test_urls_resultantes_sin_fragmento(self):
+        """T30.3: ninguna URL devuelta conserva #fragmento, ni con query."""
+        html = """<html><body>
+        <a href="/a.html#x">a</a>
+        <a href="/b.html?y=1#z">b</a>
+        </body></html>"""
+        urls = _extraer_enlaces(html, "https://site.com/idx/", "site.com")
+        self.assertIn("https://site.com/a.html", urls)
+        self.assertIn("https://site.com/b.html?y=1", urls)
+        for u in urls:
+            self.assertNotIn("#", u)
+
+    def test_source_sin_errata_separte(self):
+        """T30.3: el docstring debe decir «se parte», no «separte»."""
+        src = Path(web_indices.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("separte", src)
+
 
 class SeguirIndiceTests(unittest.TestCase):
     def setUp(self):
@@ -146,6 +175,22 @@ class SeguirIndiceTests(unittest.TestCase):
         cliente = self._crear_cliente_simulado("", estado="error")
         urls = seguir_indice(sitio_cfg, cliente, limite=50)
         self.assertEqual(urls, [])
+
+    def test_deduplica_fragmentos_de_la_misma_url(self):
+        """T30.3: /tarot/loco#top y /tarot/loco#abajo son la misma página → 1 URL."""
+        html = """<html><body>
+        <a href="/tarot/loco#top">1</a>
+        <a href="/tarot/loco#abajo">2</a>
+        </body></html>"""
+        sitio_cfg = {
+            "nombre": "biddytarot.com",
+            "indice": "https://biddytarot.com/tarot/",
+            "regex": "/tarot/",
+            "dominio": "biddytarot.com",
+        }
+        cliente = self._crear_cliente_simulado(html)
+        urls = seguir_indice(sitio_cfg, cliente, limite=50)
+        self.assertEqual(urls, ["https://biddytarot.com/tarot/loco"])
 
     def test_sin_html_retorna_vacio(self):
         sitio_cfg = {
