@@ -137,6 +137,19 @@ class MojibakeTests(unittest.TestCase):
         t = "aÃ±os \u00ef\u00bf\u00bd"
         self.assertEqual(reparar_mojibake(t), t)
 
+    def test_caso_adverso_texto_mixto_T30c(self):
+        """T30c: «sÃ» irrecuperable no debe impedir reparar el resto."""
+        t = "aÃ±os, QuÃ© es, mÃ¡s, tirada del sÃ y el no"
+        esperado = "años, Qué es, más, tirada del sÃ y el no"
+        self.assertEqual(reparar_mojibake(t), esperado)
+
+    def test_eme_aislada_en_texto_limpio_sin_cambios(self):
+        t = "Letra \u00c3 suelta en texto limpio"
+        self.assertEqual(reparar_mojibake(t), t)
+
+    def test_apostrofe_curvo(self):
+        self.assertEqual(reparar_mojibake("dijoâ€™hola"), "dijo’hola")
+
     def test_extraer_repara_mojibake_integracion(self):
         frase = "Esto son aÃ±os de experiencia en la lectura seria de las cartas. "
         html = (
