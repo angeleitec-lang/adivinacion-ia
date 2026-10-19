@@ -1,4 +1,5 @@
 """Tests del juez de evidencias (T22): candidatos, validación, anclaje y salida."""
+import json
 import os
 import sys
 
@@ -287,3 +288,142 @@ class AnclajeFacetas(unittest.TestCase):
         self.assertTrue(todas <= set(juez.PALABRAS_CLAVE_FACETA))
         for faceta in ("significado_general", "simbolismo"):
             self.assertIsNone(juez.PALABRAS_CLAVE_FACETA[faceta])
+
+
+import tempfile
+
+
+class ConversiónEvidencias(unittest.TestCase):
+    """T22.4: conversión de juicios a evidencias del esquema de cobertura."""
+
+    def _fuente_libro(self):
+        return {"tipo": "libro", "fuente_id": "waite-pktt",
+                "dominio": "waite-pktt", "periodo": "clasica", "idioma": "en"}
+
+    def test_evidencias_de_juicio_conocimiento(self):
+        seccion = _seccion("The Fool",
+                           "The Fool speaks of new starts and of a couple "
+                           "in love; pareja y amor.")
+        juicio = {"tipo": "conocimiento", "calidad": 4, "idioma": "en",
+                  "entidades": [{"entidad_id": "tarot-mayor-01",
+                                 "facetas": ["significado_general", "amor",
+                                             "dinero"]}]}
+        evs = juez.evidencias_de_seccion(seccion, juicio, self._fuente_libro())
+        self.assertEqual({e["faceta"] for e in evs},
+                         {"significado_general", "amor"})
+        e = evs[0]
+        self.assertEqual(e["entidad_id"], "tarot-mayor-01")
+        self.assertEqual(e["tipo"], "libro")
+        self.assertEqual(e["fuente_id"], "waite-pktt")
+        self.assertEqual(e["periodo"], "clasica")
+        self.assertEqual(e["idioma"], "en")
+        self.assertEqual(e["calidad"], 4)
+        self.assertNotIn("tipo_evidencia", e)
+
+    def test_lectura_trabajada_marca_tipo_evidencia(self):
+        seccion = _seccion("Tirada", "El consultante habla de su pareja.")
+        juicio = {"tipo": "lectura_trabajada", "calidad": 5, "idioma": "es",
+                  "entidades": [{"entidad_id": "tarot-mayor-01",
+                                 "facetas": ["amor"]}]}
+        evs = juez.evidencias_de_seccion(seccion, juicio, self._fuente_libro())
+        self.assertEqual(len(evs), 1)
+        self.assertEqual(evs[0]["tipo_evidencia"], "lectura")
+
+    def test_tipos_no_knowledge_no_dejan_evidencia(self):
+        for tipo in ("publicidad", "relleno", "ficcion", "otro", "error"):
+            juicio = {"tipo": tipo, "calidad": 4, "idioma": "es",
+                      "entidades": [{"entidad_id": "tarot-mayor-01",
+                                     "facetas": ["significado_general"]}]}
+            evs = juez.evidencias_de_seccion(_seccion("x", "y"), juicio,
+                                             self._fuente_libro())
+            self.assertEqual(evs, [], tipo)
+
+    def test_idioma_del_juicio_si_la_fuente_no_lo_sabe(self):
+        fuente = {"tipo": "libro", "fuente_id": "anon", "dominio": "anon",
+                  "periodo": "moderna", "idioma": None}
+        juicio = {"tipo": "conocimiento", "calidad": 3, "idioma": "es",
+                  "entidades": [{"entidad_id": "tarot-mayor-01",
+                                 "facetas": ["significado_general"]}]}
+        evs = juez.evidencias_de_seccion(_seccion("t", "x"), juicio, fuente)
+        self.assertEqual(evs[0]["idioma"], "es")
+
+    def test_fuente_desconocida_es_moderna(self):
+        meta = juez.cargar_meta_libros([])
+        fuente = juez.fuente_de_seccion(
+            _seccion("t", "x", id_libro="no-existe"), meta)
+        self.assertEqual(fuente["periodo"], "moderna")
+
+
+class EscrituraReanudable(unittest.TestCase):
+    """T22.4: relanzar el procesamiento no repite llamadas al LLM."""
+
+    def _simulado(self, llamadas):
+        def simulado(sistema, usuario):
+            llamadas.append(usuario)
+            id_m = "tarot-mayor-01"
+            return ("```json\n%s\n```" % _json.dumps({
+                "tipo": "conocimiento", "calidad": 4, "idioma": "es",
+                "entidades": [{"entidad_id": id_m,
+                               "facetas": ["significado_general"]}]}))
+        return simulado
+
+    def _secciones(self):
+        return [
+            _seccion("The Fool", "texto primero sobre la pareja"),
+            _seccion("The Fool", "texto segundo distinto"),
+            _seccion("Nota", "sin entidades en absoluto: planchas de cobre "
+                     "del siglo XVIII conservadas en vitrina."),
+        ]
+
+    def test_relanzamiento_no_repite_llamadas(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            llamadas = []
+            cliente = llm_client.LLMClient(simulado=self._simulado(llamadas))
+            stats1 = juez.procesar_secciones(self._secciones(), cliente, tmp,
+                                             workers=1)
+            n1 = len(llamadas)
+            self.assertEqual(n1, 2)  # la sección sin candidatos no llama
+            self.assertGreater(stats1["evidencias"], 0)
+            stats2 = juez.procesar_secciones(self._secciones(), cliente, tmp,
+                                             workers=1)
+            self.assertEqual(len(llamadas), n1)  # ninguna llamada nueva
+            self.assertEqual(stats2["reaprovechadas"], 2)
+            with open(os.path.join(tmp, "evidencias.jsonl"),
+                      encoding="utf-8") as fh:
+                lineas = [l for l in fh if l.strip()]
+            self.assertEqual(len(lineas), stats1["evidencias"])
+
+    def test_evidencias_se_regeneran_desde_juicios_sin_llamada(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            llamadas = []
+            cliente = llm_client.LLMClient(simulado=self._simulado(llamadas))
+            juez.procesar_secciones(self._secciones(), cliente, tmp,
+                                    workers=1)
+            # Se borra el fichero de evidencias: debe regenerarse de juicios.
+            os.remove(os.path.join(tmp, "evidencias.jsonl"))
+            n = len(llamadas)
+            stats = juez.procesar_secciones(self._secciones(), cliente, tmp,
+                                            workers=1)
+            self.assertEqual(len(llamadas), n)
+            self.assertGreaterEqual(stats["evidencias"], 1)
+
+    def test_limite_de_secciones(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            llamadas = []
+            cliente = llm_client.LLMClient(simulado=self._simulado(llamadas))
+            juez.procesar_secciones(self._secciones(), cliente, tmp,
+                                    workers=1, limite=1)
+            self.assertEqual(len(llamadas), 1)
+
+    def test_juicios_quedan_en_fichero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            llamadas = []
+            cliente = llm_client.LLMClient(simulado=self._simulado(llamadas))
+            juez.procesar_secciones(self._secciones(), cliente, tmp,
+                                    workers=1)
+            with open(os.path.join(tmp, "juicios.jsonl"),
+                      encoding="utf-8") as fh:
+                registros = [json.loads(l) for l in fh if l.strip()]
+            self.assertEqual(len(registros), 2)
+            self.assertEqual({r["juicio"]["tipo"] for r in registros},
+                             {"conocimiento"})

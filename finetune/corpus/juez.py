@@ -398,3 +398,237 @@ def facetas_ancladas(facetas, texto):
             if faceta not in aceptadas:
                 aceptadas.append(faceta)
     return aceptadas
+
+
+import glob
+import os
+
+# ---------------------------------------------------------------------------
+# Fuentes, evidencias y procesamiento reanudable
+# ---------------------------------------------------------------------------
+
+_PERIODO_CORTE_ANIO = 1950
+
+_RUTAS_META_POR_DEFECTO = (
+    "fuentes_libros*.jsonl", "epubs_locales.jsonl")
+
+
+def hash_seccion(seccion):
+    """Identificador estable de la sección: hash del texto más su id."""
+    id_parte = seccion.get("id_libro") or seccion.get("url") or ""
+    numero = seccion.get("seccion", seccion.get("posicion", 0))
+    base = "%s|%s|%s" % (id_parte, numero, seccion.get("texto") or "")
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+
+def cargar_meta_libros(rutas=None):
+    """Metadatos de libros por id, desde los inventarios JSONL de knowledge.
+
+    Cada entrada: {"anio","idioma","titulo","autor","periodo"}. Con `rutas`
+    None se leen los inventarios por defecto (`fuentes_libros*.jsonl` y
+    `epubs_locales.jsonl` en `finetune/knowledge`, junto a este fichero).
+    """
+    if rutas is None:
+        base = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "..", "knowledge")
+        rutas = []
+        for patron in _RUTAS_META_POR_DEFECTO:
+            rutas.extend(sorted(glob.glob(os.path.join(base, patron))))
+    meta = {}
+    for ruta in rutas:
+        try:
+            fh = open(ruta, encoding="utf-8")
+        except OSError:
+            continue
+        with fh:
+            for linea in fh:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    dato = json.loads(linea)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(dato, dict) or "id" not in dato:
+                    continue
+                anio = dato.get("anio")
+                periodo = None
+                if isinstance(anio, int):
+                    periodo = ("clasica" if anio < _PERIODO_CORTE_ANIO
+                               else "moderna")
+                meta[dato["id"]] = {
+                    "anio": anio,
+                    "idioma": dato.get("idioma"),
+                    "titulo": dato.get("titulo"),
+                    "autor": dato.get("autor"),
+                    "periodo": periodo,
+                }
+    return meta
+
+
+def _idioma_corto(valor):
+    return valor if valor in IDIOMAS_VALIDOS else None
+
+
+def fuente_de_seccion(seccion, meta=None):
+    """Datos de fuente de una sección: páginas web (con `url`) o libros."""
+    meta = meta or {}
+    if seccion.get("url"):
+        return {
+            "tipo": "web",
+            "fuente_id": seccion["url"],
+            "dominio": seccion.get("dominio") or "",
+            "periodo": "moderna",
+            "idioma": _idioma_corto(seccion.get("idioma")),
+        }
+    id_libro = seccion.get("id_libro") or ""
+    datos = meta.get(id_libro, {})
+    return {
+        "tipo": "libro",
+        "fuente_id": id_libro,
+        "dominio": id_libro,
+        "periodo": datos.get("periodo") or "moderna",
+        "idioma": _idioma_corto(datos.get("idioma")),
+    }
+
+
+TIPOS_CON_EVIDENCIA = {"conocimiento", "lectura_trabajada"}
+
+
+def evidencias_de_seccion(seccion, juicio, fuente):
+    """Líneas de evidencias.jsonl para el juicio de una sección.
+
+    Solo los tipos conocimiento y lectura_trabajada generan evidencias, y
+    solo para las facetas que superan el anclaje léxico sobre el texto. Las
+    lecturas trabajadas añaden `tipo_evidencia: "lectura"` para A6.
+    """
+    if juicio.get("tipo") not in TIPOS_CON_EVIDENCIA:
+        return []
+    idioma = fuente.get("idioma") or juicio.get("idioma") or "otro"
+    tn = seccion.get("texto") or ""
+    evidencia_hash = hash_seccion(seccion)
+    lineas = []
+    for ent in juicio.get("entidades", []):
+        for faceta in facetas_ancladas(ent.get("facetas", []), tn):
+            linea = {
+                "entidad_id": ent["entidad_id"],
+                "faceta": faceta,
+                "fuente_id": fuente["fuente_id"],
+                "dominio": fuente["dominio"],
+                "idioma": idioma,
+                "periodo": fuente["periodo"],
+                "calidad": juicio.get("calidad", 0),
+                "tipo": fuente["tipo"],
+                "hash_seccion": evidencia_hash,
+            }
+            if juicio["tipo"] == "lectura_trabajada":
+                linea["tipo_evidencia"] = "lectura"
+            lineas.append(linea)
+    return lineas
+
+
+def _leer_jsonl(ruta):
+    registros = []
+    if not os.path.exists(ruta):
+        return registros
+    with open(ruta, encoding="utf-8") as fh:
+        for linea in fh:
+            linea = linea.strip()
+            if not linea:
+                continue
+            try:
+                registros.append(json.loads(linea))
+            except json.JSONDecodeError:
+                continue
+    return registros
+
+
+def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
+                       limite=None):
+    """Juzga secciones y escribe `juicios.jsonl` y `evidencias.jsonl`.
+
+    Reanudable: las secciones cuyo hash ya está en juicios.jsonl no vuelven
+    a llamarse; si sus evidencias faltan, se regeneran del juicio guardado.
+    `limite` recorta el número de secciones procesadas en esta pasada.
+    Devuelve estadísticas {"juzgadas","llamadas","evidencias",
+    "reaprovechadas","sin_candidatos","error"}.
+    """
+    if limite is not None:
+        secciones = secciones[:limite]
+    os.makedirs(out_dir, exist_ok=True)
+    ruta_juicios = os.path.join(out_dir, "juicios.jsonl")
+    ruta_evidencias = os.path.join(out_dir, "evidencias.jsonl")
+    hechos = {}
+    for registro in _leer_jsonl(ruta_juicios):
+        if registro.get("hash"):
+            hechos[registro["hash"]] = registro
+    hashes_ev = {e.get("hash_seccion")
+                 for e in _leer_jsonl(ruta_evidencias)}
+
+    stats = {"juzgadas": 0, "llamadas": 0, "evidencias": 0,
+             "reaprovechadas": 0, "sin_candidatos": 0, "error": 0}
+    fh_juicios = open(ruta_juicios, "a", encoding="utf-8")
+    fh_ev = open(ruta_evidencias, "a", encoding="utf-8")
+
+    def _escribir_ev(lineas):
+        for linea in lineas:
+            fh_ev.write(json.dumps(linea, ensure_ascii=False) + "\n")
+        if lineas:
+            fh_ev.flush()
+
+    try:
+        pendientes = []
+        for seccion in secciones:
+            h = hash_seccion(seccion)
+            if h in hechos:
+                stats["reaprovechadas"] += 1
+                if h not in hashes_ev:
+                    lineas = evidencias_de_seccion(
+                        seccion, hechos[h]["juicio"],
+                        fuente_de_seccion(seccion, meta))
+                    _escribir_ev(lineas)
+                    stats["evidencias"] += len(lineas)
+                continue
+            candidatos = candidatos_seccion(seccion)
+            if not candidatos:
+                stats["sin_candidatos"] += 1
+                continue
+            pendientes.append((h, seccion, candidatos))
+
+        def _trabajo(item):
+            h, seccion, candidatos = item
+            return h, seccion, candidatos, juzgar_seccion(cliente, seccion,
+                                                          candidatos)
+
+        resultados = []
+        if pendientes:
+            if workers and workers > 1 and len(pendientes) > 1:
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    resultados = list(pool.map(_trabajo, pendientes))
+            else:
+                resultados = [_trabajo(item) for item in pendientes]
+
+        for h, seccion, candidatos, juicio in resultados:
+            if juicio.get("tipo") == "error":
+                stats["error"] += 1
+            stats["juzgadas"] += 1
+            stats["llamadas"] += juicio.get("llamadas", 0)
+            registro = {
+                "hash": h,
+                "fuente_id": fuente_de_seccion(seccion, meta)["fuente_id"],
+                "titulo": seccion.get("titulo"),
+                "candidatos": [c["entidad_id"] for c in candidatos],
+                "juicio": juicio,
+            }
+            fh_juicios.write(json.dumps(registro, ensure_ascii=False) + "\n")
+            fh_juicios.flush()
+            lineas = evidencias_de_seccion(
+                seccion, juicio, fuente_de_seccion(seccion, meta))
+            _escribir_ev(lineas)
+            stats["evidencias"] += len(lineas)
+            hashes_ev.add(h)
+    finally:
+        fh_juicios.close()
+        fh_ev.close()
+    return stats
