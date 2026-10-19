@@ -32,7 +32,7 @@
         "https://www.aeclectic.net/tarot/tarot-card-meanings/minor-arcana/",
         "https://www.aeclectic.net/tarot/tarot-card-meanings/court-cards/"
       ],
-      "regex": "/tarot/tarot-card-meanings/(major|minor|court)-arcana/[^/]+\\.shtml$",
+      "regex": "/tarot/tarot-card-meanings/(major-arcana|minor-arcana|court-cards)/[^/]+\\.shtml$",
       "dominio": "aeclectic.net",
       "familia": "tarot",
       "prioridad": "media"
