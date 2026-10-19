@@ -98,6 +98,7 @@ class LecturaPaginasTests(unittest.TestCase):
             _escribir_pagina(base, "a.com", "uno.md", "Uno", "Cuerpo uno.")
             _escribir_pagina(base, "b.com", "dos.md", "Dos", "Cuerpo dos.")
             (base / "notas.txt").write_text("no es markdown", encoding="utf-8")
+            (base / "informe.md").write_text("# Informe generado", encoding="utf-8")
             paginas = leer_paginas(base)
             self.assertEqual(len(paginas), 2)
             self.assertEqual({p["dominio"] for p in paginas}, {"a.com", "b.com"})

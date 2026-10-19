@@ -153,9 +153,13 @@ def leer_pagina(ruta: Path) -> Dict[str, Any]:
 
 
 def leer_paginas(web_dir: Path) -> List[Dict[str, Any]]:
-    """Lee todas las páginas ``*.md`` bajo ``web_dir`` ordenadas por ruta."""
+    """Lee los ``<dominio>/*.md`` de ``web_dir`` ordenados por ruta.
+
+    Solo baja un nivel: los Markdown sueltos en la raíz (informes generados
+    como ``informe.md`` o ``calidad.md``) no son páginas descargadas.
+    """
     web_dir = Path(web_dir)
-    paginas = [leer_pagina(ruta) for ruta in sorted(web_dir.rglob("*.md"))]
+    paginas = [leer_pagina(ruta) for ruta in sorted(web_dir.glob("*/*.md"))]
     return paginas
 
 
