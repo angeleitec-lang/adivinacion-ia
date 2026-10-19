@@ -2,7 +2,7 @@
 """Descubrimiento de páginas desde índices configurables (A3.4).
 
 Para sitios con una página por carta/número pero sin patrón de URL fijo,
-se parte de una página índice y se siguen los enlaces que cumplan una
+separte de una página índice y se siguen los enlaces que cumplan una
 regex configurable.
 """
 
@@ -47,19 +47,27 @@ def _mismo_dominio(url: str, dominio: str) -> bool:
 def _extraer_enlaces(html: str, base_url: str, dominio: Optional[str] = None) -> List[str]:
     """Extrae todos los enlaces <a href> del HTML, opcionalmente filtrando por dominio.
 
-    Resolve URLs relativas con urljoin; descarta #ancla, mailto:, tel:, javascript:, data:.
-    Quita el fragmento #… de las URLs resultantes.
+    Resuelve URLs relativas con urljoin; descarta #ancla, mailto:, tel:, javascript:, data:.
+    Quita el fragmento #… de las URLs resultantes. Si tras quitar el fragmento la URL
+    es igual a `base_url`, también se descarta.
     """
     patron = re.compile(r'<a\s+[^>]*href\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
     enlaces = []
     for match in patron.finditer(html):
         href = match.group(1)
+        # Descartar hrefs que empiecen por #
+        if href.startswith("#"):
+            continue
         url_norm = _normalizar_url(base_url, href)
+        # Descartar si tras quitar fragmento la URL es la misma que base_url
+        base_sin_fragmento = base_url.split("#")[0]
+        if url_norm == base_sin_fragmento:
+            continue
         # Filtrar esquemas no deseados
         if url_norm.startswith(("mailto:", "tel:", "javascript:", "data:")):
             continue
+        # Quita el fragmento #… de las URLs resultantes
         if "#" in url_norm.split("?")[0]:
-            # quita el fragmento #… conservando la query string si la hay
             url_norm = url_norm.split("#")[0]
         if dominio is None or _mismo_dominio(url_norm, dominio):
             enlaces.append(url_norm)
@@ -95,7 +103,7 @@ def _seguir_indice_unico(
     limite: int,
     timeout: float,
 ) -> List[str]:
-    """Secuencia interna deseguir_indice para un solo URL de índice."""
+    """Secuencia interna de `seguir_indice` para un solo URL de índice."""
     resp = cliente.get(indice_url)
     if resp["estado"] != "ok" or not resp.get("html"):
         return []
