@@ -27,8 +27,12 @@
     },
     {
       "nombre": "aeclectic.net",
-      "indice": "https://www.aeclectic.net/tarot/tarot-card-meanings/",
-      "regex": "/tarot/tarot-card-meanings/(major|minor)-arcana/",
+      "indice": [
+        "https://www.aeclectic.net/tarot/tarot-card-meanings/major-arcana/",
+        "https://www.aeclectic.net/tarot/tarot-card-meanings/minor-arcana/",
+        "https://www.aeclectic.net/tarot/tarot-card-meanings/court-cards/"
+      ],
+      "regex": "/tarot/tarot-card-meanings/(major|minor|court)-arcana/[^/]+\\.shtml$",
       "dominio": "aeclectic.net",
       "familia": "tarot",
       "prioridad": "media"
@@ -43,8 +47,8 @@
     },
     {
       "nombre": "tarotrossana.com",
-      "indice": "https://tarotrossana.com/cartas/",
-      "regex": "/cartas/[^/]+/",
+      "indice": "https://tarotrossana.com/guia/tarot/",
+      "regex": "/guia/tarot/arcanos-(mayores|menores)/[^/]+/$",
       "dominio": "tarotrossana.com",
       "familia": "tarot",
       "prioridad": "media"
