@@ -401,6 +401,18 @@ def escribir_md(resultado, ruta, max_huecos=200, resumen=None, catalogo=None):
         f.write("\n".join(lineas) + "\n")
 
 
+def huecos_para_rastreo(resultado):
+    """Lista de huecos para las pistas de rastreo, ordenada por mayor carencia.
+
+    Cada elemento: {"entidad_id", "faceta", "faltan"}.
+    """
+    huecos = [c for c in resultado["celdas"] if not c["completa"]]
+    return [
+        {"entidad_id": c["entidad_id"], "faceta": c["faceta"], "faltan": c["faltan"]}
+        for c in ordenar_por_carencia(huecos)
+    ]
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------

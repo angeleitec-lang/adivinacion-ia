@@ -364,5 +364,58 @@ class SalidaYCLI(unittest.TestCase):
                          ["c1", "c2", "c3", "c4"])
 
 
+class HuecosParaRastreo(unittest.TestCase):
+    """Utilidad para que las pistas de rastreo sepan qué buscar."""
+
+    def test_solo_huecos_ordenados_por_carencia(self):
+        resultado = {"celdas": [
+            {"entidad_id": "poco", "faceta": "f", "n_fuentes": 4,
+             "n_clasicas": 1, "n_modernas": 2, "n_es": 1, "completa": False,
+             "faltan": ["falta 1 fuente independiente"]},
+            {"entidad_id": "llena", "faceta": "f", "n_fuentes": 5,
+             "n_clasicas": 1, "n_modernas": 2, "n_es": 1, "completa": True,
+             "faltan": []},
+            {"entidad_id": "vacia", "faceta": "f", "n_fuentes": 0,
+             "n_clasicas": 0, "n_modernas": 0, "n_es": 0, "completa": False,
+             "faltan": ["faltan 5 fuentes independientes",
+                       "falta 1 fuente clásica",
+                       "faltan 2 fuentes modernas",
+                       "falta 1 fuente en español"]},
+        ], "completas": 1, "ignoradas": 0}
+        huecos = cobertura.huecos_para_rastreo(resultado)
+        self.assertEqual([h["entidad_id"] for h in huecos], ["vacia", "poco"])
+        for h in huecos:
+            self.assertEqual(set(h.keys()), {"entidad_id", "faceta", "faltan"})
+            self.assertTrue(h["faltan"], "todo hueco debe listar sus carencias")
+
+    def test_coherencia_con_matriz_completa(self):
+        evidencias = [_ev(fuente="w", dominio="a.org", periodo="clasica",
+                         tipo="libro")]
+        resultado = cobertura.calcular_cobertura(evidencias)
+        huecos = cobertura.huecos_para_rastreo(resultado)
+        self.assertEqual(len(huecos),
+                         len(resultado["celdas"]) - resultado["completas"])
+
+        def carencia(h):
+            celda = next(c for c in resultado["celdas"]
+                        if c["entidad_id"] == h["entidad_id"]
+                        and c["faceta"] == h["faceta"])
+            return (max(0, 5 - celda["n_fuentes"])
+                    + max(0, 1 - celda["n_clasicas"])
+                    + max(0, 2 - celda["n_modernas"])
+                    + max(0, 1 - celda["n_es"]))
+
+        valores = [carencia(h) for h in huecos]
+        self.assertEqual(valores, sorted(valores, reverse=True),
+                        "los huecos deben ir de mayor a menor carencia")
+
+    def test_vacio_sin_huecos(self):
+        resultado = {"celdas": [
+            {"entidad_id": "e", "faceta": "f", "n_fuentes": 5, "n_clasicas": 1,
+             "n_modernas": 2, "n_es": 1, "completa": True, "faltan": []},
+        ], "completas": 1, "ignoradas": 0}
+        self.assertEqual(cobertura.huecos_para_rastreo(resultado), [])
+
+
 if __name__ == "__main__":
     unittest.main()
