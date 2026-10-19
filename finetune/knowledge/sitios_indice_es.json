@@ -9,11 +9,11 @@
         "https://www.forotarot.net/foro-combinaciones",
         "https://www.forotarot.net/foro-tiradas-de-cartas"
       ],
-      "regex": "/tema-[^/?#]+$",
+      "regex": "/tema-(?!Sistema-de-puntos|[Nn]ormas-|minimo-de-puntos)[^/?#]+$",
       "dominio": "forotarot.net",
       "familia": "baraja_espanola",
       "prioridad": "alta",
-      "nota": "Foro MyBB. Secciones /foro-*, hilos públicos /tema-<slug>. Robots prohíbe /usercp, /login, /post/*; los hilos están permitidos."
+      "nota": "Foro MyBB. Secciones /foro-*, hilos públicos /tema-<slug>. Robots prohíbe /usercp, /login, /post/*; los hilos están permitidos. El lookahead excluye los 4 meta-hilos de normas/puntos (antes 50 hilos descubiertos, ahora 46)."
     },
     {
       "nombre": "eragon8.blogspot.com",
@@ -174,6 +174,161 @@
       "familia": "numerologia",
       "prioridad": "media",
       "nota": "Herramientas y explicaciones de numerología aplicada al tarot."
+    },
+    {
+      "nombre": "grancosmos.com",
+      "tipo": "guia",
+      "indice": [
+        "https://grancosmos.com/",
+        "https://grancosmos.com/guia/"
+      ],
+      "regex": "/guia/[a-z]+-en-[a-z]+$",
+      "dominio": "grancosmos.com",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "Sitio internacional de astrología en español (autor no consta). Rutas /guia/<planeta>-en-<signo>. Licencia: consultar."
+    },
+    {
+      "nombre": "mercurioretrogrado.com",
+      "tipo": "guia",
+      "indice": [
+        "https://www.mercurioretrogrado.com/",
+        "https://www.mercurioretrogrado.com/planeta-en-casa/"
+      ],
+      "regex": "/(?:planeta-en-casa|aspecto)/[a-z0-9-]+$",
+      "dominio": "mercurioretrogrado.com",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "Sitio en español centrado en Mercurio retrógrado con fichas planeta-casa (autor no consta). Licencia: consultar."
+    },
+    {
+      "nombre": "astrolink.com",
+      "tipo": "guia",
+      "indice": [
+        "https://www.astrolink.com/es/sol",
+        "https://www.astrolink.com/es/luna",
+        "https://www.astrolink.com/es/mercurio",
+        "https://www.astrolink.com/es/venus",
+        "https://www.astrolink.com/es/marte",
+        "https://www.astrolink.com/es/jupiter",
+        "https://www.astrolink.com/es/saturno",
+        "https://www.astrolink.com/es/urano",
+        "https://www.astrolink.com/es/neptuno",
+        "https://www.astrolink.com/es/pluton"
+      ],
+      "regex": "/es/interpretacion/[a-z]+-en-[a-z]+$",
+      "dominio": "astrolink.com",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "Astrolink en español: cada hub de planeta enlaza las 12 interpretaciones por signo; la portada /es/ no enlaza combos directas. Licencia: consultar."
+    },
+    {
+      "nombre": "escuelamaia.com",
+      "tipo": "guia",
+      "indice": [
+        "https://escuelamaia.com/astrologia-psicologica/"
+      ],
+      "regex": "/(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis|casa-\\d{1,2})/",
+      "dominio": "escuelamaia.com",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "Escuela Maia (astrología psicológica) en español; la regex excluye los hubs <planeta>-en-astrologia/. Licencia: consultar."
+    },
+    {
+      "nombre": "mundivia.es",
+      "tipo": "guia",
+      "indice": [
+        "https://www.mundivia.es/numerologia/"
+      ],
+      "regex": "/numerologia/numero-\\d+/$",
+      "dominio": "mundivia.es",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "Mundivia (sección numerología) en español; una página por número básico. Licencia: consultar."
+    },
+    {
+      "nombre": "es.astrologyk.com",
+      "tipo": "guia",
+      "indice": [
+        "https://es.astrologyk.com/numerologia"
+      ],
+      "regex": "/numerologia/(?:alma|camino-de-vida|destino|personalidad)/\\d+$",
+      "dominio": "es.astrologyk.com",
+      "familia": "numerologia",
+      "prioridad": "baja",
+      "nota": "Astrologyk en español; fichas numerológicas cortas pero bien estructuradas por tipo y número. Licencia: consultar."
+    },
+    {
+      "nombre": "eight-leaves.de",
+      "tipo": "guia",
+      "indice": [
+        "https://eight-leaves.de/es/numerologia/"
+      ],
+      "regex": "/es/numerologia/[a-z-]+-\\d+$",
+      "dominio": "eight-leaves.de",
+      "familia": "numerologia",
+      "prioridad": "alta",
+      "nota": "Eight Leaves (sección es) en español; fichas numerológicas muy extensas. Licencia: consultar."
+    },
+    {
+      "nombre": "moonoscope.com",
+      "tipo": "guia",
+      "indice": [
+        "https://moonoscope.com/es/numerology/"
+      ],
+      "regex": "/es/numerology/(?:soul-urge|life-path|destiny)/\\d+$",
+      "dominio": "moonoscope.com",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "Moonoscope en español; cubre los tres números principales. Ya citado en la rejilla T20 como fuente numerológica de referencia. Licencia: consultar."
+    },
+    {
+      "nombre": "tarot.ac",
+      "tipo": "guia",
+      "indice": [
+        "https://tarot.ac/es/numerology/"
+      ],
+      "regex": "/es/numerology/numbers/\\d+$",
+      "dominio": "tarot.ac",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "Tarot.ac (sección numerología en español); una ficha por número. Licencia: consultar."
+    },
+    {
+      "nombre": "loveplay.io",
+      "tipo": "guia",
+      "indice": [
+        "https://loveplay.io/es/numerologia/"
+      ],
+      "regex": "/es/numerologia/\\d+-\\d+/$",
+      "dominio": "loveplay.io",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "Loveplay (numerología en español); fichas por combinación numérica. Licencia: consultar."
+    },
+    {
+      "nombre": "horoscopelogic.com",
+      "tipo": "guia",
+      "indice": [
+        "https://horoscopelogic.com/es/numerology"
+      ],
+      "regex": "/es/(?:expression|personality)-number-\\d+$",
+      "dominio": "horoscopelogic.com",
+      "familia": "numerologia",
+      "prioridad": "alta",
+      "nota": "Horoscope Logic en español; números de expresión y personalidad. Licencia: consultar."
+    },
+    {
+      "nombre": "es.astro-seek.com",
+      "tipo": "guia",
+      "indice": [
+        "https://es.astro-seek.com/numerologia-ano-personal-vibracion-personal-anual"
+      ],
+      "regex": "/numerologia-ano-personal/\\d+$",
+      "dominio": "es.astro-seek.com",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "Astro-Seek en español; año personal y vibración anual. Ya citado en la rejilla T20. Licencia: consultar."
     }
   ]
 }

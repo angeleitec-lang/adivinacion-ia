@@ -1,6 +1,6 @@
 # Fuentes web en español — síntesis T20
 
-Catálogo complementario en `fuentes_web_es.jsonl` (41 fuentes verificadas abriendo al menos una URL real de cada una, 2026-10-19). No duplica los 143 dominios de `fuentes_sitios.jsonl` ni los sitios de las rejillas existentes.
+Catálogo complementario en `fuentes_web_es.jsonl` (53 fuentes verificadas abriendo al menos una URL real de cada una, 2026-10-19). No duplica los 143 dominios de `fuentes_sitios.jsonl`. Las 12 fuentes de astrología y numerología de la sección (d) se añadieron en T26 con sondeo de índice + regex sobre páginas de entidad.
 
 ## (a) Las 15 mejores fuentes por valor para el proyecto
 
@@ -26,8 +26,8 @@ Catálogo complementario en `fuentes_web_es.jsonl` (41 fuentes verificadas abrie
 |---|---|---|
 | baraja_espanola | 12 | Los 40 naipes (brisademartarot, institutolta, eragon8, astrologuias), combinaciones (tarotdestrella, eragon8 entrega 3), tiradas (institutolta clase 4, instantesconrosmeris), foro con lecturas reales (forotarot), curso en vídeo (Lari Téllez). Hueco mayor del proyecto: **cubierto**. |
 | lecturas | 11 | Q&A real (euroresidentes, forotarot), lecturas narrativas (eclectica, montekurama), combinaciones resueltas (tarotdestrella), libro con método (quareia), lecturas en directo (Nelys Tarot, Eduardo Tarot Profesional). Hueco mayor del proyecto: **cubierto**. |
-| astrologia | 13 | Curso extenso (grupovenus), casas y planetas (carta-natal.es), PD clásico (wikisource), tránsitos/nodos/sinastría/revolución solar vía 8 canales YouTube verificados. |
-| numerologia | 6 | Camino de vida y números del alma/expresión (losarcanos), series en vídeo (Josep Gimbernat 52+ entregas, Ricard Barrufet, Alejandro Lavín, La Numerología). Es la familia más floja: la rejilla existente (moonoscope, yourastrallife, astro-seek) sigue siendo el grueso. |
+| astrologia | 17 | Curso extenso (grupovenus), casas y planetas (carta-natal.es), PD clásico (wikisource), tránsitos/nodos/sinastría/revolución solar vía 8 canales YouTube verificados. T26 suma 4 guías de fichas planeta-en-signo/casa: grancosmos, mercurioretrogrado, astrolink, escuelamaia. |
+| numerologia | 14 | Camino de vida y números del alma/expresión (losarcanos), series en vídeo (Josep Gimbernat 52+ entregas, Ricard Barrufet, Alejandro Lavín, La Numerología). T26 suma 8 sitios de fichas por número: mundivia, es.astrologyk, eight-leaves, moonoscope, tarot.ac, loveplay, horoscopelogic, es.astro-seek. Familia reforzada. |
 | tarot | 17 | Escuelas (Marsella: Plano Consciente), combinaciones de arcanos (angelestarotyvidencia), cursos en vídeo (Popy, El Tarot de Andy), lecturas (Nelys, Eduardo), Q&A (euroresidentes), libro (quareia). |
 
 ## (c) Descartes y motivos
@@ -37,6 +37,27 @@ Catálogo complementario en `fuentes_web_es.jsonl` (41 fuentes verificadas abrie
 - **Regla de no rastreo**: Scribd, Studocu, CourseHero, SlideShare y Amazon (pago/login).
 - **Ya catalogados**: todo dominio presente en `fuentes_sitios.jsonl` (143) y en las rejillas (40), p. ej. tarotrossana.com, elreydecopas.com, astro-seek, moonoscope.
 - **Casinos/juegos** (888casino, asdepoker) y prensa superficial (Univision, Cosmopolitan): sin valor de conocimiento.
+
+## (d) Nuevas fuentes de astrología y numerología (T26, 2026-10-19)
+
+Sitios en español con índice HTML que descubre páginas de entidad (una por faceta) vía `indice` + `regex` en `sitios_indice_es.json`. Cada uno verificado: índice 200, robots.txt permite las rutas, y 3 muestras reales devuelven 200 con texto visible abundante. Autor y año no constan en las páginas (sitios editoriales/SEO); `licencia_hint: consultar`.
+
+| Sitio | Familia | Páginas descubiertas | Procedencia (URL índice · autor · año · licencia) |
+|---|---|---|---|
+| grancosmos.com | astrologia | 72 | https://grancosmos.com/guia/ · autor no consta · año no consta · consultar |
+| mercurioretrogrado.com | astrologia | 124 | https://www.mercurioretrogrado.com/planeta-en-casa/ · autor no consta · año no consta · consultar |
+| astrolink.com | astrologia | 120 | https://www.astrolink.com/es/sol (y 9 hubs de planeta) · autor no consta · año no consta · consultar |
+| escuelamaia.com | astrologia | 216 | https://escuelamaia.com/astrologia-psicologica/ · Escuela Maia (astrología psicológica) · año no consta · consultar |
+| mundivia.es | numerologia | 9 | https://www.mundivia.es/numerologia/ · autor no consta · año no consta · consultar |
+| es.astrologyk.com | numerologia | 48 | https://es.astrologyk.com/numerologia · autor no consta · año no consta · consultar |
+| eight-leaves.de | numerologia | 25 | https://eight-leaves.de/es/numerologia/ · autor no consta · año no consta · consultar |
+| moonoscope.com | numerologia | 36 | https://moonoscope.com/es/numerology/ · autor no consta · año no consta · consultar |
+| tarot.ac | numerologia | 18 | https://tarot.ac/es/numerology/ · autor no consta · año no consta · consultar |
+| loveplay.io | numerologia | 45 | https://loveplay.io/es/numerologia/ · autor no consta · año no consta · consultar |
+| horoscopelogic.com | numerologia | 24 | https://horoscopelogic.com/es/numerology · autor no consta · año no consta · consultar |
+| es.astro-seek.com | numerologia | 10 | https://es.astro-seek.com/numerologia-ano-personal-vibracion-personal-anual · Astro-Seek · año no consta · consultar |
+
+Descartes de T26 (sin índice HTML que descubra páginas de entidad, o 404): numerologia-cotidiana.com, yourastrallife.com, misabueso.com, campus-astrologia.es, freenumerology.net.
 
 ## Notas de método
 
