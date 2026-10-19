@@ -1,6 +1,10 @@
 """Tests del módulo cobertura: matriz de entidades × facetas y fuentes que las respaldan."""
+import contextlib
+import io
+import json
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -242,6 +246,122 @@ class CalculoDeCeldas(unittest.TestCase):
         self.assertEqual(len(res["celdas"]), total)
         self.assertEqual(res["completas"], 0)
         self.assertEqual(res["ignoradas"], 0)
+
+
+class SalidaYCLI(unittest.TestCase):
+    """Escritura de cobertura.json / cobertura.md y comportamiento del CLI."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.ruta_json = os.path.join(self.tmp.name, "cobertura.json")
+        self.ruta_md = os.path.join(self.tmp.name, "cobertura.md")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _escribir_evidencias(self, nombre, lineas):
+        ruta = os.path.join(self.tmp.name, nombre)
+        with open(ruta, "w", encoding="utf-8") as f:
+            for linea in lineas:
+                f.write(json.dumps(linea, ensure_ascii=False) + "\n")
+        return ruta
+
+    def test_integracion_tres_evidencias(self):
+        ruta = self._escribir_evidencias("ev.jsonl", [
+            _ev(fuente="waite", dominio="archive.org", periodo="clasica",
+                tipo="libro"),
+            _ev(fuente="pollack", dominio="pollack.com", faceta="luz_sombra"),
+            _ev(fuente="tarotes_es", dominio="tarotes.es", idioma="es",
+                entidad="aries|signo"),
+        ])
+        salida = io.StringIO()
+        with contextlib.redirect_stdout(salida):
+            codigo = cobertura.main([
+                "--evidencias", ruta,
+                "--out-json", self.ruta_json,
+                "--out-md", self.ruta_md,
+            ])
+        self.assertEqual(codigo, 0)
+        with open(self.ruta_json, encoding="utf-8") as f:
+            datos = json.load(f)
+        self.assertEqual(datos["resumen"]["ignoradas"], 0)
+        self.assertEqual(datos["resumen"]["total_celdas"], 7455)
+        self.assertEqual(datos["resumen"]["completas"], 0)
+        self.assertIn("Tarot", datos["resumen"]["por_familia"])
+        with open(self.ruta_md, encoding="utf-8") as f:
+            md = f.read()
+        self.assertIn("Matriz de cobertura", md)
+        self.assertIn("Numerología", md)
+        self.assertIn("falta 1 fuente en español", md)
+
+    def test_dry_run_no_escribe(self):
+        ruta = self._escribir_evidencias("ev.jsonl", [_ev()])
+        salida = io.StringIO()
+        with contextlib.redirect_stdout(salida):
+            codigo = cobertura.main([
+                "--evidencias", ruta,
+                "--out-json", self.ruta_json,
+                "--out-md", self.ruta_md,
+                "--dry-run",
+            ])
+        self.assertEqual(codigo, 0)
+        self.assertFalse(os.path.exists(self.ruta_json))
+        self.assertFalse(os.path.exists(self.ruta_md))
+        self.assertIn("cobertura", salida.getvalue().lower())
+
+    def test_fichero_inexistente_sin_fallo(self):
+        salida = io.StringIO()
+        with contextlib.redirect_stdout(salida):
+            codigo = cobertura.main([
+                "--evidencias", os.path.join(self.tmp.name, "no-existe.jsonl"),
+                "--out-json", self.ruta_json,
+                "--out-md", self.ruta_md,
+            ])
+        self.assertEqual(codigo, 0)
+        with open(self.ruta_json, encoding="utf-8") as f:
+            datos = json.load(f)
+        self.assertEqual(datos["resumen"]["completas"], 0)
+
+    def test_lineas_malformadas_se_ignoran(self):
+        ruta = os.path.join(self.tmp.name, "rota.jsonl")
+        with open(ruta, "w", encoding="utf-8") as f:
+            f.write("{esto no es json}\n")
+            f.write("\n")
+            f.write(json.dumps(_ev(fuente="buena", dominio="d.net",
+                                  periodo="clasica", tipo="libro"),
+                             ensure_ascii=False) + "\n")
+        salida = io.StringIO()
+        with contextlib.redirect_stdout(salida):
+            cobertura.main([
+                "--evidencias", ruta,
+                "--out-json", self.ruta_json,
+                "--out-md", self.ruta_md,
+            ])
+        with open(self.ruta_json, encoding="utf-8") as f:
+            datos = json.load(f)
+        self.assertEqual(datos["resumen"]["ignoradas"], 1)
+
+    def test_max_huecos_limita_listado(self):
+        resultado = cobertura.calcular_cobertura([])
+        cobertura.escribir_md(resultado, self.ruta_md, max_huecos=5)
+        with open(self.ruta_md, encoding="utf-8") as f:
+            md = f.read()
+        self.assertIn("Y 7450 celdas más bajo el mínimo", md)
+
+    def test_ordenacion_por_carencia(self):
+        celdas = [
+            {"entidad_id": "c4", "faceta": "f", "n_fuentes": 5,
+             "n_clasicas": 1, "n_modernas": 2, "n_es": 1},
+            {"entidad_id": "c1", "faceta": "f", "n_fuentes": 0,
+             "n_clasicas": 0, "n_modernas": 0, "n_es": 0},
+            {"entidad_id": "c3", "faceta": "f", "n_fuentes": 3,
+             "n_clasicas": 1, "n_modernas": 2, "n_es": 1},
+            {"entidad_id": "c2", "faceta": "f", "n_fuentes": 1,
+             "n_clasicas": 1, "n_modernas": 0, "n_es": 1},
+        ]
+        orden = cobertura.ordenar_por_carencia(celdas)
+        self.assertEqual([c["entidad_id"] for c in orden],
+                         ["c1", "c2", "c3", "c4"])
 
 
 if __name__ == "__main__":

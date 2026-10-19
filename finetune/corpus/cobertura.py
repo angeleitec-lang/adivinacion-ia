@@ -8,7 +8,19 @@ Las convenciones de `entidad_id` reutilizan las de `web_rejillas.py`:
 `planeta|signo|planeta_en_signo`, `planeta|casaN|planeta_en_casa` y
 `p1|aspecto|p2|aspecto` (pares sin repetición, i < j).
 """
+import argparse
+import json
+import os
+import sys
+
 import cartas
+
+_NOMBRE_FAMILIA = {
+    "tarot": "Tarot",
+    "baraja_espanola": "Baraja española",
+    "astrologia": "Astrología",
+    "numerologia": "Numerología",
+}
 
 # ---------------------------------------------------------------------------
 # Catálogos canónicos (estables; coinciden con knowledge/rejillas_astrologia.json)
@@ -249,3 +261,186 @@ def calcular_cobertura(evidencias, catalogo=None, calidad_min=3,
             "faltan": faltan,
         })
     return {"celdas": celdas, "completas": completas, "ignoradas": ignoradas}
+
+
+# ---------------------------------------------------------------------------
+# Lectura de evidencias y resumen
+# ---------------------------------------------------------------------------
+
+def leer_evidencias(rutas):
+    """Lee ficheros JSONL de evidencias. Devuelve (evidencias, ignoradas).
+
+    Las líneas vacías se omiten; las que no son JSON válido (o no son objetos)
+    se cuentan como ignoradas. Los ficheros inexistentes se saltan sin error.
+    """
+    evidencias = []
+    ignoradas = 0
+    for ruta in rutas:
+        try:
+            archivo = open(ruta, encoding="utf-8")
+        except FileNotFoundError:
+            continue
+        with archivo:
+            for linea in archivo:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    ev = json.loads(linea)
+                except json.JSONDecodeError:
+                    ignoradas += 1
+                    continue
+                if not isinstance(ev, dict):
+                    ignoradas += 1
+                    continue
+                evidencias.append(ev)
+    return evidencias, ignoradas
+
+
+def resumen_por_familia(resultado, catalogo=None):
+    """Celdas, completas y porcentaje por familia (con nombre legible)."""
+    if catalogo is None:
+        catalogo = entidades()
+    familia_de = {e["entidad_id"]: e["familia"] for e in catalogo}
+    acumulado = {}
+    for celda in resultado["celdas"]:
+        familia = familia_de.get(celda["entidad_id"])
+        datos = acumulado.setdefault(familia, {"celdas": 0, "completas": 0})
+        datos["celdas"] += 1
+        if celda["completa"]:
+            datos["completas"] += 1
+    for datos in acumulado.values():
+        if datos["celdas"]:
+            datos["porcentaje"] = round(100.0 * datos["completas"] / datos["celdas"], 1)
+        else:
+            datos["porcentaje"] = 0.0
+    return {_NOMBRE_FAMILIA.get(f, f): d for f, d in acumulado.items()}
+
+
+def _porcentaje_es(valor):
+    return f"{valor:.1f}".replace(".", ",") + " %"
+
+
+# ---------------------------------------------------------------------------
+# Salida en disco
+# ---------------------------------------------------------------------------
+
+def ordenar_por_carencia(celdas, minimo_fuentes=5, minimo_clasicas=1,
+                        minimo_modernas=2, minimo_es=1):
+    """Ordena las celdas de mayor a menor carencia (desempate por id y faceta)."""
+    def clave(celda):
+        carencia = (
+            max(0, minimo_fuentes - celda["n_fuentes"])
+            + max(0, minimo_clasicas - celda["n_clasicas"])
+            + max(0, minimo_modernas - celda["n_modernas"])
+            + max(0, minimo_es - celda["n_es"])
+        )
+        return (-carencia, celda["entidad_id"], celda["faceta"])
+    return sorted(celdas, key=clave)
+
+
+def escribir_json(resultado, ruta, resumen=None, catalogo=None):
+    """Vuelca la matriz completa y el resumen a cobertura.json (UTF-8)."""
+    if resumen is None:
+        resumen = resumen_por_familia(resultado, catalogo)
+    datos = {
+        "resumen": {
+            "total_celdas": len(resultado["celdas"]),
+            "completas": resultado["completas"],
+            "ignoradas": resultado["ignoradas"],
+            "por_familia": resumen,
+        },
+        "celdas": resultado["celdas"],
+    }
+    with open(ruta, "w", encoding="utf-8") as f:
+        json.dump(datos, f, ensure_ascii=False, indent=1)
+        f.write("\n")
+
+
+def escribir_md(resultado, ruta, max_huecos=200, resumen=None, catalogo=None):
+    """Informe en markdown: resumen por familia y celdas bajo el mínimo."""
+    if resumen is None:
+        resumen = resumen_por_familia(resultado, catalogo)
+    total = len(resultado["celdas"])
+    completas = resultado["completas"]
+    pct = round(100.0 * completas / total, 1) if total else 0.0
+    lineas = [
+        "# Matriz de cobertura",
+        "",
+        f"- Total de celdas: {total}",
+        f"- Celdas completas: {completas} ({_porcentaje_es(pct)})",
+        f"- Evidencias ignoradas: {resultado['ignoradas']}",
+        "",
+        "## Resumen por familia",
+        "",
+        "| Familia | Celdas | Completas | % completas |",
+        "|---|---|---|---|",
+    ]
+    for nombre, datos in resumen.items():
+        lineas.append(
+            f"| {nombre} | {datos['celdas']} | {datos['completas']} "
+            f"| {_porcentaje_es(datos['porcentaje'])} |"
+        )
+    huecos = [c for c in resultado["celdas"] if not c["completa"]]
+    huecos = ordenar_por_carencia(huecos)
+    lineas += [
+        "",
+        "## Celdas bajo el mínimo (ordenadas por mayor carencia)",
+        "",
+    ]
+    for celda in huecos[:max_huecos]:
+        lineas.append(
+            f"- `{celda['entidad_id']}` · {celda['faceta']}: "
+            + "; ".join(celda["faltan"])
+        )
+    restantes = len(huecos) - max_huecos
+    if restantes > 0:
+        lineas.append("")
+        lineas.append(f"Y {restantes} celdas más bajo el mínimo.")
+    with open(ruta, "w", encoding="utf-8") as f:
+        f.write("\n".join(lineas) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Calcula la matriz de cobertura a partir de evidencias etiquetadas.")
+    parser.add_argument("--evidencias", nargs="+", required=True,
+                       help="uno o varios ficheros JSONL de evidencias")
+    parser.add_argument("--out-json", default="cobertura.json",
+                       help="ruta de salida del JSON (por defecto: cobertura.json)")
+    parser.add_argument("--out-md", default="cobertura.md",
+                       help="ruta de salida del informe (por defecto: cobertura.md)")
+    parser.add_argument("--calidad-min", type=int, default=3,
+                       help="calidad mínima para contar una evidencia (por defecto: 3)")
+    parser.add_argument("--max-huecos", type=int, default=200,
+                       help="máximo de celdas listadas en el informe (por defecto: 200)")
+    parser.add_argument("--dry-run", action="store_true",
+                       help="imprime el resumen y no escribe ficheros")
+    args = parser.parse_args(argv)
+
+    evidencias, malas = leer_evidencias(args.evidencias)
+    catalogo = entidades()
+    resultado = calcular_cobertura(evidencias, catalogo=catalogo,
+                                  calidad_min=args.calidad_min)
+    resultado["ignoradas"] += malas
+    resumen = resumen_por_familia(resultado, catalogo)
+    if args.dry_run:
+        total = len(resultado["celdas"])
+        print(f"Cobertura (simulación): {resultado['completas']} de {total} "
+              f"celdas completas; evidencias ignoradas: {resultado['ignoradas']}")
+        for nombre, datos in resumen.items():
+            print(f"  {nombre}: {datos['completas']}/{datos['celdas']} completas "
+                  f"({_porcentaje_es(datos['porcentaje'])})")
+        return 0
+    escribir_json(resultado, args.out_json, resumen)
+    escribir_md(resultado, args.out_md, max_huecos=args.max_huecos, resumen=resumen)
+    print(f"Cobertura escrita en {args.out_json} y {args.out_md}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
