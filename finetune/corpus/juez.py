@@ -18,9 +18,10 @@ Diseño en dos pasos:
      admite un reintento y después queda como `error`.
 
 Las facetas aceptadas deben superar la verificación de anclaje
-(`PALABRAS_CLAVE_FACETA`): el texto de la sección debe contener alguna
-palabra clave razonable de la faceta. `significado_general` y `simbolismo`
-no exigen palabra clave.
+(`PALABRAS_CLAVE_FACETA` en español y `PALABRAS_CLAVE_FACETA_EN` en
+inglés): el texto de la sección debe contener alguna palabra clave razonable
+de la faceta, en el idioma detectado de la sección (o la unión de ambos si
+es dudoso). `significado_general` y `simbolismo` no exigen palabra clave.
 """
 
 from __future__ import annotations
@@ -358,6 +359,9 @@ def juzgar_seccion(cliente, seccion, candidatos, reintentos=1):
 # tildes) que deben aparecer en el texto de la sección para aceptar la faceta.
 # `None` significa exenta: no exige palabra clave (lo son `significado_general`
 # y `simbolismo`, que todo texto de entidad documenta de facto).
+# Hay dos tablas, una por idioma (`PALABRAS_CLAVE_FACETA` en español y
+# `PALABRAS_CLAVE_FACETA_EN` en inglés); `facetas_ancladas` elige la tabla
+# según el idioma detectado de la sección y, si es dudoso, aplica la unión.
 PALABRAS_CLAVE_FACETA = {
     "significado_general": None,
     "simbolismo": None,
@@ -383,18 +387,61 @@ PALABRAS_CLAVE_FACETA = {
                        "en la practica", "consulta real"],
 }
 
+# Tabla en inglés (T22b): la mayor parte del corpus (Waite, Papus, libros de
+# archive.org) está en este idioma, así que sin claves inglesas ninguna fuente
+# inglesa respaldaría facetas como amor/trabajo/dinero y la matriz de
+# cobertura subestimaría gravemente su cobertura. Mismas facetas y mismas
+# exenciones que la tabla española.
+PALABRAS_CLAVE_FACETA_EN = {
+    "significado_general": None,
+    "simbolismo": None,
+    "luz_sombra": ["shadow", "light side", "positive", "negative"],
+    "derecha_invertida": ["reversed", "upside down", "inverted"],
+    "amor": ["love", "partner", "relationship", "romance"],
+    "trabajo": ["work", "career", "job", "business", "venture"],
+    "dinero": ["money", "finances", "wealth", "income"],
+    "salud": ["health", "body", "illness", "wellbeing"],
+    "espiritual": ["spiritual", "soul", "divine"],
+    "correspondencias": ["correspondence", "ruled by", "element", "kabbalah",
+                         "tree of life"],
+    "consejo_practico": ["advice", "recommend", "should", "practical"],
+    "ejemplo_de_uso": ["example", "sample reading", "spread"],
+}
 
-def facetas_ancladas(facetas, texto):
+
+def _claves_faceta(faceta, idioma):
+    """Palabras clave de la faceta según el idioma (`None` = exenta).
+
+    Con `idioma` `'es'` o `'en'` se usa solo la tabla de ese idioma; con
+    cualquier otro valor (desconocido o dudoso) se aplica la unión de ambas,
+    para no perder anclajes cuando el idioma de la sección no está claro.
+    """
+    if idioma == "es":
+        return PALABRAS_CLAVE_FACETA.get(faceta)
+    if idioma == "en":
+        return PALABRAS_CLAVE_FACETA_EN.get(faceta)
+    es = PALABRAS_CLAVE_FACETA.get(faceta)
+    en = PALABRAS_CLAVE_FACETA_EN.get(faceta)
+    if es is None or en is None:
+        return None
+    return list(es) + list(en)
+
+
+def facetas_ancladas(facetas, texto, idioma=None):
     """Subconjunto de `facetas` cuyo anclaje léxico supera el texto.
 
     Las facetas sin entrada o con lista vacía se consideran exentas. El texto
     se normaliza con `cartas.norm` (minúsculas, sin tildes), igual que las
-    palabras clave de la constante.
+    palabras clave de las constantes.
+
+    `idioma` selecciona la tabla de palabras clave: `'es'` o `'en'` usan
+    solo la de ese idioma; cualquier otro valor (o `None`) aplica la unión de
+    español e inglés, para no perder anclajes cuando el idioma es dudoso.
     """
     tn = _norm(texto)
     aceptadas = []
     for faceta in facetas:
-        claves = PALABRAS_CLAVE_FACETA.get(faceta)
+        claves = _claves_faceta(faceta, idioma)
         if not claves or any(clave in tn for clave in claves):
             if faceta not in aceptadas:
                 aceptadas.append(faceta)
@@ -508,11 +555,22 @@ def evidencias_de_seccion(seccion, juicio, fuente):
     if juicio.get("tipo") not in TIPOS_CON_EVIDENCIA:
         return []
     idioma = fuente.get("idioma") or juicio.get("idioma") or "otro"
+    # Idioma para el anclaje léxico: si el metadato de la fuente y el idioma
+    # que el LLM detectó en ESTA sección coinciden, se aplica solo la lista de
+    # ese idioma; si discrepan o alguno falta, la señal es dudosa y se aplica
+    # la unión de español e inglés (ver `facetas_ancladas`).
+    idioma_fuente = fuente.get("idioma")
+    idioma_juicio = juicio.get("idioma")
+    if idioma_fuente and idioma_fuente == idioma_juicio:
+        idioma_anclaje = idioma_fuente
+    else:
+        idioma_anclaje = "otro"
     tn = seccion.get("texto") or ""
     evidencia_hash = hash_seccion(seccion)
     lineas = []
     for ent in juicio.get("entidades", []):
-        for faceta in facetas_ancladas(ent.get("facetas", []), tn):
+        for faceta in facetas_ancladas(ent.get("facetas", []), tn,
+                                       idioma=idioma_anclaje):
             linea = {
                 "entidad_id": ent["entidad_id"],
                 "faceta": faceta,
