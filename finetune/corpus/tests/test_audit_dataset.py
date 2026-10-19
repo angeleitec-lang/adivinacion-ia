@@ -201,6 +201,29 @@ RESPUESTA_LUNA = (
     "observando los sueños y las señales que el subconsciente te envía cada noche."
 )
 
+# Seguimiento legítimo: sin «tarot», «carta» ni ningún término fuerte
+RESPUESTA_SEGUIDIMIENTO = (
+    "Cuando una etapa nueva se abre paso, te conviene aprovecharla con pasos "
+    "pequeños y concretos: anota lo que quieres cambiar, habla con las personas "
+    "implicadas y date un plazo razonable para ver resultados. La paciencia activa "
+    "funciona mejor que la prisa, porque las cosas maduran a su ritmo y puedes ir "
+    "ajustando tu plan según lo que observes cada semana."
+)
+
+RESPUESTA_COCINA = (
+    "La cocina italiana se apoya en la pasta, el tomate, el aceite de oliva y las "
+    "hierbas frescas; cada región tiene sus platos típicos y sus secretos "
+    "transmitidos de generación en generación, desde lasañas y ravioles hasta las "
+    "pizzas horneadas en leña que se disfrutan en todo el país."
+)
+
+RESPUESTA_POSTRES = (
+    "Entre los postres más típicos encontrarás el tiramisú, la panna cotta y los "
+    "cannoli sicilianos, todos ellos fáciles de preparar en casa con ingredientes "
+    "sencillos; te recomiendo empezar por el tiramisú, que no necesita horno y "
+    "gusta a casi todo el mundo en las comidas familiares."
+)
+
 
 class TestMultiTurno(unittest.TestCase):
     def test_extraer_pares_devuelve_todos_los_pares(self):
@@ -274,6 +297,53 @@ class TestMultiTurno(unittest.TestCase):
         self.assertGreater(informe["longitudes"]["min"], len(RESPUESTA_TAROT))
         self.assertEqual(informe["ejemplos_aceptados"][0]["prompt"],
                          "¿Qué me dice El Loco en mi tirada sobre el trabajo?")
+
+
+class TestDominioEnFilaMultiTurno(unittest.TestCase):
+    def test_turno_dos_sin_termino_fuerte_no_falla_dominio(self):
+        f = fila_multi([
+            ("¿Qué me dice La Estrella en mi tirada sobre mi renovación?", RESPUESTA_TAROT),
+            ("Dijiste que habrá renovación, ¿cómo la aprovecho?", RESPUESTA_SEGUIDIMIENTO),
+        ])
+        score, motivos, _ = aud.puntuar(f)
+        self.assertNotIn("t1:dominio", motivos)
+        self.assertNotIn("t2:dominio", motivos)
+        self.assertGreaterEqual(score, 0.6)
+
+    def test_fila_multi_turno_sin_dominio_en_ningun_mensaje_sigue_fallando(self):
+        f = fila_multi([
+            ("¿Qué me cuentas de la cocina italiana?", RESPUESTA_COCINA),
+            ("¿Y qué postres recomiendas?", RESPUESTA_POSTRES),
+        ])
+        score, motivos, _ = aud.puntuar(f)
+        self.assertIn("t1:dominio", motivos)
+        self.assertIn("t2:dominio", motivos)
+        self.assertLess(score, 0.6)
+
+    def test_un_turno_sin_dominio_sigue_penalizando_sin_prefijo(self):
+        _, motivos, _ = aud.puntuar(
+            fila("¿Qué me cuentas de la cocina italiana?", RESPUESTA_COCINA))
+        self.assertIn("dominio", motivos)
+        self.assertFalse(any(":" in m for m in motivos))
+
+
+class TestSeguimientosCortos(unittest.TestCase):
+    def test_seguimiento_corto_no_penaliza_como_generico(self):
+        f = fila_multi([
+            ("¿Qué me dice La Estrella en mi tirada sobre mi renovación?", RESPUESTA_TAROT),
+            ("¿Y si no cambia en un mes?", RESPUESTA_SEGUIDIMIENTO),
+        ])
+        score, motivos, _ = aud.puntuar(f)
+        self.assertNotIn("t2:prompt_generico", motivos)
+        self.assertGreaterEqual(score, 0.6)
+
+    def test_prompt_vacio_de_contenido_sigue_siendo_generico(self):
+        f = fila_multi([
+            ("¿Qué me dice La Estrella en mi tirada sobre mi renovación?", RESPUESTA_TAROT),
+            ("¿Y?", RESPUESTA_SEGUIDIMIENTO),
+        ])
+        _, motivos, _ = aud.puntuar(f)
+        self.assertIn("t2:prompt_generico", motivos)
 
 
 if __name__ == "__main__":
