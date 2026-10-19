@@ -178,3 +178,13 @@ for w in .worktrees/*/; do echo "$(basename $w): $(git -C $w log --oneline main.
 ## 13. Registro de lo escrito en Letta (2026-10-18/19)
 
 Scope `project: adivinacion-ia`: entrada de **correcciones** (9 puntos que sustituyen a entradas anteriores), entrada de **resumen de la sesión**, y las entradas que escribieron las propias IAs (T5, T8…). Scope `global`: **lecciones de coordinación multi-IA** (ajustes por prompt, verificar con casos propios, sin subagentes Agent, rate limits). Memoria local de Claude: `feedback_no_subagentes.md`, `project_estado_adivinacion_ia.md`.
+
+## 8d. Cobertura web ampliada (2026-10-19, tras T26 y 647 páginas nuevas)
+
+Web en español: 756 páginas de 27 dominios; 5.285 evidencias. Celdas con ≥ 1 fuente (todas en español, ninguna clásica todavía):
+- Tarot: 332 de 936 (≥ 3 fuentes: 31; ≥ 5: 2).
+- Numerología: 387 de 792 (≥ 3: 63; ≥ 5: 3).
+- Astrología + baraja española (`naipe-*`): 1.566 de 6.207 (≥ 3: 213; ≥ 5: 4). La baraja española estaba en 372 de 480 antes de esta ampliación.
+- Celdas completas: 0 (falta siempre la fuente clásica; vendrá de libros).
+Auditoría de calidad (T31, `/Users/angelgonzalez/fase0/web/calidad.md`): 4 páginas con mojibake (tarotsevilla.com), 171 con título pobre, 2 duplicadas; ambos defectos reales pasan a T30b.
+Pendientes: libros (T24), YouTube (limitado por 429, bucle de reanudación), tarot por carta (T27), lecturas trabajadas (T28), extractor de afirmaciones (T29).
