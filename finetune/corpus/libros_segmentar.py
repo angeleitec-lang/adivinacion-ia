@@ -365,8 +365,10 @@ _VOCALES = set("aeiouyáéíóúñ")
 
 
 def _titulo_es_ruido(titulo):
-    """True si el título es ruido OCR: pocas letras, exceso de símbolos o
-    algún token de 3+ caracteres sin ninguna vocal."""
+    """True si el título es ruido OCR: pocas letras, exceso de símbolos,
+    algún token de 3+ caracteres sin ninguna vocal, sílabas sueltas sin
+    vocales en títulos cortos o palabras largas con proporción de vocales
+    anómala."""
     if not titulo:
         return False
     texto = titulo.strip()
@@ -382,7 +384,36 @@ def _titulo_es_ruido(titulo):
         if len(token) >= 3 and tok_letras and not any(c in _VOCALES
                                                     for c in tok_letras):
             return True
+        n = len(tok_letras)
+        if not n:
+            continue
+        vocales = sum(1 for c in tok_letras if c in _VOCALES)
+        # (a) título corto con sílaba suelta sin vocales: «ENS DS».
+        if len(letras) < 8 and n <= 2 and vocales == 0:
+            return True
+        # (b) palabra larga con exceso de vocales: «FUESEIEAES».
+        if n >= 8 and vocales / n > 0.65:
+            return True
+        # Escasez de vocales solo a partir de 9 letras: «Strength» (8 letras,
+        # 1 vocal) es una carta legítima y no debe quedar marcada.
+        if n >= 9 and vocales / n < 0.15:
+            return True
     return False
+
+
+_MARCA_PAGINA_RE = re.compile(r"^(?:page\b|chap(?!ter)\b)", re.IGNORECASE)
+
+
+def _es_marca_pagina(titulo, familia):
+    """True si el título es una marca de página o capítulo mal reconocida
+    («PAGE», «CHAP. PAQK») que no aporta un título real detrás."""
+    if not titulo or not _MARCA_PAGINA_RE.match(titulo):
+        return False
+    resto = re.sub(r"^(?:page|chap(?!ter)\b)\.?\s*", "", titulo,
+                  count=1, flags=re.IGNORECASE).strip(" .:,-")
+    if not resto:
+        return True
+    return not _titulo_protegido(resto, familia)
 
 
 def _titulo_de_linea(linea, familia):
@@ -390,7 +421,7 @@ def _titulo_de_linea(linea, familia):
     titulo = _titulo_bruto_de_linea(linea, familia)
     if (titulo and len(titulo) <= 40
             and not _titulo_protegido(titulo, familia)
-            and _titulo_es_ruido(titulo)):
+            and (_titulo_es_ruido(titulo) or _es_marca_pagina(titulo, familia))):
         return None
     return titulo
 
@@ -573,6 +604,39 @@ def _demoler_repetidos(secciones):
     return rehechas
 
 
+def _fundir_consecutivos(secciones):
+    """Funde secciones cuyo título se repite de forma consecutiva cuando el
+    cuerpo repetido es breve: una misma cabecera corrida por error de OCR
+    («TAROTS, TAROTS») no es un capítulo nuevo. Con cuerpos grandes se
+    conserva, porque pueden ser secciones reales homónimas y fundirlas
+    obligaría a re-trocear en exceso."""
+    fundidas = []
+    for seccion in secciones:
+        if (fundidas and seccion["titulo"]
+                and fundidas[-1]["titulo"] == seccion["titulo"]
+                and seccion["chars"] < 2000):
+            previa = fundidas[-1]
+            previa["texto"] = (previa["texto"] + "\n\n"
+                              + seccion["texto"]).strip()
+            previa["chars"] = len(previa["texto"])
+        else:
+            fundidas.append(dict(seccion))
+    if len(fundidas) == len(secciones):
+        return secciones
+    rehechas = []
+    for seccion in fundidas:
+        for parte in _partir_largo(seccion["texto"]):
+            if parte.strip():
+                nueva = dict(seccion)
+                nueva["texto"] = parte
+                nueva["chars"] = len(parte)
+                rehechas.append(nueva)
+    for indice, seccion in enumerate(rehechas):
+        seccion["seccion"] = indice + 1
+        seccion["posicion"] = indice
+    return rehechas
+
+
 def segmentar(texto_limpio, familia, id_libro=""):
     """Devuelve las secciones de un libro limpio, en orden.
 
@@ -619,4 +683,4 @@ def segmentar(texto_limpio, familia, id_libro=""):
         if frente_materia:
             seccion["front_matter"] = True
         secciones.append(seccion)
-    return _demoler_repetidos(secciones)
+    return _fundir_consecutivos(_demoler_repetidos(secciones))
