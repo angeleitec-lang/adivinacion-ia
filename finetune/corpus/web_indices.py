@@ -2,7 +2,7 @@
 """Descubrimiento de páginas desde índices configurables (A3.4).
 
 Para sitios con una página por carta/número pero sin patrón de URL fijo,
-separte de una página índice y se siguen los enlaces que cumplan una
+se parte de una página índice y se siguen los enlaces que cumplan una
 regex configurable.
 """
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin, urlparse
@@ -59,19 +60,63 @@ def _extraer_enlaces(html: str, base_url: str, dominio: Optional[str] = None) ->
         if href.startswith("#"):
             continue
         url_norm = _normalizar_url(base_url, href)
-        # Descartar si tras quitar fragmento la URL es la misma que base_url
+        # Quitar el fragmento #… antes de comparar y deduplicar
+        url_norm = url_norm.split("#")[0]
+        # Descartar si la URL es la propia página índice
         base_sin_fragmento = base_url.split("#")[0]
         if url_norm == base_sin_fragmento:
             continue
         # Filtrar esquemas no deseados
         if url_norm.startswith(("mailto:", "tel:", "javascript:", "data:")):
             continue
-        # Quita el fragmento #… de las URLs resultantes
-        if "#" in url_norm.split("?")[0]:
-            url_norm = url_norm.split("#")[0]
         if dominio is None or _mismo_dominio(url_norm, dominio):
             enlaces.append(url_norm)
     return enlaces
+
+
+_PATRON_LOC = re.compile(r"<loc>\s*(.*?)\s*</loc>", re.IGNORECASE | re.DOTALL)
+_MAX_SITEMAPS_HIJOS = 10
+
+
+def _es_sitemap(texto: str, url: str = "") -> bool:
+    """True si la URL acaba en .xml o el contenido parece un sitemap XML."""
+    if url.lower().split("?")[0].endswith(".xml"):
+        return True
+    inicio = texto.lstrip()[:200]
+    return bool(re.match(r"<\?xml|<urlset|<sitemapindex", inicio, re.IGNORECASE))
+
+
+def _extraer_locs(xml_texto: str) -> List[str]:
+    """Extrae las URLs de las etiquetas <loc> de un sitemap XML."""
+    return [m.strip() for m in _PATRON_LOC.findall(xml_texto) if m.strip()]
+
+
+def _enlaces_desde_respuesta(
+    texto: str,
+    url_base: str,
+    cliente,
+    dominio: str,
+    pausa_s: float = 1.0,
+) -> List[str]:
+    """Enlaces desde una respuesta: sitemap XML o HTML normal.
+
+    Si es `sitemapindex`, sigue los sitemaps hijos (máximo 1 nivel y 10 hijos,
+    con `pausa_s` segundos entre peticiones; el cliente ya respeta robots.txt).
+    """
+    if not _es_sitemap(texto, url_base):
+        return _extraer_enlaces(texto, url_base, dominio)
+    if re.search(r"<sitemapindex", texto, re.IGNORECASE):
+        enlaces: List[str] = []
+        hijos = _extraer_locs(texto)[:_MAX_SITEMAPS_HIJOS]
+        for i, hijo in enumerate(hijos):
+            if i > 0 and pausa_s > 0:
+                time.sleep(pausa_s)
+            resp = cliente.get(hijo)
+            if resp["estado"] != "ok" or not resp.get("html"):
+                continue
+            enlaces.extend(_extraer_locs(resp["html"]))
+        return enlaces
+    return _extraer_locs(texto)
 
 
 def _filtrar_por_regex(urls: List[str], regex: str, dominio: str) -> List[str]:
@@ -102,14 +147,15 @@ def _seguir_indice_unico(
     dominio: str,
     limite: int,
     timeout: float,
+    pausa_s: float = 1.0,
 ) -> List[str]:
     """Secuencia interna de `seguir_indice` para un solo URL de índice."""
     resp = cliente.get(indice_url)
     if resp["estado"] != "ok" or not resp.get("html"):
         return []
 
-    # Extraer enlaces
-    enlaces = _extraer_enlaces(resp["html"], indice_url, dominio)
+    # Extraer enlaces (HTML normal o sitemap XML)
+    enlaces = _enlaces_desde_respuesta(resp["html"], indice_url, cliente, dominio, pausa_s)
 
     # Filtrar por regex y dominio
     filtradas = _filtrar_por_regex(enlaces, regex, dominio)
@@ -126,6 +172,7 @@ def seguir_indice(
     cliente,
     limite: int = 50,
     timeout: float = 30.0,
+    pausa_s: float = 1.0,
 ) -> List[str]:
     """Descarga el índice, extrae enlaces, filtra por regex y dominio.
 
@@ -150,7 +197,7 @@ def seguir_indice(
             if resp["estado"] != "ok" or not resp.get("html"):
                 # Si falla este índice, se continúa con los demás
                 continue
-            enlaces = _extraer_enlaces(resp["html"], idx_url, dominio)
+            enlaces = _enlaces_desde_respuesta(resp["html"], idx_url, cliente, dominio, pausa_s)
             todas_enlaces.extend(enlaces)
         # Filtrar por regex y dominio sobre la unión
         filtradas = _filtrar_por_regex(todas_enlaces, regex, dominio)
@@ -160,7 +207,7 @@ def seguir_indice(
         return unicas[:limite]
     else:
         # Un solo índice (retrocompatible)
-        return _seguir_indice_unico(indice, cliente, regex, dominio, limite, timeout)
+        return _seguir_indice_unico(indice, cliente, regex, dominio, limite, timeout, pausa_s)
 
 
 def seguir_indice_multiples(

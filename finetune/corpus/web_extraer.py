@@ -62,46 +62,131 @@ def _yaml_dumper(data: Dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Frases de navegación/comercial a eliminar (insensible a mayúsculas)
-# ---------------------------------------------------------------------------
-
-FRASES_RUIDO = [
-    "suscríbete", "suscribete", "subscribe",
-    "compra", "comprar", "buy", "añadir al carrito", "añadir al carrito",
-    "agregar al carrito", "add to cart", "ver productos", "ver productos relacionados",
-    "lee también", "leer también", "read also", "continúa leyendo", "continuar leyendo",
-    "regístrate", "registrate", "sign up", "iniciar sesión", "iniciar sesion",
-    "cookie", "política de privacidad", "privacy policy", "términos de uso",
-    "terms of service", "aceptar cookies", "accept cookies",
-    "publicidad", "advertisement", "anuncio", "sponsored",
-    "newsletter", "boletín", "boletin", "no te pierdas",
-    "síguenos", "siguenos", "follow us", "compártelo", "compartelo",
-    "share", "whatsapp", "telegram", "facebook", "twitter", "instagram",
-]
-
-
-# ---------------------------------------------------------------------------
 # Funciones de limpieza
 # ---------------------------------------------------------------------------
 
+# Coincidencia con límite de palabra: «compra» no casa dentro de «comprador»
+_PATRONES_RUIDO = [re.compile(r"\b" + re.escape(frase) + r"\b", re.IGNORECASE)
+                   for frase in FRASES_RUIDO]
+
+# Una línea que contenga ruido solo se borra si es corta (navegación/comercial)
+MAX_PALABRAS_RUIDO = 12
+
+
+def _contiene_ruido(linea_lower: str) -> bool:
+    """True si la línea contiene alguna frase de ruido como palabra completa."""
+    return any(p.search(linea_lower) for p in _PATRONES_RUIDO)
+
+
+def _es_solo_ruido(linea_lower: str) -> bool:
+    """True si, quitadas las frases de ruido, no queda nada alfanumérico."""
+    resto = linea_lower
+    for p in _PATRONES_RUIDO:
+        resto = p.sub(" ", resto)
+    return not re.search(r"\w", resto)
+
+
 def _limpiar_ruido(texto: str) -> str:
-    """Elimina frases de navegación/comercial (insensible a mayúsculas, multilinea)."""
+    """Borra líneas cortas de navegación/comercial o que son solo ruido.
+
+    Respeta la prosa larga (> MAX_PALABRAS_RUIDO palabras) aunque contenga
+    palabras de la lista, y la prosa corta sin ruido. La coincidencia es con
+    límite de palabra, así «comprador» o «anuncia» no se confunden con
+    «compra» o «anuncio».
+    """
     lineas = texto.splitlines()
     limpias = []
     for linea in lineas:
-        lower = linea.lower().strip()
-        # Saltar líneas que son solo ruido
-        if any(frase in lower for frase in FRASES_RUIDO):
-            continue
+        stripped = linea.strip()
         # Saltar líneas muy cortas que parecen ruido
-        if len(linea.strip()) <= 2:
+        if len(stripped) <= 2:
             continue
+        lower = stripped.lower()
+        if not _contiene_ruido(lower):
+            limpias.append(linea)
+            continue
+        # Línea que es solo ruido: fuera sea cual sea su longitud
+        if _es_solo_ruido(lower):
+            continue
+        # Ruido en línea corta (navegación/comercial): fuera
+        if len(lower.split()) <= MAX_PALABRAS_RUIDO:
+            continue
+        # Prosa larga: se conserva
         limpias.append(linea)
     return "\n".join(limpias)
 
 
+def _limpiar_marcas_titulo(t: str) -> str:
+    """Quita marcas de negrita/cursiva y normaliza espacios del título."""
+    t = t.replace("**", "").replace("__", "")
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _extraer_titulo(md: str, html: str = "") -> str:
+    """Título: primer encabezado #/## del Markdown; si no, el <title> del HTML;
+
+    y si no, la primera línea corta (≤ 120 caracteres) sin marcas ``**``.
+    """
+    for l in md.splitlines():
+        m = re.match(r"^#{1,2}\s+(.+)$", l.strip())
+        if m:
+            t = _limpiar_marcas_titulo(m.group(1))
+            if t:
+                return t[:200]
+    m = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+    if m:
+        t = _limpiar_marcas_titulo(reparar_mojibake(m.group(1)))
+        if t:
+            return t[:200]
+    for l in md.splitlines():
+        s = l.strip()
+        if s and len(s) <= 120 and "**" not in s:
+            return s
+    return ""
+
+
 def _sha256(texto: str) -> str:
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Reparación de mojibake (UTF-8 leído como cp1252)
+# ---------------------------------------------------------------------------
+
+# Caracteres que cp1252 usa para los bytes 0x80-0xBF (posibles segundos bytes
+# de una secuencia UTF-8 mal leída). Se calculan del propio códec.
+_CARACTERES_80_BF = "".join(
+    ch
+    for ch in (bytes([b]).decode("cp1252", errors="ignore") for b in range(0x80, 0xC0))
+    if ch
+)
+_CLASE_80_BF = "".join(re.escape(ch) for ch in _CARACTERES_80_BF)
+
+# Secuencias mojibake: «Ã» + 1 byte de continuación, o «â» + 1-2 bytes.
+_MOJIBAKE_SEQ = re.compile(
+    "Ã[" + _CLASE_80_BF + "]|â[" + _CLASE_80_BF + "]{1,2}"
+)
+
+
+def _reparar_secuencia(match: "re.Match") -> str:
+    """Repara una secuencia mojibake; si no decodifica, la deja intacta."""
+    try:
+        return match.group(0).encode("cp1252").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return match.group(0)
+
+
+def reparar_mojibake(texto: str) -> str:
+    """Repara texto UTF-8 que fue leído como cp1252 (mojibake tipo «aÃ±os»).
+
+    Repara secuencia a secuencia (T30c): cada «Ã»/«â» + bytes de continuación se
+    re-codifica por separado como cp1252 y se decodifica como UTF-8. Las
+    secuencias irrecuperables (p. ej. una «Ã» sin su segundo byte) se quedan
+    intactas y no impiden reparar las demás.
+    """
+    if not _MOJIBAKE_SEQ.search(texto):
+        return texto
+    return _MOJIBAKE_SEQ.sub(_reparar_secuencia, texto)
 
 
 # ---------------------------------------------------------------------------
@@ -145,20 +230,17 @@ def extraer(
     if not md or len(md.strip()) < min_chars:
         return None
 
+    # Reparar mojibake (UTF-8 leído como cp1252) antes de limpiar ruido
+    md = reparar_mojibake(md)
+
     # Limpiar ruido
     md = _limpiar_ruido(md)
 
     # Detectar idioma (simple, basado en trafilatura o heurística)
     idioma = "es"  # default para nuestro corpus
 
-    # Título: primera línea que parece título (heurística simple)
-    lineas = md.splitlines()
-    titulo = ""
-    for l in lineas:
-        l_strip = l.strip()
-        if l_strip and not l_strip.startswith("#") and len(l_strip) > 5:
-            titulo = l_strip[:200]
-            break
+    # Título: encabezado #/##, si no <title> del HTML, si no línea corta sin **
+    titulo = _extraer_titulo(md, html)
 
     chars = len(md)
     sha = hashlib.sha256(md.encode("utf-8")).hexdigest()

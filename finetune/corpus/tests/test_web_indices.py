@@ -4,11 +4,13 @@ import os
 import re
 import sys
 import unittest
+from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import re
+import web_indices
 from web_indices import (
     cargar_config,
     seguir_indice,
@@ -84,6 +86,33 @@ class UtilidadesTests(unittest.TestCase):
         urls = ["a", "b", "a", "c", "b"]
         self.assertEqual(_deduplicar_urls(urls), ["a", "b", "c"])
 
+    def test_propia_pagina_con_fragmento_se_descarta(self):
+        """T30.3: href que apunta a la propia página índice con #fragmento no debe salir."""
+        html = """<html><body>
+        <a href="/cartas/#top">Arriba</a>
+        <a href="/cartas/loco.html">El Loco</a>
+        </body></html>"""
+        urls = _extraer_enlaces(html, "https://site.com/cartas/", "site.com")
+        self.assertNotIn("https://site.com/cartas/", urls)
+        self.assertIn("https://site.com/cartas/loco.html", urls)
+
+    def test_urls_resultantes_sin_fragmento(self):
+        """T30.3: ninguna URL devuelta conserva #fragmento, ni con query."""
+        html = """<html><body>
+        <a href="/a.html#x">a</a>
+        <a href="/b.html?y=1#z">b</a>
+        </body></html>"""
+        urls = _extraer_enlaces(html, "https://site.com/idx/", "site.com")
+        self.assertIn("https://site.com/a.html", urls)
+        self.assertIn("https://site.com/b.html?y=1", urls)
+        for u in urls:
+            self.assertNotIn("#", u)
+
+    def test_source_sin_errata_separte(self):
+        """T30.3: el docstring debe decir «se parte», no «separte»."""
+        src = Path(web_indices.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("separte", src)
+
 
 class SeguirIndiceTests(unittest.TestCase):
     def setUp(self):
@@ -146,6 +175,22 @@ class SeguirIndiceTests(unittest.TestCase):
         cliente = self._crear_cliente_simulado("", estado="error")
         urls = seguir_indice(sitio_cfg, cliente, limite=50)
         self.assertEqual(urls, [])
+
+    def test_deduplica_fragmentos_de_la_misma_url(self):
+        """T30.3: /tarot/loco#top y /tarot/loco#abajo son la misma página → 1 URL."""
+        html = """<html><body>
+        <a href="/tarot/loco#top">1</a>
+        <a href="/tarot/loco#abajo">2</a>
+        </body></html>"""
+        sitio_cfg = {
+            "nombre": "biddytarot.com",
+            "indice": "https://biddytarot.com/tarot/",
+            "regex": "/tarot/",
+            "dominio": "biddytarot.com",
+        }
+        cliente = self._crear_cliente_simulado(html)
+        urls = seguir_indice(sitio_cfg, cliente, limite=50)
+        self.assertEqual(urls, ["https://biddytarot.com/tarot/loco"])
 
     def test_sin_html_retorna_vacio(self):
         sitio_cfg = {
@@ -247,6 +292,118 @@ class SeguirIndiceTests(unittest.TestCase):
         # Solo el primer índice (major) debería procesarse; el segundo falla y se omite
         self.assertIn("https://biddytarot.com/tarot-card-meanings/major-arcana/the-fool", urls)
         self.assertNotIn("https://biddytarot.com/tarot-card-meanings/minor-arcana/the-fool", urls)
+
+
+class SitemapTests(unittest.TestCase):
+    """T30d.1: soporte de sitemaps XML (urlset y sitemapindex)."""
+
+    def _cliente_mapa(self, mapa):
+        class ClienteMapa:
+            def __init__(self, mapa):
+                self.mapa = mapa
+                self.peticiones = []
+            def get(self, url):
+                self.peticiones.append(url)
+                html = self.mapa.get(url)
+                if html is None:
+                    return {"estado": "error", "html": None, "status": 404, "bytes": 0}
+                return {"estado": "ok", "html": html, "status": 200, "bytes": len(html)}
+        return ClienteMapa(mapa)
+
+    def _cfg(self, indice):
+        return {
+            "nombre": "s",
+            "indice": indice,
+            "regex": "/tarot/",
+            "dominio": "site.com",
+        }
+
+    def test_urlset_extrae_locs(self):
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            "<url><loc>https://site.com/tarot/loco</loc></url>"
+            "<url><loc>https://site.com/tarot/mago</loc></url>"
+            "<url><loc>https://otro.com/tarot/ajeno</loc></url>"
+            "</urlset>"
+        )
+        cliente = self._cliente_mapa({"https://site.com/sitemap.xml": xml})
+        urls = seguir_indice(self._cfg("https://site.com/sitemap.xml"), cliente,
+                            limite=50, pausa_s=0)
+        self.assertEqual(urls, [
+            "https://site.com/tarot/loco",
+            "https://site.com/tarot/mago",
+        ])
+
+    def test_sitemapindex_sigue_hijos_maximo_diez(self):
+        index_xml = (
+            '<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            + "".join(
+                f"<sitemap><loc>https://site.com/sm{i}.xml</loc></sitemap>"
+                for i in range(12)
+            )
+            + "</sitemapindex>"
+        )
+        mapa = {"https://site.com/sitemap_index.xml": index_xml}
+        for i in range(12):
+            mapa[f"https://site.com/sm{i}.xml"] = (
+                f"<urlset><url><loc>https://site.com/tarot/pagina{i}</loc></url></urlset>"
+            )
+        cliente = self._cliente_mapa(mapa)
+        urls = seguir_indice(self._cfg("https://site.com/sitemap_index.xml"), cliente,
+                            limite=100, pausa_s=0)
+        self.assertEqual(len(urls), 10)
+        self.assertIn("https://site.com/tarot/pagina0", urls)
+        self.assertNotIn("https://site.com/tarot/pagina10", urls)
+        self.assertNotIn("https://site.com/tarot/pagina11", urls)
+
+    def test_sitemap_detectado_por_contenido_sin_extension(self):
+        xml = '<urlset><url><loc>https://site.com/tarot/a</loc></url></urlset>'
+        cliente = self._cliente_mapa({"https://site.com/sitemap": xml})
+        urls = seguir_indice(self._cfg("https://site.com/sitemap"), cliente,
+                            limite=50, pausa_s=0)
+        self.assertEqual(urls, ["https://site.com/tarot/a"])
+
+    def test_hijo_fallido_no_bloquea_los_demas(self):
+        index_xml = (
+            "<sitemapindex>"
+            "<sitemap><loc>https://site.com/sm0.xml</loc></sitemap>"
+            "<sitemap><loc>https://site.com/sm1.xml</loc></sitemap>"
+            "</sitemapindex>"
+        )
+        mapa = {
+            "https://site.com/sitemap.xml": index_xml,
+            "https://site.com/sm1.xml": (
+                "<urlset><url><loc>https://site.com/tarot/buena</loc></url></urlset>"
+            ),
+        }
+        cliente = self._cliente_mapa(mapa)
+        urls = seguir_indice(self._cfg("https://site.com/sitemap.xml"), cliente,
+                            limite=50, pausa_s=0)
+        self.assertEqual(urls, ["https://site.com/tarot/buena"])
+
+    def test_indice_lista_con_sitemaps(self):
+        xml_a = '<urlset><url><loc>https://site.com/tarot/a</loc></url></urlset>'
+        xml_b = '<urlset><url><loc>https://site.com/tarot/b</loc></url></urlset>'
+        cliente = self._cliente_mapa({
+            "https://site.com/sa.xml": xml_a,
+            "https://site.com/sb.xml": xml_b,
+        })
+        cfg = self._cfg(["https://site.com/sa.xml", "https://site.com/sb.xml"])
+        urls = seguir_indice(cfg, cliente, limite=50, pausa_s=0)
+        self.assertEqual(urls, [
+            "https://site.com/tarot/a",
+            "https://site.com/tarot/b",
+        ])
+
+
+class ProtocoloRelativoTests(unittest.TestCase):
+    """T30d.2: enlaces //dominio/ruta resueltos con urljoin."""
+
+    def test_protocol_relative_mismo_dominio_resuelto(self):
+        html = '<html><body><a href="//site.com/tarot/loco.html">x</a></body></html>'
+        urls = _extraer_enlaces(html, "https://site.com/idx/", "site.com")
+        self.assertIn("https://site.com/tarot/loco.html", urls)
 
 
 class CargarConfigTests(unittest.TestCase):

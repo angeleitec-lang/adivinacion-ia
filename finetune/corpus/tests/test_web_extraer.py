@@ -9,7 +9,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import unittest
 
-from web_extraer import extraer, guardar_markdown, _limpiar_ruido
+import web_extraer
+from web_extraer import (
+    extraer,
+    guardar_markdown,
+    reparar_mojibake,
+    _limpiar_ruido,
+    _extraer_titulo,
+)
 
 
 class LimpiarRuidoTests(unittest.TestCase):
@@ -38,6 +45,122 @@ class LimpiarRuidoTests(unittest.TestCase):
         texto = "SUSCRÍBETE\nsubscribe\nSuscribete"
         res = _limpiar_ruido(texto)
         self.assertEqual(res.strip(), "")
+
+    def test_conserva_prosa_legitima_corta(self):
+        lineas = [
+            "La carta anuncia un cambio importante",
+            "Es momento de compartir lo vivido",
+            "El comprador debe firmar el contrato con calma",
+        ]
+        res = _limpiar_ruido("\n".join(lineas))
+        for linea in lineas:
+            self.assertIn(linea, res)
+
+    def test_conserva_prosa_larga_con_palabras_de_ruido(self):
+        prosa = ("La compra del mazo nuevo de tarot de Marsella fue una decision "
+                 "acertada que trajo muchas horas de lectura compartida entre amigos")
+        res = _limpiar_ruido(prosa)
+        self.assertIn("compra", res)
+        self.assertIn("compartida", res)
+
+    def test_elimina_linea_comercial_corta(self):
+        res = _limpiar_ruido("texto bueno\nCompra ahora y ahorra un veinte por ciento\nmás texto")
+        self.assertNotIn("Compra ahora", res)
+        self.assertIn("texto bueno", res)
+
+    def test_elimina_linea_solo_ruido_aunque_sea_larga(self):
+        ruido = ("Suscríbete Compártelo Facebook Twitter Instagram WhatsApp "
+                 "Newsletter Boletín Síguenos Suscríbete Compártelo Facebook")
+        res = _limpiar_ruido(ruido)
+        self.assertEqual(res.strip(), "")
+
+    def test_conserva_prosa_sin_ruido(self):
+        res = _limpiar_ruido("El tarot de Marsella tiene setenta y ocho cartas")
+        self.assertIn("setenta y ocho", res)
+
+
+class DuplicadoFrasesTests(unittest.TestCase):
+    def test_frases_ruido_definida_una_sola_vez(self):
+        src = Path(web_extraer.__file__).read_text(encoding="utf-8")
+        self.assertEqual(src.count("FRASES_RUIDO = ["), 1)
+
+
+class TituloTests(unittest.TestCase):
+    def test_prefiere_encabezado_h2(self):
+        md = "Introducción cualquiera del cuerpo del artículo.\n\n## Elemento: **Fuego**\n\nMás texto."
+        self.assertEqual(_extraer_titulo(md, ""), "Elemento: Fuego")
+
+    def test_prefiere_encabezado_sobre_title(self):
+        md = "# La Emperatriz\n\nCuerpo del artículo."
+        html = "<html><head><title>Titulo HTML</title></head></html>"
+        self.assertEqual(_extraer_titulo(md, html), "La Emperatriz")
+
+    def test_sin_encabezado_usa_title_html(self):
+        md = "Texto plano sin ningún encabezado en el markdown."
+        html = "<html><head><title>El Colgado — Tarot</title></head></html>"
+        self.assertEqual(_extraer_titulo(md, html), "El Colgado — Tarot")
+
+    def test_sin_encabezado_ni_title_primera_linea_corta_sin_marcas(self):
+        md = "**Los nacidos bajo la influencia de Júpiter**\nEl oráculo revela el camino."
+        self.assertEqual(_extraer_titulo(md, ""), "El oráculo revela el camino.")
+
+    def test_fallback_rechaza_linea_larga(self):
+        md = "x" * 150 + "\nLínea corta válida."
+        self.assertEqual(_extraer_titulo(md, ""), "Línea corta válida.")
+
+    def test_extraer_titulo_sin_marcas_negrita(self):
+        cuerpo = "Contenido extenso sobre el elemento fuego en astrología para superar el mínimo. " * 30
+        html = ("<html><head><title>Astrologuias: fuego</title></head><body><article>"
+                "<h2>Elemento: <strong>Fuego</strong></h2><p>" + cuerpo + "</p></article></body></html>")
+        res = extraer(html, "https://astrologuias.example/fuego", min_chars=200)
+        self.assertIsNotNone(res)
+        self.assertTrue(res["titulo"])
+        self.assertNotIn("**", res["titulo"])
+
+
+class MojibakeTests(unittest.TestCase):
+    def test_repara_anos(self):
+        self.assertEqual(reparar_mojibake("aÃ±os"), "años")
+
+    def test_repara_que(self):
+        self.assertEqual(reparar_mojibake("QuÃ© es el tarot"), "Qué es el tarot")
+
+    def test_repara_raya_larga(self):
+        self.assertEqual(reparar_mojibake("holaâ€”adios"), "hola—adios")
+
+    def test_texto_correcto_inalterado(self):
+        t = "El loco anuncia un nuevo comienzo con ilusión."
+        self.assertEqual(reparar_mojibake(t), t)
+
+    def test_secuencias_no_mojibake_quedan_intactas(self):
+        # «ï¿½» no empieza por Ã/â: no es secuencia mojibake, se deja tal cual
+        t = "aÃ±os \u00ef\u00bf\u00bd"
+        self.assertEqual(reparar_mojibake(t), "años \u00ef\u00bf\u00bd")
+
+    def test_caso_adverso_texto_mixto_T30c(self):
+        """T30c: «sÃ» irrecuperable no debe impedir reparar el resto."""
+        t = "aÃ±os, QuÃ© es, mÃ¡s, tirada del sÃ y el no"
+        esperado = "años, Qué es, más, tirada del sÃ y el no"
+        self.assertEqual(reparar_mojibake(t), esperado)
+
+    def test_eme_aislada_en_texto_limpio_sin_cambios(self):
+        t = "Letra \u00c3 suelta en texto limpio"
+        self.assertEqual(reparar_mojibake(t), t)
+
+    def test_apostrofe_curvo(self):
+        self.assertEqual(reparar_mojibake("dijoâ€™hola"), "dijo’hola")
+
+    def test_extraer_repara_mojibake_integracion(self):
+        frase = "Esto son aÃ±os de experiencia en la lectura seria de las cartas. "
+        html = (
+            "<html><head><title>QuÃ© es el tarot</title></head><body>"
+            "<h1>QuÃ© es el tarot</h1><p>" + frase * 5 + "</p></body></html>"
+        )
+        res = extraer(html, "https://tarotsevilla.com/que-es", min_chars=50)
+        self.assertIsNotNone(res)
+        self.assertIn("años", res["texto_md"])
+        self.assertNotIn("aÃ±os", res["texto_md"])
+        self.assertIn("Qué", res["titulo"])
 
 
 class ExtraerTests(unittest.TestCase):
