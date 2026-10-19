@@ -277,5 +277,44 @@ class TestMultiTurnoFusion(unittest.TestCase):
         self.assertEqual(len(res["val"]) + len(res["test"]), 0)
 
 
+class TestRepartoSinFuga(unittest.TestCase):
+    def setUp(self):
+        self.cfg = {"seed": 42, "train_ratio": 0.8, "val_ratio": 0.1, "include_en": False}
+
+    def test_val_real_mismo_primer_human_mismo_lado(self):
+        a = fila_multi([
+            ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA),
+            ("Seguimiento A", RESPUESTA_VALIDA + " Variante A del seguimiento con mas texto."),
+        ])
+        b = fila_multi([
+            ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA),
+            ("Seguimiento B", RESPUESTA_VALIDA + " Variante B del seguimiento con otro texto."),
+        ])
+        res = fusionar([], [a, b], [], [], self.cfg)
+        en_val = a in res["val"] and b in res["val"]
+        en_test = a in res["test"] and b in res["test"]
+        self.assertTrue(en_val or en_test)
+
+    def test_synth_mismo_primer_human_mismo_split(self):
+        par1 = ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA)
+        s1 = fila_multi([par1, ("Seguimiento A", RESPUESTA_VALIDA + " texto A distinto.")])
+        s2 = fila_multi([par1, ("Seguimiento B", RESPUESTA_VALIDA + " texto B distinto.")])
+        synth = [s1, s2]
+        meta = [{"block": "tarot"}, {"block": "tarot"}]
+        res = fusionar([], [], synth, meta, self.cfg)
+        en_train = all(r in res["train"] for r in synth)
+        en_val = all(r in res["val"] for r in synth)
+        en_test = all(r in res["test"] for r in synth)
+        self.assertTrue(en_train or en_val or en_test)
+
+    def test_synth_distinto_human_puede_repartirse(self):
+        synth = [fila(f"Explícame tema{i} de forma clara y completa.",
+                     RESPUESTA_VALIDA + f" Detalle {i}.") for i in range(20)]
+        meta = [{"block": "tarot"}] * 20
+        res = fusionar([], [], synth, meta, self.cfg)
+        self.assertGreater(len(res["train"]), 0)
+        self.assertGreater(len(res["val"]) + len(res["test"]), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

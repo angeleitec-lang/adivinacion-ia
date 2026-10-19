@@ -103,15 +103,29 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
 
 
 def split_block(rows: list[dict], block: str, seed: int, r_train: float, r_val: float):
+    """Reparte por GRUPOS del primer human: variantes de una misma pregunta no se separan.
+
+    Cada grupo (mismo sha del primer human) va entero a un unico split, evitando
+    fuga train/val/test entre follow-ups de una misma pregunta.
+    """
     rng = random.Random(f"{seed}:{block}")
-    idx = list(range(len(rows)))
-    rng.shuffle(idx)
-    n = len(idx)
+    grupos: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        grupos[sha(human_of(r))].append(r)
+    claves = sorted(grupos)
+    rng.shuffle(claves)
+    n = len(rows)
     n_train = int(n * r_train)
     n_val = int(n * r_val)
-    train = [rows[i] for i in idx[:n_train]]
-    val = [rows[i] for i in idx[n_train:n_train + n_val]]
-    test = [rows[i] for i in idx[n_train + n_val:]]
+    train, val, test = [], [], []
+    for k in claves:
+        g = grupos[k]
+        if len(train) < n_train:
+            train += g
+        elif len(train) + len(val) < n_train + n_val:
+            val += g
+        else:
+            test += g
     return train, val, test
 
 
