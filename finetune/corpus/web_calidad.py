@@ -18,12 +18,13 @@ por dominio con porcentajes y peores páginas).
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 UMBRAL_CORTO = 1000
 UMBRAL_NO_ESPANOL_PALABRAS = 40
@@ -373,3 +374,165 @@ def analizar_paginas(paginas: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
             ]
         resultados.append(resultado)
     return resultados
+
+
+# ---------------------------------------------------------------------------
+# Informe
+# ---------------------------------------------------------------------------
+
+BANDERAS = (
+    "corta",
+    "mojibake",
+    "no_espanol",
+    "ruido_navegacion",
+    "duplicada",
+    "titulo_pobre",
+    "repeticion_interna",
+)
+
+
+def _tabla_banderas(paginas: Sequence[Dict[str, Any]]) -> List[str]:
+    total = len(paginas)
+    conteo = Counter(
+        bandera for pagina in paginas for bandera in pagina["banderas"]
+    )
+    lineas = ["| Bandera | Páginas | % |", "|---|---|---|"]
+    for bandera in BANDERAS:
+        n = conteo.get(bandera, 0)
+        porcentaje = (100.0 * n / total) if total else 0.0
+        lineas.append(f"| {bandera} | {n} | {porcentaje:.1f} % |")
+    return lineas
+
+
+def _peores_paginas(paginas: Sequence[Dict[str, Any]], limite: int = 3) -> List[str]:
+    con_banderas = [p for p in paginas if p["banderas"]]
+    peores = sorted(
+        con_banderas,
+        key=lambda p: (-len(p["banderas"]), p["caracteres"], p["ruta"]),
+    )[:limite]
+    if not peores:
+        return ["Sin páginas con banderas."]
+    lineas = []
+    for posicion, pagina in enumerate(peores, 1):
+        banderas = ", ".join(pagina["banderas"])
+        lineas.append(
+            f"{posicion}. `{pagina['ruta']}` — {len(pagina['banderas'])} "
+            f"banderas ({banderas}), {pagina['caracteres']} caracteres"
+        )
+    return lineas
+
+
+def generar_informe(
+    paginas: Sequence[Dict[str, Any]], out_dir: Path
+) -> Dict[str, Any]:
+    """Escribe ``calidad.md`` y ``calidad.jsonl``; devuelve el resumen."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    por_dominio: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for pagina in paginas:
+        por_dominio[pagina["dominio"]].append(pagina)
+
+    lineas_md: List[str] = [
+        "# Auditoría de calidad de páginas web",
+        "",
+        "Generado por `finetune/corpus/web_calidad.py` (heurísticas "
+        "deterministas, sin LLM).",
+        "",
+        f"- Páginas analizadas: {len(paginas)}",
+        f"- Dominios: {len(por_dominio)}",
+        "",
+        "## Resumen global",
+        "",
+        *_tabla_banderas(paginas),
+        "",
+        "## Por dominio",
+        "",
+    ]
+
+    resumen_dominios: Dict[str, Any] = {}
+    for dominio in sorted(por_dominio):
+        paginas_dominio = sorted(por_dominio[dominio], key=lambda p: p["ruta"])
+        conteo = Counter(
+            bandera for pagina in paginas_dominio for bandera in pagina["banderas"]
+        )
+        resumen_dominios[dominio] = {
+            "paginas": len(paginas_dominio),
+            "banderas": dict(conteo),
+        }
+        lineas_md.extend([
+            f"### {dominio}",
+            "",
+            f"- Páginas: {len(paginas_dominio)}",
+            "",
+            *_tabla_banderas(paginas_dominio),
+            "",
+            "**Peores páginas**",
+            "",
+            *_peores_paginas(paginas_dominio),
+            "",
+        ])
+
+    (out_dir / "calidad.md").write_text(
+        "\n".join(lineas_md).rstrip() + "\n", encoding="utf-8"
+    )
+
+    with open(out_dir / "calidad.jsonl", "w", encoding="utf-8") as fichero:
+        for pagina in paginas:
+            registro = {
+                "ruta": pagina["ruta"],
+                "dominio": pagina["dominio"],
+                "titulo": pagina["titulo"],
+                "sha256": pagina["sha256"],
+                "caracteres": pagina["caracteres"],
+                "banderas": pagina["banderas"],
+                "detalles": pagina["detalles"],
+            }
+            fichero.write(json.dumps(registro, ensure_ascii=False) + "\n")
+
+    return {
+        "paginas": len(paginas),
+        "dominios": len(por_dominio),
+        "por_dominio": resumen_dominios,
+    }
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Audita la calidad de las páginas web Markdown descargadas."
+    )
+    parser.add_argument(
+        "--web-dir",
+        default="/Users/angelgonzalez/fase0/web",
+        help="Directorio raíz con un subdirectorio por dominio.",
+    )
+    parser.add_argument(
+        "--out-dir",
+        default=None,
+        help="Directorio de salida (por defecto, el mismo que --web-dir).",
+    )
+    args = parser.parse_args(argv)
+
+    web_dir = Path(args.web_dir)
+    out_dir = Path(args.out_dir) if args.out_dir else web_dir
+    paginas = analizar_paginas(leer_paginas(web_dir))
+    resumen = generar_informe(paginas, out_dir)
+
+    print(f"Páginas analizadas: {resumen['paginas']}")
+    for dominio in sorted(resumen["por_dominio"]):
+        datos = resumen["por_dominio"][dominio]
+        detalle = ", ".join(
+            f"{bandera}={n}" for bandera, n in sorted(datos["banderas"].items())
+        )
+        print(f"  {dominio}: {datos['paginas']} páginas" + (f" ({detalle})" if detalle else ""))
+    print(f"Informe: {out_dir / 'calidad.md'}")
+    print(f"JSONL: {out_dir / 'calidad.jsonl'}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

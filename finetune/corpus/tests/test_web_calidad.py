@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests de web_calidad: auditoría determinista de páginas web descargadas."""
 import hashlib
+import json
 import os
 import sys
 import tempfile
@@ -21,6 +22,8 @@ from web_calidad import (
     leer_pagina,
     leer_paginas,
     analizar_paginas,
+    generar_informe,
+    main,
     parrafos_repetidos,
 )
 
@@ -321,3 +324,70 @@ class DetectarDuplicadasTests(unittest.TestCase):
                 detalle = por_nombre[nombre]["detalles"]["duplicada_de"]
                 self.assertEqual(detalle["motivo"], "sha256")
                 self.assertEqual(len(detalle["rutas"]), 1)
+
+class InformeTests(unittest.TestCase):
+    def _corpus(self, base: Path) -> None:
+        _escribir_pagina(base, "a.com", "corta.md", "abc", "Texto breve.")
+        _escribir_pagina(
+            base, "a.com", "larga.md", "Contenido correcto",
+            ("La carta del Sol representa claridad y vitalidad en la tirada. " * 40),
+        )
+        _escribir_pagina(
+            base, "b.com", "ingles.md", "Tarot guide",
+            ("The tarot is a system of symbols that people use to interpret life. " * 40),
+        )
+
+    def test_genera_markdown_y_jsonl(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td) / "web"
+            out = Path(td) / "salida"
+            self._corpus(base)
+            paginas = analizar_paginas(leer_paginas(base))
+            resumen = generar_informe(paginas, out)
+
+            md = (out / "calidad.md").read_text(encoding="utf-8")
+            lineas = [
+                l for l in (out / "calidad.jsonl").read_text(encoding="utf-8").splitlines()
+                if l.strip()
+            ]
+            self.assertEqual(len(lineas), 3)
+            self.assertEqual(resumen["paginas"], 3)
+            self.assertIn("### a.com", md)
+            self.assertIn("### b.com", md)
+            self.assertIn("Páginas: 2", md)
+            self.assertIn("Peores páginas", md)
+            self.assertIn("| corta | 1 | 50.0 % |", md)
+
+            registros = [json.loads(l) for l in lineas]
+            self.assertEqual(
+                set(registros[0]),
+                {"ruta", "dominio", "titulo", "sha256", "caracteres",
+                 "banderas", "detalles"},
+            )
+
+    def test_peores_paginas_maximo_tres_por_dominio(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td) / "web"
+            out = Path(td) / "salida"
+            for i in range(5):
+                _escribir_pagina(
+                    base, "a.com", f"p{i}.md", "abc",
+                    f"Texto corto número {i} con mojibake Ã©.",
+                )
+            generar_informe(analizar_paginas(leer_paginas(base)), out)
+            md = (out / "calidad.md").read_text(encoding="utf-8")
+            peores = md.split("**Peores páginas**", 1)[1]
+            entradas = [
+                l for l in peores.splitlines() if l.split(".", 1)[0].isdigit()
+            ]
+            self.assertEqual(len(entradas), 3)
+
+    def test_cli_escribe_en_out_dir(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td) / "web"
+            out = Path(td) / "salida"
+            self._corpus(base)
+            codigo = main(["--web-dir", str(base), "--out-dir", str(out)])
+            self.assertEqual(codigo, 0)
+            self.assertTrue((out / "calidad.md").exists())
+            self.assertTrue((out / "calidad.jsonl").exists())
