@@ -1,0 +1,151 @@
+{
+ "descripcion": "Sitios en español con una página (o sección extensa) por carta del tarot de 78 (Rider-Waite-Smith y/o Marsella), con significado derecho/invertido y ámbitos (amor, trabajo, salud, dinero, consejo). Sondeo 2026-10-19: 12 sitios nuevos, ninguno duplicado de sitios_indice_es.json. Cada regex fue validada contra el sitemap real del sitio (se anota el número de URLs de carta capturadas).",
+ "sitios": [
+  {
+   "nombre": "cartastarotsagrado.com",
+   "tipo": "sitio",
+   "indice": [
+    "https://cartastarotsagrado.com/arcanos-mayores/",
+    "https://cartastarotsagrado.com/arcanos-menores/"
+   ],
+   "regex": "^https://cartastarotsagrado\\.com/(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-emperador|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo|(?:as|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|[1-9]|10)-de-(?:bastos|copas|espadas|oros)|(?:sota|caballo|caballero|reina|rey)-de-(?:bastos|copas|espadas|oros))/$",
+   "dominio": "cartastarotsagrado.com",
+   "familia": "tarot",
+   "prioridad": "alta",
+   "nota": "WordPress. 78 páginas de carta en la raíz (el-loco…el-mundo, as-de-*, 2-de-*…10-de-*, sota/caballo/reina/rey-de-*; la rueda usa el slug la-rueda-fortuna). Robots: Disallow solo /escoger-cartas.php y similares; las páginas de carta están permitidas. Enfoque clásico-espiritual. Regex captura 78 URLs del sitemap."
+  },
+  {
+   "nombre": "tarotveraluna.com",
+   "tipo": "sitio",
+   "indice": [
+    "https://tarotveraluna.com/",
+    "https://tarotveraluna.com/cartas/"
+   ],
+   "regex": "^https://tarotveraluna\\.com/cartas/(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-emperador|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo|(?:as|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|[1-9]|10)-de-(?:bastos|copas|espadas|oros)|(?:sota|caballo|caballero|reina|rey)-de-(?:bastos|copas|espadas|oros))/$",
+   "dominio": "tarotveraluna.com",
+   "familia": "tarot",
+   "prioridad": "alta",
+   "nota": "WordPress. 78 páginas /cartas/<slug>/ (as-de-bastos, caballero-de-copas…). Página as-de-copas: 167 KB de HTML, 'tarot' x133 y 0 menciones de baraja española → es tarot (Rider-Waite). Robots: solo /wp-admin/ prohibido. La home enlaza las 78 cartas con URLs absolutas. Regex captura 78 URLs del sitemap."
+  },
+  {
+   "nombre": "tarot-secret.com",
+   "tipo": "sitio",
+   "indice": [
+    "https://tarot-secret.com/sitemap_index.xml"
+   ],
+   "regex": "^https://(?:www\\.)?tarot-secret\\.com/es/(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-emperador|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo|(?:as|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|[1-9]|10)-de-(?:bastos|copas|espadas|oros)|(?:sota|caballo|caballero|reina|rey)-de-(?:bastos|copas|espadas|oros))/$",
+   "dominio": "tarot-secret.com",
+   "familia": "tarot",
+   "prioridad": "alta",
+   "nota": "WordPress multilingüe; sección española /es/<slug>/. Página as-de-copas: 12.378 caracteres visibles, con invertido, amor y trabajo. Robots: solo /wp-admin/ prohibido. Regex captura 78 URLs de carta del sitemap (de 94 en /es/, que incluye guías como aprender-tarot)."
+  },
+  {
+   "nombre": "tarotbrisatalis.com",
+   "tipo": "sitio",
+   "indice": [
+    "https://tarotbrisatalis.com/"
+   ],
+   "regex": "^https://(?:www\\.)?tarotbrisatalis\\.com/(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo|(?:as|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|[1-9]|10)-de-(?:bastos|copas|espadas|oros)|(?:sota|caballo|caballero|reina|rey)-de-(?:bastos|copas|espadas|oros)|el-emperador-en-el-tarot|la-muerte-en-el-tarot)/$",
+   "dominio": "tarotbrisatalis.com",
+   "familia": "tarot",
+   "prioridad": "media",
+   "nota": "WordPress + WooCommerce (tienda de mazos). 22 páginas de carta en la raíz (as-de-copas, 3-de-espadas, el-colgado, el-emperador-en-el-tarot…); no llega a las 78 pero supera con holgura el mínimo. Robots: solo rutas de WooCommerce/admin prohibidas. Regex captura 22 URLs del sitemap."
+  },
+  {
+   "nombre": "tuastral.com",
+   "tipo": "sitio",
+   "indice": [
+    "https://tuastral.com/sitemap.xml"
+   ],
+   "regex": "^https://tuastral\\.com/tarot/cartas/(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-emperador|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo|(?:as|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|[1-9]|10)-de-(?:bastos|copas|espadas|oros)|(?:sota|caballo|caballero|reina|rey)-de-(?:bastos|copas|espadas|oros))$",
+   "dominio": "tuastral.com",
+   "familia": "tarot",
+   "prioridad": "alta",
+   "nota": "Next.js. 78 páginas /tarot/cartas/<slug> (SIN barra final). Página as-de-copas: 6.182 caracteres con invertido, amor, trabajo, salud y dinero. Robots: Allow /; Disallow /api/ y /*?_rsc= (no afectan a las cartas). Regex captura 78 URLs del sitemap."
+  },
+  {
+   "nombre": "tarotjunguiano.com",
+   "tipo": "blog",
+   "indice": [
+    "https://www.tarotjunguiano.com/cartas-de-tarot/"
+   ],
+   "regex": "^https://(?:www\\.)?tarotjunguiano\\.com/(?:arcano-mayor-[^/]+|arcano-menor-[^/]+|(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-emperador|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo|(?:as|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|[1-9]|10)-de-(?:bastos|copas|espadas|oros)|(?:sota|caballo|caballero|reina|rey)-de-(?:bastos|copas|espadas|oros)))/$",
+   "dominio": "tarotjunguiano.com",
+   "familia": "tarot",
+   "prioridad": "media",
+   "nota": "WordPress. 67 posts de carta: 22 mayores (/arcano-mayor-<x>-arquetipo/) + 44 menores (/arcano-menor-<x>/) + /9-de-copas/. Enfoque junguiano/psicológico (autora: Débora). Página as-de-copas ~3.018 caracteres visibles; los menores no traen secciones de invertido/amor/trabajo. Robots: Allow * (solo se prohíben bots de estudio). Regex captura 67 URLs del sitemap."
+  },
+  {
+   "nombre": "tarotnova.app",
+   "tipo": "sitio",
+   "indice": [
+    "https://www.tarotnova.app/sitemap.xml"
+   ],
+   "regex": "^https://(?:www\\.)?tarotnova\\.app/es/tarot/(?:marsella|rider-waite)/majors/(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-emperador|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo)$",
+   "dominio": "tarotnova.app",
+   "familia": "tarot",
+   "prioridad": "alta",
+   "nota": "Solo arcanos mayores en español: 22 de Marsella (/es/tarot/marsella/majors/*) + 20 de Rider-Waite (/es/tarot/rider-waite/majors/*) = 42 URLs. Página el-loco: 15.113 caracteres con derecho, invertido, amor, trabajo, dinero y consejo. Calidad alta; sin menores. Robots: Allow /; Disallow /api/ y /auth/. Regex captura 42 URLs del sitemap."
+  },
+  {
+   "nombre": "eltarot.es",
+   "tipo": "sitio",
+   "indice": [
+    "https://eltarot.es/cartas"
+   ],
+   "regex": "^https://eltarot\\.es/cartas/(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-emperador|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo|(?:as|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|[1-9]|10)-de-(?:bastos|copas|espadas|oros)|(?:sota|caballo|caballero|reina|rey)-de-(?:bastos|copas|espadas|oros))$",
+   "dominio": "eltarot.es",
+   "familia": "tarot",
+   "prioridad": "baja",
+   "nota": "Astro (estático). 74 páginas /cartas/<slug> (sin barra final), tarot de Marsella; autor identificable: David Cruz Anaya (humans.txt). Página as-de-bastos: solo ~760 caracteres, sin invertido/amor/trabajo. Backup de cobertura, no fuente principal. Robots: Allow /. Regex captura 74 URLs del sitemap."
+  },
+  {
+   "nombre": "tarotgratuito.net",
+   "tipo": "sitio",
+   "indice": [
+    "https://www.tarotgratuito.net/sitemap.xml"
+   ],
+   "regex": "^https://(?:www\\.)?tarotgratuito\\.net/(?:el|la|los)-[^/]+-tarot$",
+   "dominio": "tarotgratuito.net",
+   "familia": "tarot",
+   "prioridad": "alta",
+   "nota": "78 páginas en la raíz con patrón /(el|la|los)-<carta>-tarot (el-as-de-bastos-tarot…la-templanza-tarot, los-amantes-tarot, el-hierofante-tarot). Página el-as-de-copas-tarot: 6.106 caracteres con invertido, amor, trabajo, dinero y consejo. Robots: Allow / (Disallow /admin, /api). NO confundir con tarotgratis.net (sin sitemap). Regex captura 78 URLs del sitemap."
+  },
+  {
+   "nombre": "tarotfiable.es",
+   "tipo": "sitio",
+   "indice": [
+    "https://tarotfiable.es/sitemap.xml"
+   ],
+   "regex": "^https://tarotfiable\\.es/arcano-(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-emperador|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo)/$",
+   "dominio": "tarotfiable.es",
+   "familia": "tarot",
+   "prioridad": "media",
+   "nota": "Solo arcanos mayores: 20 páginas /arcano-<x>/ (arcano-el-loco…arcano-los-amantes; el-carro y otros 2 no tienen página propia). Página arcano-el-loco: 12.102 caracteres visibles con invertido, amor y trabajo. Robots OK para estas rutas. Regex captura 20 URLs del sitemap."
+  },
+  {
+   "nombre": "zodiatarot.com",
+   "tipo": "sitio",
+   "indice": [
+    "https://zodiatarot.com/es/significado-cartas-tarot/"
+   ],
+   "regex": "^https://zodiatarot\\.com/es/significado-cartas-tarot/(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-emperador|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo|(?:as|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|[1-9]|10)-de-(?:bastos|copas|espadas|oros)|(?:sota|caballo|caballero|reina|rey)-de-(?:bastos|copas|espadas|oros))/$",
+   "dominio": "zodiatarot.com",
+   "familia": "tarot",
+   "prioridad": "alta",
+   "nota": "78 páginas /es/significado-cartas-tarot/<slug>/ (as-de-bastos…). Página as-de-copas: 12.716 caracteres con invertido, amor, trabajo, salud y consejo. Título: 'As de Copas - Significado en el Tarot — ZodiaTarot'. Robots: Allow /. Regex captura 78 URLs del sitemap."
+  },
+  {
+   "nombre": "tarotdetiziana.com",
+   "tipo": "blog",
+   "indice": [
+    "https://tarotdetiziana.com/"
+   ],
+   "regex": "^https://tarotdetiziana\\.com/[^/]*(?:el-loco|el-mago|la-sacerdotisa|la-emperatriz|el-emperador|el-sumo-sacerdote|el-papa|el-hierofante|los-enamorados|los-amantes|el-carro|la-fuerza|el-ermitano|la-rueda-de-la-fortuna|la-rueda|la-justicia|el-colgado|el-ahorcado|la-muerte|la-templanza|el-diablo|la-torre|la-estrella|la-luna|el-sol|el-juicio|el-mundo|(?:as|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|[1-9]|10)-de-(?:bastos|copas|espadas|oros)|(?:sota|caballo|caballero|reina|rey)-de-(?:bastos|copas|espadas|oros))[^/]*/$",
+   "dominio": "tarotdetiziana.com",
+   "familia": "tarot",
+   "prioridad": "media",
+   "nota": "WordPress de Tiziana Prado (autora identificable). 119 posts TEMÁTICOS por carta (el-as-de-copas-y-su-significado-en-el-tarot, el-2-de-copas-y-su-significado-en-el-amor…): NO es una página única por carta sino varias por carta; útil para variedad de enfoques, deduplicar al generar dataset. Robots: solo /wp-admin/ prohibido; no usar el buscador interno. Regex captura 119 URLs del sitemap."
+  }
+ ]
+}
