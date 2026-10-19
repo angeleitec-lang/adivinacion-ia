@@ -152,11 +152,16 @@ def compartir_vocabulario(afirmacion, texto_seccion):
 
 
 def menciona_otra_carta(afirmacion, entidad_id):
-    """True si la afirmación menciona una carta distinta de `entidad_id`."""
+    """True si la afirmación menciona una carta distinta de `entidad_id`.
+
+    Se usa `contextual=False` a propósito: en un corpus de adivinación un
+    nombre de naipe («la estrella», «el sol») casi siempre alude a la carta,
+    y aquí prima no contaminar la entidad con afirmaciones de otra carta.
+    """
     mazo = _mazo_de_entidad(entidad_id)
     if mazo is None:
         return False
-    for m in cartas.extraer_cartas(afirmacion, mazo=mazo):
+    for m in cartas.extraer_cartas(afirmacion, mazo=mazo, contextual=False):
         if m["carta"]["id"] != entidad_id:
             return True
     return False

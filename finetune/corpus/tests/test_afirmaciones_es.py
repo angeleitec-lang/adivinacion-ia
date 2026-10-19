@@ -142,6 +142,13 @@ class ValidacionDeterminista(unittest.TestCase):
         self.assertFalse(vale)
         self.assertEqual(motivo, "otra_carta")
 
+    def test_otra_carta_sin_palabra_contexto_tambien_se_descarta(self):
+        vale, motivo = af.validar_afirmacion(
+            "La estrella aporta esperanza y luz.", CUERPO_COMB,
+            "tarot-copas-02", "significado_general")
+        self.assertFalse(vale)
+        self.assertEqual(motivo, "otra_carta")
+
     def test_faceta_combinacion_permite_otra_carta(self):
         vale, motivo = af.validar_afirmacion(
             "La carta de la estrella aporta esperanza.", CUERPO_COMB,
