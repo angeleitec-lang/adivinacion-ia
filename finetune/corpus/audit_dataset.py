@@ -263,14 +263,22 @@ def _licencia_permitida(fila: dict) -> bool | None:
 
 
 def _puntuar_par(prompt: str, respuesta: str, fila: dict,
-                 licencia: str | None = None) -> tuple[float, list[str], str]:
-    """Puntua un unico par: (score 0-1, motivos de penalizacion, tipo)."""
+                 licencia: str | None = None,
+                 texto_dominio: str | None = None) -> tuple[float, list[str], str]:
+    """Puntua un unico par: (score 0-1, motivos de penalizacion, tipo).
+
+    texto_dominio: texto sobre el que se evalua el criterio de dominio. En filas
+    multi-turno se pasa la concatenacion de todos los mensajes human y gpt, de
+    modo que un seguimiento sin terminos fuertes se beneficia del contexto de la
+    conversacion. Por defecto se usa el propio par (comportamiento de siempre).
+    """
     motivos: list[str] = []
     if criterio_prompt_generico(prompt):
         motivos.append("prompt_generico")
     if criterio_residuos(prompt + "\n" + respuesta):
         motivos.append("residuos")
-    if not criterio_dominio(prompt + " " + respuesta):
+    dominio_sobre = texto_dominio if texto_dominio is not None else prompt + " " + respuesta
+    if not criterio_dominio(dominio_sobre):
         motivos.append("dominio")
     if criterio_idioma(respuesta):
         motivos.append("idioma")
@@ -293,16 +301,24 @@ def puntuar(fila: dict, licencia: str | None = None) -> tuple[float, list[str], 
     En filas de un turno el comportamiento es identico al de siempre (sin
     prefijos); en multi-turno cada motivo se prefija con t1:, t2:, ... y la
     puntuacion es el minimo de los pares (un par malo hunde la fila).
+
+    En multi-turno el criterio de dominio se evalua sobre la concatenacion de
+    todos los mensajes human y gpt de la fila: un seguimiento legitimo sin
+    terminos fuertes no falla si la conversacion entera es del dominio. Los
+    demas criterios (longitud, idioma, repeticion, residuos, prompt generico)
+    siguen evaluandose por par.
     """
     pares = extraer_pares(fila)
     if len(pares) <= 1:
         prompt, respuesta = pares[0] if pares else ("", "")
         return _puntuar_par(prompt, respuesta, fila, licencia)
+    texto_fila = " ".join(f"{h} {g}" for h, g in pares)
     peor_score: float | None = None
     peor_tipo = "otros"
     motivos: list[str] = []
     for i, (prompt, respuesta) in enumerate(pares, start=1):
-        score, ms, tipo = _puntuar_par(prompt, respuesta, fila, licencia)
+        score, ms, tipo = _puntuar_par(prompt, respuesta, fila, licencia,
+                                      texto_dominio=texto_fila)
         motivos.extend(f"t{i}:{m}" for m in ms)
         if peor_score is None or score < peor_score:
             peor_score, peor_tipo = score, tipo
