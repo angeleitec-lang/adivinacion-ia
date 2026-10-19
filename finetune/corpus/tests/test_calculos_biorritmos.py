@@ -54,5 +54,16 @@ class BiorritmosTests(unittest.TestCase):
             self.assertIn("dias_desde_nacimiento", dia)
 
 
+class ReexportacionBiorritmosTests(unittest.TestCase):
+    def test_reexportacion_no_oculta_modulo(self):
+        """El reexport como calcular_biorritmos no oculta el submodulo."""
+        import types
+        import calculos
+        import calculos.biorritmos as m
+        self.assertIsInstance(m, types.ModuleType)
+        self.assertTrue(callable(calculos.calcular_biorritmos))
+        self.assertIs(calculos.calcular_biorritmos, m.biorritmos)
+
+
 if __name__ == "__main__":
     unittest.main()

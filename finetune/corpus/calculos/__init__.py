@@ -21,7 +21,7 @@ from .numerologia import (
     perfil_completo,
 )
 
-from .biorritmos import biorritmos
+from .biorritmos import biorritmos as calcular_biorritmos
 
 __all__ = [
     "carta_natal",
@@ -39,5 +39,5 @@ __all__ = [
     "dia_personal",
     "compatibilidad",
     "perfil_completo",
-    "biorritmos",
+    "calcular_biorritmos",
 ]
