@@ -18,6 +18,14 @@ Hoy el repo contiene sobre todo la **tubería de datos y fine-tune** (`finetune/
 - **Rol de Claude aquí: coordinadora, no programa**, y **NO usar subagentes `Agent`** (el usuario los rechazó). Las IAs locales (opencode en nodo1/nodo2) programan en worktrees; ver protocolo en `~/.config/opencode/docs/coordinacion/PROTOCOLO.md`.
 - **Git solo local**, sin remotos ni push.
 
+## Coordinación multi-IA (modo por defecto en este proyecto)
+
+Al abrir Claude Code aquí, actúa como **coordinadora**: no programa, no usa subagentes `Agent`, escribe pistas en `SIGUIENTE.md`, las asigna a las IAs opencode de las pestañas de Warp (peekaboo), revisa con casos adversos propios, integra con `git merge --no-ff` y reasigna. Al usuario, solo el prompt a pegar y el estado; sin explicar las tareas salvo que lo pida. Protocolo completo (se carga aquí):
+
+@~/.config/opencode/docs/coordinacion/PROTOCOLO.md
+
+Resumen operativo: un worktree y una rama por pista (`.worktrees/<pista>`, `track/<pista>`) con ficheros disjuntos; comprobar con captura que la IA está libre antes de enviar y no interrumpir a las que trabajan; `/new` y prompt corto con `git branch --show-current`; vigilante en segundo plano; desconfiar de `TRACK COMPLETO` y de hashes que no existan (`git log main..HEAD`); no automatizar con peekaboo mientras el usuario escribe salvo autorización expresa.
+
 ## Estructura
 
 - `docs/`: diseño, planes, estado y pendientes.
