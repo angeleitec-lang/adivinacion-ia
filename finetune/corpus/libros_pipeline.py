@@ -17,17 +17,21 @@ Cada pasada solo procesa lo pendiente, así que se puede interrumpir y
 reanudar sin repetir trabajo ni tocar la red de más.
 """
 import argparse
+import glob
 import json
 import os
 import sys
 import time
 import urllib.error
 
+import cobertura
+import juez
 import libros_extraer
 import libros_fetch
 import libros_informe
 import libros_limpiar
 import libros_segmentar
+import llm_client
 from libros_fuentes import (ARCHIVE_FILES, DECISIONES_OK, EPUB_FILE, ESTADOS_OK,
                             _leer_jsonl, _normalizar_archive, _normalizar_epub,
                             normalizar_titulo)
@@ -269,6 +273,51 @@ def _etapa_informe(libros, work_dir, ctx):
     return 0
 
 
+def _cliente_juez(ctx):
+    """Cliente para el juez: el explícito, uno simulado o el real."""
+    if ctx.get("cliente") is not None:
+        return ctx["cliente"]
+    if ctx.get("simulado"):
+        return llm_client.LLMClient(simulado=juez._simular)
+    return llm_client.LLMClient()
+
+
+def _etapa_juez(libros, work_dir, ctx):
+    """Jueza las secciones segmentadas y anota la cobertura resultante."""
+    secciones_dir = os.path.join(work_dir, "secciones")
+    hay_secciones = (os.path.isdir(secciones_dir)
+                     and any(fn.endswith(".jsonl") for fn in os.listdir(secciones_dir)))
+    if not hay_secciones:
+        print("juez: no hay secciones que juzgar", file=sys.stderr)
+        return 0
+    out_dir = os.path.join(work_dir, "evidencias")
+    rutas_meta = []
+    for patron in juez._RUTAS_META_POR_DEFECTO:
+        rutas_meta.extend(sorted(glob.glob(
+            os.path.join(ctx["knowledge_dir"], patron))))
+    meta = juez.cargar_meta_libros(rutas_meta)
+    secciones = juez.leer_secciones(secciones_dir)
+    errores_ruta = os.path.join(work_dir, "errores.jsonl")
+    try:
+        stats = juez.procesar_secciones(secciones, _cliente_juez(ctx), out_dir,
+                                        meta=meta, workers=ctx["workers"])
+    except Exception as exc:
+        _anotar(errores_ruta, {"id": "*", "etapa": "juez",
+                               "motivo": "juez_%s" % type(exc).__name__})
+        print("juez: error %s" % exc, file=sys.stderr)
+        return 0
+    juez.escribir_informe(out_dir, stats)
+    evidencias, _ = cobertura.leer_evidencias(
+        [os.path.join(out_dir, "evidencias.jsonl")])
+    resumen = cobertura.calcular_cobertura(evidencias)
+    print("juez: %d juzgadas, %d reaprovechadas, %d sin candidatos, "
+          "%d evidencias" % (stats["juzgadas"], stats["reaprovechadas"],
+                             stats["sin_candidatos"], stats["evidencias"]))
+    print("cobertura: %d/%d celdas completas (%d evidencias ignoradas)"
+          % (resumen["completas"], len(resumen["celdas"]), resumen["ignoradas"]))
+    return 0
+
+
 def _etapa_pendiente(nombre):
     def etapa(libros, work_dir, ctx):
         print("Etapa %s: aún sin implementar" % nombre, file=sys.stderr)
@@ -281,6 +330,7 @@ ETAPAS_IMPLEMENTADAS = {
     "limpieza": _etapa_limpieza,
     "segmentacion": _etapa_segmentacion,
     "informe": _etapa_informe,
+    "juez": _etapa_juez,
 }
 
 

@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+import cobertura
 import libros_pipeline
 
 
@@ -211,6 +212,72 @@ class CadenaLimpieza(Base):
                                                     "epub-demo.txt")))
         self.assertTrue(os.path.exists(os.path.join(self.work, "limpio",
                                                     "epub-demo.txt")))
+
+
+class JuezCobertura(CadenaLimpieza):
+    """T24.3: juez simulado sobre las secciones y cobertura con `calcular_cobertura`."""
+
+    def _hasta_secciones(self):
+        self._sembrar_crudos()
+        code, _ = self.run_pipeline(work_dir=self.work,
+                                    knowledge_dir=self.knowledge,
+                                    hasta="segmentacion", pausa=0,
+                                    solo_ids="loco-es,the-fool-en")
+        self.assertEqual(code, 0)
+
+    def test_juez_simulado_produce_evidencias(self):
+        self._hasta_secciones()
+        code, salida = self.run_pipeline(work_dir=self.work,
+                                         knowledge_dir=self.knowledge,
+                                         hasta="juez", pausa=0, simulado=True,
+                                         solo_ids="loco-es,the-fool-en")
+        self.assertEqual(code, 0)
+        self.assertIn("juez:", salida)
+        self.assertIn("cobertura:", salida)
+        ruta_ev = os.path.join(self.work, "evidencias", "evidencias.jsonl")
+        self.assertTrue(os.path.exists(ruta_ev))
+        evidencias = _leer_jsonl(ruta_ev)
+        self.assertGreaterEqual(len(evidencias), 1)
+        for ev in evidencias:
+            self.assertIn("entidad_id", ev)
+            self.assertIn("faceta", ev)
+            self.assertIn(ev["fuente_id"], ("loco-es", "the-fool-en"))
+        rutas, ignoradas = cobertura.leer_evidencias([ruta_ev])
+        self.assertEqual(ignoradas, 0)
+        self.assertEqual(len(rutas), len(evidencias))
+        resumen = cobertura.calcular_cobertura(rutas)
+        self.assertGreaterEqual(resumen["completas"], 0)
+        self.assertGreater(len(resumen["celdas"]), 0)
+
+    def test_juez_reanuda_sin_repetir_llamadas(self):
+        self._hasta_secciones()
+        self.run_pipeline(work_dir=self.work, knowledge_dir=self.knowledge,
+                          hasta="juez", pausa=0, simulado=True,
+                          solo_ids="loco-es,the-fool-en")
+        ruta_ev = os.path.join(self.work, "evidencias", "evidencias.jsonl")
+        with open(ruta_ev, encoding="utf-8") as fh:
+            primeras = fh.read()
+        code, salida = self.run_pipeline(work_dir=self.work,
+                                         knowledge_dir=self.knowledge,
+                                         hasta="juez", pausa=0, simulado=True,
+                                         solo_ids="loco-es,the-fool-en")
+        self.assertEqual(code, 0)
+        with open(ruta_ev, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), primeras)
+        self.assertIn("reaprovechadas", salida)
+
+    def test_juez_sin_secciones_no_crashea(self):
+        import urllib.error
+
+        def _falla(url, timeout=120):
+            raise urllib.error.HTTPError(url, 503, "Servicio no disponible",
+                                         None, None)
+        with mock.patch.object(libros_pipeline.libros_fetch, "_obtener", _falla):
+            code, _ = self.run_pipeline(work_dir=self.work,
+                                             knowledge_dir=self.knowledge,
+                                             hasta="juez", pausa=0,
+                                             simulado=True, solo_ids="loco-es")
+        self.assertEqual(code, 0)
 
 
 if __name__ == "__main__":
