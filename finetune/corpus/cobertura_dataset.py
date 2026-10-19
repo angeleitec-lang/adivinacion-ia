@@ -318,13 +318,162 @@ def contar_numerologia(pares, contadores):
                 c["pares_pregunta"] += 1
 
 
-if __name__ == "__main__":
+# ---------------------------------------------------------------------------
+# Informe y CLI (T15.5)
+# ---------------------------------------------------------------------------
+
+_FAMILIAS_LABEL = {
+    "tarot": "Tarot",
+    "espanola": "Baraja española",
+    "signo": "Signos del zodiaco",
+    "planeta": "Planetas",
+    "casa": "Casas astrológicas",
+    "numerologia": "Numerología",
+}
+
+
+def construir_resumen(contadores, num_pares, minimo=20, stats=None):
+    """Monta el diccionario serializable del informe JSON."""
+    deficit = sorted(
+        [{"clave": k, "etiqueta": c["etiqueta"], "familia": c["familia"],
+          "pares_respuesta": c["pares_respuesta"],
+          "pares_pregunta": c["pares_pregunta"],
+          "solo_en_respuesta": c["solo_en_respuesta"]}
+         for k, c in contadores.items()
+         if c["pares_respuesta"] < minimo],
+        key=lambda e: (e["pares_respuesta"], e["etiqueta"]))
+    top = sorted(contadores.items(),
+                 key=lambda kv: (-kv[1]["pares_respuesta"], kv[1]["etiqueta"]))
+    sobre = [
+        {"clave": k, "etiqueta": c["etiqueta"], "familia": c["familia"],
+         "pares_respuesta": c["pares_respuesta"],
+         "porcentaje_respuesta": round(
+             100.0 * c["pares_respuesta"] / num_pares, 1) if num_pares else 0.0}
+        for k, c in top[:10]]
+    extra = {}
+    for k, c in contadores.items():
+        if c.get("invertidas"):
+            extra[k] = {"invertidas": c["invertidas"]}
+        if c.get("con_contexto_astrologico"):
+            extra.setdefault(k, {})["con_contexto_astrologico"] = \
+                c["con_contexto_astrologico"]
+    entidades = {}
+    for k, c in contadores.items():
+        e = {"etiqueta": c["etiqueta"], "familia": c["familia"],
+             "pares_respuesta": c["pares_respuesta"],
+             "pares_pregunta": c["pares_pregunta"],
+             "solo_en_respuesta": c["solo_en_respuesta"]}
+        e.update(extra.get(k, {}))
+        entidades[k] = e
+    return {
+        "totales": {
+            "pares_analizados": num_pares,
+            "pares_con_lineas_invalidas": (stats or {}).get(
+                "lineas_invalidas", 0),
+            "pares_sin_gpt": (stats or {}).get("sin_gpt", 0),
+        },
+        "minimo": minimo,
+        "entidades": entidades,
+        "deficitarias": deficit,
+        "sobre_representadas": sobre,
+    }
+
+
+def construir_informe_md(contadores, num_pares, minimo=20, stats=None):
+    """Redacta el informe en Markdown, en español."""
+    lineas = ["# Informe de cobertura del dataset", ""]
+    lineas.append("## Pares analizados")
+    lineas.append("")
+    lineas.append("- Pares con respuesta de asistente: **%d**" % num_pares)
+    st = stats or {}
+    lineas.append("- Líneas inválidas ignoradas: %d" % st.get(
+        "lineas_invalidas", 0))
+    lineas.append("- Pares sin mensaje del asistente: %d" % st.get(
+        "sin_gpt", 0))
+    lineas.append("")
+    lineas.append("## Cobertura por familia")
+    lineas.append("")
+    lineas.append("| Familia | Entidades vistas | Con menos de %d pares |"
+                  % minimo)
+    lineas.append("|---|---:|---:|")
+    por_familia = {}
+    for c in contadores.values():
+        por_familia.setdefault(c["familia"], []).append(c)
+    for fam in [f for f in _FAMILIAS_LABEL if f in por_familia]:
+        cs = por_familia[fam]
+        faltan = sum(1 for c in cs if c["pares_respuesta"] < minimo)
+        lineas.append("| %s | %d | %d |"
+                      % (_FAMILIAS_LABEL[fam], len(cs), faltan))
+    lineas.append("")
+    lineas.append("## Entidades con menos de %d pares" % minimo)
+    lineas.append("")
+    deficit = sorted((c for c in contadores.values()
+                      if c["pares_respuesta"] < minimo),
+                     key=lambda c: (c["pares_respuesta"], c["etiqueta"]))
+    if not deficit:
+        lineas.append("_Ninguna: todas las entidades alcanzadas superan el mínimo._")
+    else:
+        lineas.append("| Entidad | Familia | Pares en respuesta | "
+                      "Pares en pregunta |")
+        lineas.append("|---|---|---:|---:|")
+        for c in deficit:
+            lineas.append("| %s | %s | %d | %d |" % (
+                c["etiqueta"], _FAMILIAS_LABEL.get(c["familia"], c["familia"]),
+                c["pares_respuesta"], c["pares_pregunta"]))
+    lineas.append("")
+    lineas.append("## Las 10 entidades más representadas")
+    lineas.append("")
+    top = sorted(contadores.items(),
+                 key=lambda kv: (-kv[1]["pares_respuesta"],
+                                 kv[1]["etiqueta"]))[:10]
+    lineas.append("| Entidad | Familia | Pares en respuesta | % del dataset |")
+    lineas.append("|---|---|---:|---:|")
+    for _, c in top:
+        pct = 100.0 * c["pares_respuesta"] / num_pares if num_pares else 0.0
+        lineas.append("| %s | %s | %d | %.1f%% |" % (
+            c["etiqueta"], _FAMILIAS_LABEL.get(c["familia"], c["familia"]),
+            c["pares_respuesta"], pct))
+    lineas.append("")
+    return "\n".join(lineas)
+
+
+def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Informe de cobertura del dataset (WIP track T15).")
+        description="Informe de cobertura de entidades del dataset.")
     parser.add_argument("--in", dest="ins", nargs="+", required=True,
-                        help="ficheros JSONL ShareGPT")
-    args = parser.parse_args()
-    _pares, _stats = leer_pares(args.ins)
-    print(json.dumps(_stats, ensure_ascii=False))
+                        help="ficheros JSONL ShareGPT a analizar")
+    parser.add_argument("--minimo", type=int, default=20,
+                        help="mínimo de pares en respuesta por entidad "
+                             "(defecto: 20)")
+    parser.add_argument("--out-json", default="cobertura_dataset.json",
+                        help="ruta del informe JSON")
+    parser.add_argument("--out-md", default="cobertura_dataset.md",
+                        help="ruta del informe Markdown")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="imprime el informe sin escribir ficheros")
+    args = parser.parse_args(argv)
+
+    pares, stats = leer_pares(args.ins)
+    contadores = {}
+    contar_cartas(pares, contadores)
+    contar_astrologia(pares, contadores)
+    contar_numerologia(pares, contadores)
+    resumen = construir_resumen(contadores, len(pares), args.minimo, stats)
+    informe = construir_informe_md(contadores, len(pares), args.minimo, stats)
+    if args.dry_run:
+        print(informe)
+        return 0
+    with open(args.out_json, "w", encoding="utf-8") as fh:
+        json.dump(resumen, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    with open(args.out_md, "w", encoding="utf-8") as fh:
+        fh.write(informe)
+    print("Escritos %s y %s (%d pares, %d entidades)." % (
+        args.out_json, args.out_md, len(pares), len(contadores)))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

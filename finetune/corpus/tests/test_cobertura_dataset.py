@@ -262,5 +262,99 @@ class ContadorNumerologia(unittest.TestCase):
         self.assertEqual(cont["numero:03"]["pares_respuesta"], 1)
 
 
+class Informe(unittest.TestCase):
+    def _contadores(self):
+        pares = [
+            ("¿me lees el tarot?", "sale la carta El Loco; invertida sale la carta Muerte"),
+            ("casa 7", "tu casa VII y el ascendente en Leo"),
+            ("", "camino de vida 7"),
+        ]
+        cont = {}
+        cobertura_dataset.contar_cartas(pares, cont)
+        cobertura_dataset.contar_astrologia(pares, cont)
+        cobertura_dataset.contar_numerologia(pares, cont)
+        return cont, len(pares)
+
+    def test_resumen_json(self):
+        cont, n = self._contadores()
+        resumen = cobertura_dataset.construir_resumen(cont, n,
+                                                     stats={"pares": n,
+                                                            "lineas_invalidas": 0,
+                                                            "sin_gpt": 0})
+        self.assertEqual(resumen["totales"]["pares_analizados"], n)
+        self.assertIn("tarot:tarot-mayor-01", resumen["entidades"])
+        e = resumen["entidades"]["signo:leo"]
+        self.assertEqual(e["pares_respuesta"], 1)
+        self.assertEqual(e["con_contexto_astrologico"], 1)
+        self.assertEqual(resumen["minimo"], 20)
+
+    def test_informe_markdown(self):
+        cont, n = self._contadores()
+        md = cobertura_dataset.construir_informe_md(
+            cont, n, 20, stats={"pares": n, "lineas_invalidas": 0,
+                                "sin_gpt": 0})
+        self.assertIn("# Informe de cobertura del dataset", md)
+        self.assertIn("## Pares analizados", md)
+        self.assertIn("## Entidades con menos de 20 pares", md)
+        self.assertIn("## Las 10 entidades más representadas", md)
+        self.assertIn("El Loco", md)
+        # Porcentaje de sobre-representación presente
+        self.assertIn("%", md)
+
+    def test_sobre_representadas_orden_y_porcentaje(self):
+        cont = {}
+        pares = [("", "sale la carta El Loco") for _ in range(4)] + [
+            ("", "sale la carta Muerte")]
+        cobertura_dataset.contar_cartas(pares, cont)
+        md = cobertura_dataset.construir_informe_md(cont, 5, 20,
+                                                    stats={"pares": 5})
+        self.assertIn("80.0%", md)  # Loco: 4 de 5
+        seccion = md.split("## Las 10 entidades más representadas", 1)[1]
+        self.assertLess(seccion.find("El Loco"), seccion.find("La Muerte"))
+
+
+class Cli(unittest.TestCase):
+    def test_dry_run_no_escribe(self):
+        import contextlib
+        import io
+        ruta = os.path.join("/tmp", "t15_test_dry.jsonl")
+        with open(ruta, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"conversations": [
+                {"from": "human", "value": "¿tarot?"},
+                {"from": "gpt", "value": "sale la carta El Loco"}]},
+                ensure_ascii=False) + "\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cobertura_dataset.main([
+                "--in", ruta, "--dry-run"])
+        self.assertEqual(rc, 0)
+        self.assertIn("El Loco", buf.getvalue())
+        for p in ("/tmp/cobertura_dataset.json", "/tmp/cobertura_dataset.md"):
+            if os.path.exists(p):
+                os.remove(p)
+        os.remove(ruta)
+
+    def test_escribe_ficheros(self):
+        ruta_in = "/tmp/t15_test_in.jsonl"
+        with open(ruta_in, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"conversations": [
+                {"from": "human", "value": "numerología"},
+                {"from": "gpt", "value": "tu camino de vida es 7"}]},
+                ensure_ascii=False) + "\n")
+        rc = cobertura_dataset.main([
+            "--in", ruta_in,
+            "--out-json", "/tmp/t15_out.json",
+            "--out-md", "/tmp/t15_out.md"])
+        self.assertEqual(rc, 0)
+        with open("/tmp/t15_out.json", encoding="utf-8") as fh:
+            resumen = json.load(fh)
+        self.assertEqual(
+            resumen["entidades"]["numero:07"]["pares_respuesta"], 1)
+        with open("/tmp/t15_out.md", encoding="utf-8") as fh:
+            self.assertIn("# Informe de cobertura", fh.read())
+        for p in (ruta_in, "/tmp/t15_out.json", "/tmp/t15_out.md"):
+            os.remove(p)
+
+
 if __name__ == "__main__":
     unittest.main()
