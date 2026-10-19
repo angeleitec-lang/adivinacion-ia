@@ -1,0 +1,142 @@
+{
+  "descripcion": "Índices de sitios web en español con LECTURAS RESUELTAS (tiradas con cartas concretas nombradas + interpretación por posición/pregunta) para el pipeline T28. Verificados con sondeo real 2026-10-19: robots.txt permite (UA honesta), la regex captura >= 15 URLs de ejemplos de lectura desde las páginas de índice listadas, y >= 3 páginas por sitio contienen nombres de cartas + interpretación (>= 600 caracteres visibles). Excluye horóscopos, contenido genérico por carta y servicios de pago/registro.",
+  "sitios": [
+    {
+      "nombre": "cartastarotsagrado.com",
+      "tipo": "guia",
+      "indice": [
+        "https://cartastarotsagrado.com/tiradas/"
+      ],
+      "regex": "/tiradas/[^/?#]+/?$",
+      "dominio": "cartastarotsagrado.com",
+      "familia": "tarot",
+      "prioridad": "alta",
+      "nota": "20 URLs de tiradas desde el índice. Verificado: /tiradas/cruz-celta/ (13410 ch, 15 cartas), /tiradas/amor/ (12745 ch, 19), /tiradas/anual/ (10079 ch, 17). Cada página describe la tirada con cartas nombradas e interpretación por posición."
+    },
+    {
+      "nombre": "tarotveraluna.com",
+      "tipo": "guia",
+      "indice": [
+        "https://tarotveraluna.com/",
+        "https://tarotveraluna.com/tirada/"
+      ],
+      "regex": "/(?:[^/]*tirada[^/]*|cruz-celta-tarot-posiciones|tarot-volvera|tarot-del-trabajo)/?$",
+      "dominio": "tarotveraluna.com",
+      "familia": "tarot",
+      "prioridad": "alta",
+      "nota": "16 URLs desde home + hub /tirada/. Verificado: tirada-de-la-herradura (7163 ch, 7 cartas), tirada-de-luna-nueva (6190 ch, 8), tirada-tarot-del-amor (10310 ch, 12), tirada-de-tres-cartas (10394 ch, 13), tarot-volvera (5819 ch, 9), tarot-del-trabajo (5611 ch, 12). La regex excluye la sección /cartas/* (fichas genéricas por naipe)."
+    },
+    {
+      "nombre": "elvitarot.com",
+      "tipo": "blog",
+      "indice": [
+        "https://elvitarot.com/es/blog/"
+      ],
+      "regex": "/es/blog/[^/]*(?:tirada|lectura|ejemplo|cruz-celta|muestra|caso)[^/]*/?$",
+      "dominio": "elvitarot.com",
+      "familia": "tarot",
+      "prioridad": "alta",
+      "nota": "43 URLs de lecturas desde el índice del blog (el blog completo tiene ~575 enlaces; la regex KW aísla las de tiradas/lecturas). Verificado: cruz-celta-tirada-tarot (14154 ch, 12 cartas), guia-tirada-tres-cartas (9772 ch, 8), de-amigos-a-amantes-tirada-tarot (13271 ch, 13)."
+    },
+    {
+      "nombre": "astroideal.com",
+      "tipo": "blog",
+      "indice": [
+        "https://astroideal.com/blog/"
+      ],
+      "regex": "/blog/[^/]*(?:tirada|lectura|ejemplo|cruz-celta|muestra|caso|combinacion|arcano)[^/]*/?$",
+      "dominio": "astroideal.com",
+      "familia": "tarot",
+      "prioridad": "alta",
+      "nota": "86 URLs desde el índice del blog. Verificado: caso-real-reconciliacion-pareja-tarot (16635 ch, 19 cartas), combinaciones-arcanos-menores-ejemplos (12106 ch, 11), carta-astral-vs-tarot (15362 ch, 3). Incluye casos reales resueltos paso a paso."
+    },
+    {
+      "nombre": "mi.astrocentro.com",
+      "tipo": "guia",
+      "indice": [
+        "https://mi.astrocentro.com/tarot/tiradas-de-tarot/"
+      ],
+      "regex": "/tarot/(?:articulo/[^/?#]+|tarot-espanol/[^/?#]+|tiradas-de-tarot/[^/?#]+|[^/]*(?:tirada|lectura|cruz)[^/]*)/?$",
+      "dominio": "mi.astrocentro.com",
+      "familia": "tarot",
+      "prioridad": "media",
+      "nota": "15 URLs desde el índice. Verificado: /tarot/articulo/cruz-celta-amor (11847 ch, 10 cartas), /tarot/articulo/tirada-tarot-pregunta (19407 ch, 8), /tarot/tarot-espanol/metodos-de-tirada (15156 ch, 10). Parte del contenido enlaza a consulta de pago pero los artículos son gratuitos y completos."
+    },
+    {
+      "nombre": "tiradadecartas.com.ar",
+      "tipo": "herramientas",
+      "indice": [
+        "https://tiradadecartas.com.ar/"
+      ],
+      "regex": "/(?:tirada-de-tarot|tirada-de-cartas-espanolas)/[^/?#]+/?$|/(?:tirada-en-cruz|tirada-tres-cartas)/?$",
+      "dominio": "tiradadecartas.com.ar",
+      "familia": "baraja_espanola",
+      "prioridad": "alta",
+      "nota": "18 URLs (8 de baraja española + 8 de tarot + 2 de tiradas sueltas). Único sitio de la lista con baraja española de calidad; también cubre tarot en /tirada-de-tarot/*, /arcano/* y /combinaciones/*. Verificado: /tirada-de-cartas-espanolas/amor (6460 ch, 6 naipes), /tirada-de-tarot/amor (6760 ch, 7), /combinaciones/el-loco-y-el-mago (2371 ch, 14, 'Interpretación conjunta'). La regex excluye assets _next/* y fichas /arcano/*."
+    },
+    {
+      "nombre": "tarotnova.app",
+      "tipo": "herramientas",
+      "indice": [
+        "https://tarotnova.app/es/tiradas",
+        "https://tarotnova.app/es/blog"
+      ],
+      "regex": "/es/(?:tiradas|blog)/[^/?#]+/?$",
+      "dominio": "tarotnova.app",
+      "familia": "tarot",
+      "prioridad": "media",
+      "nota": "27 URLs desde los dos índices. Verificado: /es/blog/tarot-amor-interpretar-tirada (5431 ch, 10 cartas), /es/blog/tirada-de-tarot-vuelta-a-la-rutina (14351 ch, 12), /es/tiradas/12-casas (13332 ch, 16), /es/tiradas/cruz (8114 ch, 9)."
+    },
+    {
+      "nombre": "mysticanswer.com",
+      "tipo": "blog",
+      "indice": [
+        "https://mysticanswer.com/es/blog/",
+        "https://mysticanswer.com/mx/blog/"
+      ],
+      "regex": "/(?:es|mx)/blog/[^/]*(?:tirada|lectura|tarot)[^/]*/?$",
+      "dominio": "mysticanswer.com",
+      "familia": "tarot",
+      "prioridad": "media",
+      "nota": "90 URLs (los mismos slugs se sirven bajo /es/ y /mx/; deduplicar por slug al cosechar). Verificado 7 páginas: pareja-pide-espacio-tirada-tarot (6361 ch, 11 cartas), tirada-de-3-cartas-tarot-guia (8074 ch, 9), tirada-tarot-cierre-ciclo (8592 ch, 9), tirada-tarot-decisiones-importantes (9678 ch, 9)."
+    },
+    {
+      "nombre": "tarotysalud.com",
+      "tipo": "blog",
+      "indice": [
+        "https://tarotysalud.com/",
+        "https://tarotysalud.com/tag/interpretacion/",
+        "https://tarotysalud.com/tag/lectura-de-tarot/",
+        "https://tarotysalud.com/tag/tiradas-temporales/",
+        "https://tarotysalud.com/tag/interpretacion-de-cartas/",
+        "https://tarotysalud.com/tag/interpretacion-del-tarot/",
+        "https://tarotysalud.com/tag/lectura-de-cartas/"
+      ],
+      "regex": "/(?!tag/|category/|author/)[^/]*(?:tirada|interpretacion|lectura|arcano|energia|amarre)[^/]*/?$",
+      "dominio": "tarotysalud.com",
+      "familia": "tarot",
+      "prioridad": "alta",
+      "nota": "40 URLs de artículos desde home + 6 etiquetas (61 enlaces totales; la regex aísla artículos y excluye /tag/, /category/, /author/). Verificado 46 páginas con cartas nombradas; destacadas: como-interpretar-tirada-3-cartas-tarot (22385 ch, 16), interpretacion-tiradas-saber-si-volvera (22400 ch, 16), como-usar-tarot-decisiones (22593 ch, 16), tirada-3-cartas-metodologia-ejemplos (19396 ch, 6)."
+    },
+    {
+      "nombre": "tarotdetiziana.com",
+      "tipo": "blog",
+      "indice": [
+        "https://tarotdetiziana.com/",
+        "https://tarotdetiziana.com/tipos-de-tiradas-de-tarot-o-lecturas/",
+        "https://tarotdetiziana.com/combinaciones-de-cartas-en-el-tarot/",
+        "https://tarotdetiziana.com/lecturas-de-tarot-con-3-cartas/",
+        "https://tarotdetiziana.com/como-hacer-una-lectura-de-tarot-sencilla/",
+        "https://tarotdetiziana.com/aprender-a-leer-el-tarot-la-cruz-celta/",
+        "https://tarotdetiziana.com/lectura-de-cartas-de-tarot-el-abanico/",
+        "https://tarotdetiziana.com/la-repeticion-de-cartas-en-lectura-tarot/",
+        "https://tarotdetiziana.com/lectura-de-tarot-avanzada-el-arbol-de-la-vida/"
+      ],
+      "regex": "^https?://(?:www\\.)?tarotdetiziana\\.com/(?!producto/|mi-cuenta|etiqueta-producto)[^/?]*(?:lectura|tirada|combinacion|cruz-celta)[^/?#]*/?$",
+      "dominio": "tarotdetiziana.com",
+      "familia": "tarot",
+      "prioridad": "media",
+      "nota": "15 URLs desde 9 semillas (el sitio es WooCommerce: la regex excluye /producto/, /mi-cuenta/ y /etiqueta-producto/; el lookahead de query evita falsos positivos por redirect_to codificado). Verificado: lecturas-de-tarot-con-3-cartas (31495 ch, 16 cartas), aprender-a-leer-el-tarot-la-cruz-celta (14558 ch, 11), combinaciones-de-cartas-en-el-tarot (23514 ch, 28)."
+    }
+  ]
+}
