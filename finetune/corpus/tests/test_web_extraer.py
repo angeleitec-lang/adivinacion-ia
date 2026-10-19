@@ -39,6 +39,38 @@ class LimpiarRuidoTests(unittest.TestCase):
         res = _limpiar_ruido(texto)
         self.assertEqual(res.strip(), "")
 
+    def test_conserva_prosa_legitima_corta(self):
+        lineas = [
+            "La carta anuncia un cambio importante",
+            "Es momento de compartir lo vivido",
+            "El comprador debe firmar el contrato con calma",
+        ]
+        res = _limpiar_ruido("\n".join(lineas))
+        for linea in lineas:
+            self.assertIn(linea, res)
+
+    def test_conserva_prosa_larga_con_palabras_de_ruido(self):
+        prosa = ("La compra del mazo nuevo de tarot de Marsella fue una decision "
+                 "acertada que trajo muchas horas de lectura compartida entre amigos")
+        res = _limpiar_ruido(prosa)
+        self.assertIn("compra", res)
+        self.assertIn("compartida", res)
+
+    def test_elimina_linea_comercial_corta(self):
+        res = _limpiar_ruido("texto bueno\nCompra ahora y ahorra un veinte por ciento\nmás texto")
+        self.assertNotIn("Compra ahora", res)
+        self.assertIn("texto bueno", res)
+
+    def test_elimina_linea_solo_ruido_aunque_sea_larga(self):
+        ruido = ("Suscríbete Compártelo Facebook Twitter Instagram WhatsApp "
+                 "Newsletter Boletín Síguenos Suscríbete Compártelo Facebook")
+        res = _limpiar_ruido(ruido)
+        self.assertEqual(res.strip(), "")
+
+    def test_conserva_prosa_sin_ruido(self):
+        res = _limpiar_ruido("El tarot de Marsella tiene setenta y ocho cartas")
+        self.assertIn("setenta y ocho", res)
+
 
 class ExtraerTests(unittest.TestCase):
     def setUp(self):

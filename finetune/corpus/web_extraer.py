@@ -84,18 +84,53 @@ FRASES_RUIDO = [
 # Funciones de limpieza
 # ---------------------------------------------------------------------------
 
+# Coincidencia con límite de palabra: «compra» no casa dentro de «comprador»
+_PATRONES_RUIDO = [re.compile(r"\b" + re.escape(frase) + r"\b", re.IGNORECASE)
+                   for frase in FRASES_RUIDO]
+
+# Una línea que contenga ruido solo se borra si es corta (navegación/comercial)
+MAX_PALABRAS_RUIDO = 12
+
+
+def _contiene_ruido(linea_lower: str) -> bool:
+    """True si la línea contiene alguna frase de ruido como palabra completa."""
+    return any(p.search(linea_lower) for p in _PATRONES_RUIDO)
+
+
+def _es_solo_ruido(linea_lower: str) -> bool:
+    """True si, quitadas las frases de ruido, no queda nada alfanumérico."""
+    resto = linea_lower
+    for p in _PATRONES_RUIDO:
+        resto = p.sub(" ", resto)
+    return not re.search(r"\w", resto)
+
+
 def _limpiar_ruido(texto: str) -> str:
-    """Elimina frases de navegación/comercial (insensible a mayúsculas, multilinea)."""
+    """Borra líneas cortas de navegación/comercial o que son solo ruido.
+
+    Respeta la prosa larga (> MAX_PALABRAS_RUIDO palabras) aunque contenga
+    palabras de la lista, y la prosa corta sin ruido. La coincidencia es con
+    límite de palabra, así «comprador» o «anuncia» no se confunden con
+    «compra» o «anuncio».
+    """
     lineas = texto.splitlines()
     limpias = []
     for linea in lineas:
-        lower = linea.lower().strip()
-        # Saltar líneas que son solo ruido
-        if any(frase in lower for frase in FRASES_RUIDO):
-            continue
+        stripped = linea.strip()
         # Saltar líneas muy cortas que parecen ruido
-        if len(linea.strip()) <= 2:
+        if len(stripped) <= 2:
             continue
+        lower = stripped.lower()
+        if not _contiene_ruido(lower):
+            limpias.append(linea)
+            continue
+        # Línea que es solo ruido: fuera sea cual sea su longitud
+        if _es_solo_ruido(lower):
+            continue
+        # Ruido en línea corta (navegación/comercial): fuera
+        if len(lower.split()) <= MAX_PALABRAS_RUIDO:
+            continue
+        # Prosa larga: se conserva
         limpias.append(linea)
     return "\n".join(limpias)
 
