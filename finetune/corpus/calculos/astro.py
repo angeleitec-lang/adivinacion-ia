@@ -204,6 +204,24 @@ def _calcular_carta(jd_ut: float, lat: float, lon: float) -> Dict[str, Any]:
             "lon": round(lon_planeta, 4),
         })
 
+    # Nodos lunares: nodo medio (swe.MEAN_NODE) en trópico. Son puntos matemáticos
+    # del plano lunar; no entran en el cálculo de aspectos ni en el elemento o la
+    # modalidad dominante.
+    res_nodo = swe.calc_ut(jd_ut, swe.MEAN_NODE, swe.FLG_SWIEPH)
+    nodo_norte_lon = res_nodo[0][0] % 360
+    nodo_sur_lon = (nodo_norte_lon + 180) % 360
+    nodos_res = []
+    for nombre_nodo, lon_nodo in (("Nodo Norte", nodo_norte_lon), ("Nodo Sur", nodo_sur_lon)):
+        signo_n, grado_n, minuto_n = _lon_a_signo_grado_minuto(lon_nodo)
+        nodos_res.append({
+            "nombre": nombre_nodo,
+            "signo": signo_n,
+            "grado": grado_n,
+            "minuto": minuto_n,
+            "casa": _casa_desde_cusps(lon_nodo, casas),
+            "lon": round(lon_nodo, 4),
+        })
+
     # Ascendente y MC
     asc_lon = ascmc[0] % 360
     mc_lon = ascmc[1] % 360
@@ -261,6 +279,7 @@ def _calcular_carta(jd_ut: float, lat: float, lon: float) -> Dict[str, Any]:
 
     return {
         "planetas": planetas_res,
+        "nodos": nodos_res,
         "ascendente": {"signo": asc_signo, "grado": asc_grado, "minuto": asc_minuto, "lon": round(asc_lon, 4)},
         "medio_cielo": {"signo": mc_signo, "grado": mc_grado, "minuto": mc_minuto, "lon": round(mc_lon, 4)},
         "casas": [{"signo": _lon_a_signo_grado_minuto(c % 360)[0], "grado": _lon_a_signo_grado_minuto(c % 360)[1], "minuto": _lon_a_signo_grado_minuto(c % 360)[2], "lon": round(c % 360, 4)} for c in casas],
@@ -313,6 +332,21 @@ def _planeta_en_casa(lon: float, casas: List[Dict[str, Any]]) -> int:
     return 1
 
 
+def _casa_desde_cusps(lon: float, cusps: List[float]) -> int:
+    """Determina en qué casa cae una longitud dado un listado de cúspides (floats)."""
+    for i in range(12):
+        cusp_actual = cusps[i] % 360
+        cusp_siguiente = cusps[(i + 1) % 12] % 360
+        if cusp_siguiente < cusp_actual:
+            cusp_siguiente += 360
+        lon_norm = lon % 360
+        if lon_norm < cusp_actual:
+            lon_norm += 360
+        if cusp_actual <= lon_norm < cusp_siguiente:
+            return i + 1
+    return 1
+
+
 def transitos(
     natal: Dict[str, Any],
     fecha_transito: str,
@@ -346,9 +380,11 @@ def transitos(
         res = swe.calc_ut(jd_ut, pid, swe.FLG_SWIEPH)
         transito_pos[nombre] = res[0][0] % 360
 
-    # Aspectos tránsito -> natal
+    # Aspectos tránsito -> natal. Los nodos lunares se tratan como puntos natales
+    # adicionales (aportan nombre, lon y casa), con los mismos orbes de tránsito.
+    puntos_natales = list(natal["planetas"]) + list(natal.get("nodos", []))
     aspectos = []
-    for p_natal in natal["planetas"]:
+    for p_natal in puntos_natales:
         lon_natal = p_natal["lon"]
         casa_natal = p_natal["casa"]
         for nombre_t, lon_t in transito_pos.items():
