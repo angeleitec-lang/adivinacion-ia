@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
 import random
 import sqlite3
 import unicodedata
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
-import swisseph as swe
+from calculos import numerologia as calc_num
+from calculos.astro import carta_natal
 
 ROOT = Path(__file__).resolve().parent.parent
 KB_DIR = ROOT / "corpus" / "kb"
@@ -110,86 +109,45 @@ FOCOS_ASTRO = [
 
 FOCOS_SIN = ["compatibilidad amorosa", "sociedad laboral", "amistad", "vínculo familiar", "proyecto en común"]
 
-SIGNOS = ["Aries", "Tauro", "Géminis", "Cáncer", "Leo", "Virgo", "Libra", "Escorpio",
-          "Sagitario", "Capricornio", "Acuario", "Piscis"]
-
-PLANETAS = [
-    (swe.SUN, "Sol"), (swe.MOON, "Luna"), (swe.MERCURY, "Mercurio"),
-    (swe.VENUS, "Venus"), (swe.MARS, "Marte"), (swe.JUPITER, "Júpiter"),
-    (swe.SATURN, "Saturno"), (swe.URANUS, "Urano"), (swe.NEPTUNE, "Neptuno"),
-    (swe.PLUTO, "Plutón"),
-]
-
-ASPECTOS = [(0, "conjunción", 6.0), (60, "sextil", 5.0), (90, "cuadratura", 6.0),
-            (120, "trígono", 6.0), (180, "oposición", 7.0)]
-
-
 def load_kb(nombre):
     p = KB_DIR / nombre
     with p.open(encoding="utf-8") as fh:
         return json.load(fh)
 
 
-def fmt_grados(lon):
-    g = int(lon % 30)
-    m = int((lon % 1) * 60)
-    return f"{g}°{m:02d}'"
-
-
-def signo_de(lon):
-    return SIGNOS[int(lon // 30) % 12]
-
-
-def casa_de(lon, cuspides):
-    for i in range(12):
-        a = cuspides[i]
-        b = cuspides[(i + 1) % 12]
-        if a <= b:
-            if a <= lon < b:
-                return i + 1
-        else:
-            if lon >= a or lon < b:
-                return i + 1
-    return 1
-
-
 def calcular_carta(fecha, hora, lat, lon, tz):
-    d = dt.datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
-    # La hora de nacimiento es local: se convierte a UT antes del cálculo juliano.
-    d = d.replace(tzinfo=ZoneInfo(tz)).astimezone(dt.timezone.utc)
-    jd = swe.julday(d.year, d.month, d.day, d.hour + d.minute / 60.0)
-    cuspides, ascmc = swe.houses(jd, lat, lon, b"P")
-    cusp = list(cuspides[1:13]) if len(cuspides) >= 13 else list(cuspides[:12])
+    """Carta natal delegada en calculos.astro, adaptada al formato de siempre.
+
+    calculos.astro redondea los minutos (el código viejo los truncaba): la
+    tolerancia de no-regresión de 1 minuto queda fijada en
+    tests/test_equivalencia_calculos.py contra valores congelados.
+    """
+    carta = carta_natal(fecha, hora, lat, lon, tz)
     planetas = {}
-    for pid, nombre in PLANETAS:
-        xx, _ = swe.calc_ut(jd, pid, swe.FLG_SWIEPH | swe.FLG_SPEED)
-        l = xx[0]
-        planetas[nombre] = {
-            "signo": signo_de(l),
-            "grados": fmt_grados(l),
-            "lon": l,
-            "casa": casa_de(l, cusp),
+    for p in carta["planetas"]:
+        planetas[p["nombre"]] = {
+            "signo": p["signo"],
+            "grados": f"{p['grado']}°{p['minuto']:02d}'",
+            "lon": p["lon"],
+            "casa": p["casa"],
         }
-    aspectos = []
-    nombres = [n for _, n in PLANETAS]
-    for i in range(len(nombres)):
-        for j in range(i + 1, len(nombres)):
-            a = planetas[nombres[i]]["lon"]
-            b = planetas[nombres[j]]["lon"]
-            diff = abs((a - b + 180) % 360 - 180)
-            for ang, nom, orbe in ASPECTOS:
-                if abs(diff - ang) <= orbe:
-                    aspectos.append({
-                        "a": nombres[i], "b": nombres[j], "aspecto": nom,
-                        "orbe": round(abs(diff - ang), 1),
-                    })
-                    break
+    asc = carta["ascendente"]
+    mc = carta["medio_cielo"]
+    aspectos = [
+        {
+            "a": a["planeta_a"],
+            "b": a["planeta_b"],
+            "aspecto": a["aspecto"],
+            "orbe": round(a["orbe"], 1),
+        }
+        for a in carta["aspectos"]
+    ]
     return {
         "fecha": fecha, "hora": hora,
         "planetas": planetas,
-        "ascendente": {"signo": signo_de(ascmc[0]), "grados": fmt_grados(ascmc[0])},
-        "mc": {"signo": signo_de(ascmc[1]), "grados": fmt_grados(ascmc[1])},
-        "aspectos": mejores_aspectos(aspectos),
+        "ascendente": {"signo": asc["signo"], "grados": f"{asc['grado']}°{asc['minuto']:02d}'"},
+        "mc": {"signo": mc["signo"], "grados": f"{mc['grado']}°{mc['minuto']:02d}'"},
+        "aspectos": aspectos,
     }
 
 
@@ -213,44 +171,28 @@ def fmt_carta(c, ciudad, pais):
 
 
 def reducir(n):
-    while n > 9 and n not in (11, 22, 33):
-        n = sum(int(d) for d in str(n))
-    return n
-
-
-def digitos(fecha):
-    return sum(int(ch) for ch in fecha if ch.isdigit())
+    """Reducción pitagórica conservando maestros (delegada en calculos.numerologia)."""
+    return calc_num.reducir(n)
 
 
 def camino_de_vida(fecha):
-    """Reduce por componentes conservando maestros (11, 22, 33) en cada uno."""
-    _a, m, d = fecha.split("-")
-    return reducir(reducir(int(d)) + reducir(int(m)) + reducir(digitos(_a)))
+    """Camino de vida (delegado en calculos.numerologia)."""
+    return calc_num.camino_de_vida(fecha)
 
 
 def letras_valor(nombre):
-    n = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode().upper()
-    total = 0
-    for ch in n:
-        if "A" <= ch <= "Z":
-            total += (ord(ch) - 65) % 9 + 1
-    return total
+    """Suma pitagórica de las letras, con la normalización de calculos (fuente de verdad)."""
+    return sum(calc_num.PITAGORICA.get(c, 0) for c in calc_num._normalizar_texto(nombre))
 
 
 def vocales_consonantes(nombre):
-    n = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode().upper()
-    voc = sum(((ord(ch) - 65) % 9 + 1) for ch in n if ch in "AEIOU")
-    con = sum(((ord(ch) - 65) % 9 + 1) for ch in n if "A" <= ch <= "Z" and ch not in "AEIOU")
-    return reducir(voc), reducir(con)
+    """(Alma, personalidad) reducidos conservando maestros (delegado en calculos)."""
+    return calc_num.alma(nombre), calc_num.personalidad(nombre)
 
 
 def anio_personal(fecha, anio=2026):
-    """Año personal: el resultado se reduce siempre a 1-9 (no conserva maestros)."""
-    _a, m, d = fecha.split("-")
-    total = reducir(int(d)) + reducir(int(m)) + reducir(digitos(str(anio)))
-    while total > 9:
-        total = sum(int(ch) for ch in str(total))
-    return total
+    """Año personal: el resultado se reduce siempre a 1-9 (delegado en calculos)."""
+    return calc_num.anio_personal(fecha, anio)
 
 
 def fmt_numerologia(fecha, nombre):
@@ -258,7 +200,7 @@ def fmt_numerologia(fecha, nombre):
     return (
         f"Fecha de nacimiento: {fecha}. Nombre completo: {nombre}.\n"
         f"- Camino de vida: {camino_de_vida(fecha)}\n"
-        f"- Destino/expresión: {reducir(letras_valor(nombre))}\n"
+        f"- Destino/expresión: {calc_num.expresion(nombre)}\n"
         f"- Alma (vocales): {voc}\n"
         f"- Personalidad (consonantes): {con}\n"
         f"- Año personal 2026: {anio_personal(fecha)}"
@@ -354,7 +296,7 @@ def referencia_numerologia(fecha, nombre, kb_num):
     voc, con = vocales_consonantes(nombre)
     valores = [
         ("camino de vida", camino_de_vida(fecha)),
-        ("destino/expresión", reducir(letras_valor(nombre))),
+        ("destino/expresión", calc_num.expresion(nombre)),
         ("alma (vocales)", reducir(voc)),
         ("personalidad (consonantes)", reducir(con)),
         ("año personal", anio_personal(fecha)),
