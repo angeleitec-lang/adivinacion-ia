@@ -20,7 +20,7 @@
         "https://tarotveraluna.com/",
         "https://tarotveraluna.com/tirada/"
       ],
-      "regex": "/(?:[^/]*tirada[^/]*|cruz-celta-tarot-posiciones|tarot-volvera|tarot-del-trabajo)/?$",
+      "regex": "^https?://(?:www\\.)?tarotveraluna\\.com/(?:[^/]*tirada[^/]*|cruz-celta-tarot-posiciones|tarot-volvera|tarot-del-trabajo)/?$",
       "dominio": "tarotveraluna.com",
       "familia": "tarot",
       "prioridad": "alta",
@@ -112,11 +112,11 @@
         "https://tarotysalud.com/tag/interpretacion-del-tarot/",
         "https://tarotysalud.com/tag/lectura-de-cartas/"
       ],
-      "regex": "/(?!tag/|category/|author/)[^/]*(?:tirada|interpretacion|lectura|arcano|energia|amarre)[^/]*/?$",
+      "regex": "^https?://(?:www\\.)?tarotysalud\\.com/(?!tag/|category/|author/)[^/]*(?:tirada|interpretacion|lectura|arcano|energia|amarre)[^/?#]*/?$",
       "dominio": "tarotysalud.com",
       "familia": "tarot",
       "prioridad": "alta",
-      "nota": "40 URLs de artículos desde home + 6 etiquetas (61 enlaces totales; la regex aísla artículos y excluye /tag/, /category/, /author/). Verificado 46 páginas con cartas nombradas; destacadas: como-interpretar-tirada-3-cartas-tarot (22385 ch, 16), interpretacion-tiradas-saber-si-volvera (22400 ch, 16), como-usar-tarot-decisiones (22593 ch, 16), tirada-3-cartas-metodologia-ejemplos (19396 ch, 6)."
+      "nota": "17 URLs de artículos desde home + 6 etiquetas (61 enlaces totales; la regex anclada aísla artículos de un segmento y excluye /tag/, /category/, /author/). Verificado 46 páginas con cartas nombradas; destacadas: como-interpretar-tirada-3-cartas-tarot (22385 ch, 16), interpretacion-tiradas-saber-si-volvera (22400 ch, 16), como-usar-tarot-decisiones (22593 ch, 16), tirada-3-cartas-metodologia-ejemplos (19396 ch, 6)."
     },
     {
       "nombre": "tarotdetiziana.com",
