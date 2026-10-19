@@ -9,11 +9,11 @@
         "https://www.forotarot.net/foro-combinaciones",
         "https://www.forotarot.net/foro-tiradas-de-cartas"
       ],
-      "regex": "/tema-[^/?#]+$",
+      "regex": "/tema-(?!Sistema-de-puntos|[Nn]ormas-|minimo-de-puntos)[^/?#]+$",
       "dominio": "forotarot.net",
       "familia": "baraja_espanola",
       "prioridad": "alta",
-      "nota": "Foro MyBB. Secciones /foro-*, hilos públicos /tema-<slug>. Robots prohíbe /usercp, /login, /post/*; los hilos están permitidos."
+      "nota": "Foro MyBB. Secciones /foro-*, hilos públicos /tema-<slug>. Robots prohíbe /usercp, /login, /post/*; los hilos están permitidos. El lookahead excluye los 4 meta-hilos de normas/puntos (antes 50 hilos descubiertos, ahora 46)."
     },
     {
       "nombre": "eragon8.blogspot.com",
