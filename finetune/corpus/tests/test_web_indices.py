@@ -294,6 +294,118 @@ class SeguirIndiceTests(unittest.TestCase):
         self.assertNotIn("https://biddytarot.com/tarot-card-meanings/minor-arcana/the-fool", urls)
 
 
+class SitemapTests(unittest.TestCase):
+    """T30d.1: soporte de sitemaps XML (urlset y sitemapindex)."""
+
+    def _cliente_mapa(self, mapa):
+        class ClienteMapa:
+            def __init__(self, mapa):
+                self.mapa = mapa
+                self.peticiones = []
+            def get(self, url):
+                self.peticiones.append(url)
+                html = self.mapa.get(url)
+                if html is None:
+                    return {"estado": "error", "html": None, "status": 404, "bytes": 0}
+                return {"estado": "ok", "html": html, "status": 200, "bytes": len(html)}
+        return ClienteMapa(mapa)
+
+    def _cfg(self, indice):
+        return {
+            "nombre": "s",
+            "indice": indice,
+            "regex": "/tarot/",
+            "dominio": "site.com",
+        }
+
+    def test_urlset_extrae_locs(self):
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            "<url><loc>https://site.com/tarot/loco</loc></url>"
+            "<url><loc>https://site.com/tarot/mago</loc></url>"
+            "<url><loc>https://otro.com/tarot/ajeno</loc></url>"
+            "</urlset>"
+        )
+        cliente = self._cliente_mapa({"https://site.com/sitemap.xml": xml})
+        urls = seguir_indice(self._cfg("https://site.com/sitemap.xml"), cliente,
+                            limite=50, pausa_s=0)
+        self.assertEqual(urls, [
+            "https://site.com/tarot/loco",
+            "https://site.com/tarot/mago",
+        ])
+
+    def test_sitemapindex_sigue_hijos_maximo_diez(self):
+        index_xml = (
+            '<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            + "".join(
+                f"<sitemap><loc>https://site.com/sm{i}.xml</loc></sitemap>"
+                for i in range(12)
+            )
+            + "</sitemapindex>"
+        )
+        mapa = {"https://site.com/sitemap_index.xml": index_xml}
+        for i in range(12):
+            mapa[f"https://site.com/sm{i}.xml"] = (
+                f"<urlset><url><loc>https://site.com/tarot/pagina{i}</loc></url></urlset>"
+            )
+        cliente = self._cliente_mapa(mapa)
+        urls = seguir_indice(self._cfg("https://site.com/sitemap_index.xml"), cliente,
+                            limite=100, pausa_s=0)
+        self.assertEqual(len(urls), 10)
+        self.assertIn("https://site.com/tarot/pagina0", urls)
+        self.assertNotIn("https://site.com/tarot/pagina10", urls)
+        self.assertNotIn("https://site.com/tarot/pagina11", urls)
+
+    def test_sitemap_detectado_por_contenido_sin_extension(self):
+        xml = '<urlset><url><loc>https://site.com/tarot/a</loc></url></urlset>'
+        cliente = self._cliente_mapa({"https://site.com/sitemap": xml})
+        urls = seguir_indice(self._cfg("https://site.com/sitemap"), cliente,
+                            limite=50, pausa_s=0)
+        self.assertEqual(urls, ["https://site.com/tarot/a"])
+
+    def test_hijo_fallido_no_bloquea_los_demas(self):
+        index_xml = (
+            "<sitemapindex>"
+            "<sitemap><loc>https://site.com/sm0.xml</loc></sitemap>"
+            "<sitemap><loc>https://site.com/sm1.xml</loc></sitemap>"
+            "</sitemapindex>"
+        )
+        mapa = {
+            "https://site.com/sitemap.xml": index_xml,
+            "https://site.com/sm1.xml": (
+                "<urlset><url><loc>https://site.com/tarot/buena</loc></url></urlset>"
+            ),
+        }
+        cliente = self._cliente_mapa(mapa)
+        urls = seguir_indice(self._cfg("https://site.com/sitemap.xml"), cliente,
+                            limite=50, pausa_s=0)
+        self.assertEqual(urls, ["https://site.com/tarot/buena"])
+
+    def test_indice_lista_con_sitemaps(self):
+        xml_a = '<urlset><url><loc>https://site.com/tarot/a</loc></url></urlset>'
+        xml_b = '<urlset><url><loc>https://site.com/tarot/b</loc></url></urlset>'
+        cliente = self._cliente_mapa({
+            "https://site.com/sa.xml": xml_a,
+            "https://site.com/sb.xml": xml_b,
+        })
+        cfg = self._cfg(["https://site.com/sa.xml", "https://site.com/sb.xml"])
+        urls = seguir_indice(cfg, cliente, limite=50, pausa_s=0)
+        self.assertEqual(urls, [
+            "https://site.com/tarot/a",
+            "https://site.com/tarot/b",
+        ])
+
+
+class ProtocoloRelativoTests(unittest.TestCase):
+    """T30d.2: enlaces //dominio/ruta resueltos con urljoin."""
+
+    def test_protocol_relative_mismo_dominio_resuelto(self):
+        html = '<html><body><a href="//site.com/tarot/loco.html">x</a></body></html>'
+        urls = _extraer_enlaces(html, "https://site.com/idx/", "site.com")
+        self.assertIn("https://site.com/tarot/loco.html", urls)
+
+
 class CargarConfigTests(unittest.TestCase):
     def test_carga_config_valida(self):
         config = cargar_config()
