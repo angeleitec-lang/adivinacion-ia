@@ -13,6 +13,8 @@ from zoneinfo import ZoneInfo
 
 import swisseph as swe
 
+from calculos import numerologia as calc_num
+
 ROOT = Path(__file__).resolve().parent.parent
 KB_DIR = ROOT / "corpus" / "kb"
 
@@ -213,44 +215,28 @@ def fmt_carta(c, ciudad, pais):
 
 
 def reducir(n):
-    while n > 9 and n not in (11, 22, 33):
-        n = sum(int(d) for d in str(n))
-    return n
-
-
-def digitos(fecha):
-    return sum(int(ch) for ch in fecha if ch.isdigit())
+    """Reducción pitagórica conservando maestros (delegada en calculos.numerologia)."""
+    return calc_num.reducir(n)
 
 
 def camino_de_vida(fecha):
-    """Reduce por componentes conservando maestros (11, 22, 33) en cada uno."""
-    _a, m, d = fecha.split("-")
-    return reducir(reducir(int(d)) + reducir(int(m)) + reducir(digitos(_a)))
+    """Camino de vida (delegado en calculos.numerologia)."""
+    return calc_num.camino_de_vida(fecha)
 
 
 def letras_valor(nombre):
-    n = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode().upper()
-    total = 0
-    for ch in n:
-        if "A" <= ch <= "Z":
-            total += (ord(ch) - 65) % 9 + 1
-    return total
+    """Suma pitagórica de las letras, con la normalización de calculos (fuente de verdad)."""
+    return sum(calc_num.PITAGORICA.get(c, 0) for c in calc_num._normalizar_texto(nombre))
 
 
 def vocales_consonantes(nombre):
-    n = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode().upper()
-    voc = sum(((ord(ch) - 65) % 9 + 1) for ch in n if ch in "AEIOU")
-    con = sum(((ord(ch) - 65) % 9 + 1) for ch in n if "A" <= ch <= "Z" and ch not in "AEIOU")
-    return reducir(voc), reducir(con)
+    """(Alma, personalidad) reducidos conservando maestros (delegado en calculos)."""
+    return calc_num.alma(nombre), calc_num.personalidad(nombre)
 
 
 def anio_personal(fecha, anio=2026):
-    """Año personal: el resultado se reduce siempre a 1-9 (no conserva maestros)."""
-    _a, m, d = fecha.split("-")
-    total = reducir(int(d)) + reducir(int(m)) + reducir(digitos(str(anio)))
-    while total > 9:
-        total = sum(int(ch) for ch in str(total))
-    return total
+    """Año personal: el resultado se reduce siempre a 1-9 (delegado en calculos)."""
+    return calc_num.anio_personal(fecha, anio)
 
 
 def fmt_numerologia(fecha, nombre):
@@ -258,7 +244,7 @@ def fmt_numerologia(fecha, nombre):
     return (
         f"Fecha de nacimiento: {fecha}. Nombre completo: {nombre}.\n"
         f"- Camino de vida: {camino_de_vida(fecha)}\n"
-        f"- Destino/expresión: {reducir(letras_valor(nombre))}\n"
+        f"- Destino/expresión: {calc_num.expresion(nombre)}\n"
         f"- Alma (vocales): {voc}\n"
         f"- Personalidad (consonantes): {con}\n"
         f"- Año personal 2026: {anio_personal(fecha)}"
@@ -354,7 +340,7 @@ def referencia_numerologia(fecha, nombre, kb_num):
     voc, con = vocales_consonantes(nombre)
     valores = [
         ("camino de vida", camino_de_vida(fecha)),
-        ("destino/expresión", reducir(letras_valor(nombre))),
+        ("destino/expresión", calc_num.expresion(nombre)),
         ("alma (vocales)", reducir(voc)),
         ("personalidad (consonantes)", reducir(con)),
         ("año personal", anio_personal(fecha)),
