@@ -10,7 +10,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import unittest
 
 import web_extraer
-from web_extraer import extraer, guardar_markdown, _limpiar_ruido, _extraer_titulo
+from web_extraer import (
+    extraer,
+    guardar_markdown,
+    reparar_mojibake,
+    _limpiar_ruido,
+    _extraer_titulo,
+)
 
 
 class LimpiarRuidoTests(unittest.TestCase):
@@ -110,6 +116,38 @@ class TituloTests(unittest.TestCase):
         self.assertIsNotNone(res)
         self.assertTrue(res["titulo"])
         self.assertNotIn("**", res["titulo"])
+
+
+class MojibakeTests(unittest.TestCase):
+    def test_repara_anos(self):
+        self.assertEqual(reparar_mojibake("aÃ±os"), "años")
+
+    def test_repara_que(self):
+        self.assertEqual(reparar_mojibake("QuÃ© es el tarot"), "Qué es el tarot")
+
+    def test_repara_raya_larga(self):
+        self.assertEqual(reparar_mojibake("holaâ€”adios"), "hola—adios")
+
+    def test_texto_correcto_inalterado(self):
+        t = "El loco anuncia un nuevo comienzo con ilusión."
+        self.assertEqual(reparar_mojibake(t), t)
+
+    def test_rechaza_si_introduce_reemplazo(self):
+        # «ï¿½» re-codificado produce U+FFFD: la reparación se rechaza
+        t = "aÃ±os \u00ef\u00bf\u00bd"
+        self.assertEqual(reparar_mojibake(t), t)
+
+    def test_extraer_repara_mojibake_integracion(self):
+        frase = "Esto son aÃ±os de experiencia en la lectura seria de las cartas. "
+        html = (
+            "<html><head><title>QuÃ© es el tarot</title></head><body>"
+            "<h1>QuÃ© es el tarot</h1><p>" + frase * 5 + "</p></body></html>"
+        )
+        res = extraer(html, "https://tarotsevilla.com/que-es", min_chars=50)
+        self.assertIsNotNone(res)
+        self.assertIn("años", res["texto_md"])
+        self.assertNotIn("aÃ±os", res["texto_md"])
+        self.assertIn("Qué", res["titulo"])
 
 
 class ExtraerTests(unittest.TestCase):

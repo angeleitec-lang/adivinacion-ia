@@ -135,7 +135,7 @@ def _extraer_titulo(md: str, html: str = "") -> str:
                 return t[:200]
     m = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
     if m:
-        t = _limpiar_marcas_titulo(m.group(1))
+        t = _limpiar_marcas_titulo(reparar_mojibake(m.group(1)))
         if t:
             return t[:200]
     for l in md.splitlines():
@@ -147,6 +147,35 @@ def _extraer_titulo(md: str, html: str = "") -> str:
 
 def _sha256(texto: str) -> str:
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Reparación de mojibake (UTF-8 leído como cp1252)
+# ---------------------------------------------------------------------------
+
+_MOJIBAKE_PATRON = re.compile(r"Ã[\u0080-\u00bf]|â€")
+
+
+def reparar_mojibake(texto: str) -> str:
+    """Repara texto UTF-8 que fue leído como cp1252 (mojibake tipo «aÃ±os»).
+
+    Si se detectan secuencias de mojibake, intenta re-codificar como cp1252 y
+    decodificar de nuevo como UTF-8. Acepta el resultado solo si reduce el
+    número de secuencias de mojibake y no introduce el carácter de reemplazo.
+    Si no, devuelve el texto original intacto.
+    """
+    originales = len(_MOJIBAKE_PATRON.findall(texto))
+    if originales == 0:
+        return texto
+    try:
+        reparado = texto.encode("cp1252", errors="ignore").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return texto
+    if "\ufffd" in reparado:
+        return texto
+    if len(_MOJIBAKE_PATRON.findall(reparado)) < originales:
+        return reparado
+    return texto
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +218,9 @@ def extraer(
 
     if not md or len(md.strip()) < min_chars:
         return None
+
+    # Reparar mojibake (UTF-8 leído como cp1252) antes de limpiar ruido
+    md = reparar_mojibake(md)
 
     # Limpiar ruido
     md = _limpiar_ruido(md)
