@@ -6,6 +6,7 @@ import json
 import contextlib
 import tempfile
 import unittest
+import urllib.error
 from unittest import mock
 
 import cobertura
@@ -27,6 +28,13 @@ RELLENO_ES = ("el loco del sol y de la luna es un viaje del alma y el anda "
 
 CRUDO_EN = "\n\n".join([_parrafo(RELLENO_EN, 15)] * 4)
 CRUDO_ES = "\n\n".join([_parrafo(RELLENO_ES, 15)] * 4)
+
+
+def _obtener_que_falla(code, mensaje="limitado"):
+    """_obtener de recambio que lanza HTTPError con ese código."""
+    def _obtener(url, timeout=120):
+        raise urllib.error.HTTPError(url, code, mensaje, None, None)
+    return _obtener
 
 
 def _escribir(ruta, texto):
@@ -267,17 +275,68 @@ class JuezCobertura(CadenaLimpieza):
         self.assertIn("reaprovechadas", salida)
 
     def test_juez_sin_secciones_no_crashea(self):
-        import urllib.error
-
-        def _falla(url, timeout=120):
-            raise urllib.error.HTTPError(url, 503, "Servicio no disponible",
-                                         None, None)
-        with mock.patch.object(libros_pipeline.libros_fetch, "_obtener", _falla):
+        with mock.patch.object(libros_pipeline.libros_fetch, "_obtener",
+                               _obtener_que_falla(503, "Servicio no disponible")):
             code, _ = self.run_pipeline(work_dir=self.work,
                                              knowledge_dir=self.knowledge,
                                              hasta="juez", pausa=0,
                                              simulado=True, solo_ids="loco-es")
         self.assertEqual(code, 0)
+
+
+class LimitacionTest(Base):
+    """T24.4: los 429 seguidos cortan la pasada con código 3 y no cortan
+    otros errores por libro."""
+
+    def test_429_seguidos_parada_limpia(self):
+        with mock.patch.object(libros_pipeline.libros_fetch, "_obtener",
+                               _obtener_que_falla(429)):
+            code, _ = self.run_pipeline(work_dir=self.work,
+                                        knowledge_dir=self.knowledge,
+                                        hasta="descarga", pausa=0)
+        self.assertEqual(code, 3)
+        # no se crean etapas posteriores
+        self.assertFalse(os.path.exists(os.path.join(self.work, "limpio")))
+        errores = _leer_jsonl(os.path.join(self.work, "errores.jsonl"))
+        self.assertEqual([e["motivo"] for e in errores], ["http_429", "http_429"])
+        registro = _leer_jsonl(os.path.join(self.work, "fetch.jsonl"))
+        self.assertEqual(registro[-1]["estado"], "limitada")
+
+    def test_un_429_no_corta_la_pasada(self):
+        llamadas = []
+
+        def _obtener(url, timeout=120):
+            llamadas.append(url)
+            if len(llamadas) == 1:
+                raise urllib.error.HTTPError(url, 429, "limitado", None, None)
+            return CRUDO_EN.encode("utf-8")
+        with mock.patch.object(libros_pipeline.libros_fetch, "_obtener", _obtener):
+            code, _ = self.run_pipeline(work_dir=self.work,
+                                        knowledge_dir=self.knowledge,
+                                        hasta="descarga", pausa=0)
+        self.assertEqual(code, 0)
+        self.assertTrue(os.path.exists(os.path.join(self.work, "crudo",
+                                                    "the-fool-en.txt")))
+        errores = _leer_jsonl(os.path.join(self.work, "errores.jsonl"))
+        self.assertEqual(errores[0]["id"], "loco-es")
+        self.assertEqual(errores[0]["motivo"], "http_429")
+
+    def test_error_por_libro_no_detiene_el_resto(self):
+        def _obtener(url, timeout=120):
+            if "loco" in url:
+                raise urllib.error.HTTPError(url, 500, "fallback", None, None)
+            return CRUDO_EN.encode("utf-8")
+        with mock.patch.object(libros_pipeline.libros_fetch, "_obtener", _obtener):
+            code, _ = self.run_pipeline(work_dir=self.work,
+                                        knowledge_dir=self.knowledge,
+                                        hasta="limpieza", pausa=0)
+        self.assertEqual(code, 0)
+        self.assertFalse(os.path.exists(os.path.join(self.work, "crudo",
+                                                     "loco-es.txt")))
+        self.assertTrue(os.path.exists(os.path.join(self.work, "limpio",
+                                                    "the-fool-en.txt")))
+        errores = _leer_jsonl(os.path.join(self.work, "errores.jsonl"))
+        self.assertEqual(errores[0]["motivo"], "http_500")
 
 
 if __name__ == "__main__":

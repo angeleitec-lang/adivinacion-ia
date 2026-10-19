@@ -42,6 +42,8 @@ DEFAULT_KNOWLEDGE_DIR = os.path.join(os.path.dirname(__file__), "..", "knowledge
 # Umbral del orquestador: más laxo que el de libros_fetch (OCR incompleto),
 # solo evita guardar páginas de error o ficheros vacíos.
 MIN_CRUDO_BYTES = 1024
+# Con estos 429 seguidos se corta la pasada (código 3) para no hostigar.
+CUARENTA_Y_NUEVE_SEGUIDOS = 2
 
 
 def cargar_inventario(dir_knowledge):
@@ -150,6 +152,8 @@ def _etapa_descarga(libros, work_dir, ctx):
     pendientes = pendientes_de_descarga(libros, work_dir)
     descargados = 0
     bytes_total = 0
+    cuarenta_y_nueve = 0
+    parada_limitada = False
     for i, libro in enumerate(pendientes):
         datos = b""
         try:
@@ -162,6 +166,10 @@ def _etapa_descarga(libros, work_dir, ctx):
             motivo = "error_inesperado"
         else:
             motivo = ""
+        if motivo == "http_429":
+            cuarenta_y_nueve += 1
+        else:
+            cuarenta_y_nueve = 0
         if not motivo and len(datos) >= MIN_CRUDO_BYTES \
                 and not _es_pagina_error(datos):
             _guardar_crudo(crud_dir, libro, datos)
@@ -173,26 +181,32 @@ def _etapa_descarga(libros, work_dir, ctx):
                                    "motivo": motivo or "contenido_invalido"})
             print("%s: error (%s)" % (libro["id"], motivo or "contenido_invalido"),
                   file=sys.stderr)
+        if cuarenta_y_nueve >= CUARENTA_Y_NUEVE_SEGUIDOS:
+            parada_limitada = True
+            print("descarga: %d errores 429 seguidos, se para la pasada"
+                  % cuarenta_y_nueve, file=sys.stderr)
+            break
         if i < len(pendientes) - 1 and pausa > 0:
             time.sleep(pausa)
-    for libro in libros:
-        if libro["origen"] != "epub_local":
-            continue
-        if crudo_usable(_ruta_crudo(work_dir, libro)):
-            continue
-        if not libro.get("ruta_local"):
-            _anotar(errores_ruta, {"id": libro["id"], "etapa": "descarga",
-                                   "motivo": "sin_ruta_local"})
-            print("%s: sin ruta local de EPUB" % libro["id"], file=sys.stderr)
-            continue
-        bytes_extraidos = _extraer_epub(libro, crud_dir, errores_ruta)
-        descargados += 1 if bytes_extraidos else 0
-        bytes_total += bytes_extraidos
-    estado = "ok" if descargados else "ya_existe"
+    if not parada_limitada:
+        for libro in libros:
+            if libro["origen"] != "epub_local":
+                continue
+            if crudo_usable(_ruta_crudo(work_dir, libro)):
+                continue
+            if not libro.get("ruta_local"):
+                _anotar(errores_ruta, {"id": libro["id"], "etapa": "descarga",
+                                       "motivo": "sin_ruta_local"})
+                print("%s: sin ruta local de EPUB" % libro["id"], file=sys.stderr)
+                continue
+            bytes_extraidos = _extraer_epub(libro, crud_dir, errores_ruta)
+            descargados += 1 if bytes_extraidos else 0
+            bytes_total += bytes_extraidos
+    estado = "limitada" if parada_limitada else ("ok" if descargados else "ya_existe")
     _anotar(os.path.join(work_dir, "fetch.jsonl"),
             {"etapa": "descarga", "estado": estado, "nuevos": descargados,
              "reutilizados": len(pendientes) - descargados, "bytes": bytes_total})
-    return 0
+    return 3 if parada_limitada else 0
 
 
 def _etapa_limpieza(libros, work_dir, ctx):
