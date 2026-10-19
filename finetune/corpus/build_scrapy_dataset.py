@@ -134,6 +134,9 @@ def main(argv=None) -> int:
     parser.add_argument("--min-chars", type=int, default=200)
     parser.add_argument("--min-domain-terms", type=int, default=2,
                         help="Términos del dominio exigidos por par (0 desactiva)")
+    parser.add_argument("--min-density", type=float, default=0.0,
+                        help="Términos fuertes por 1.000 palabras de cuerpo "
+                             "exigidos por par (0 desactiva; default: 0)")
     parser.add_argument("--max-chars", type=int, default=4000)
     parser.add_argument(
         "--min-en-doc-chars",
@@ -173,7 +176,8 @@ def main(argv=None) -> int:
             stats["inyectados"] += 1
         candidates = []
         for pair in bd.build_pairs(path.stem, md, rng, args.min_chars,
-                                   args.max_chars, args.min_domain_terms):
+                                   args.max_chars, args.min_domain_terms,
+                                   args.min_density):
             if is_foreign_short(doc_lang, pair_answer(pair)):
                 stats["pares_extranjeros_cortos"] += 1
                 continue

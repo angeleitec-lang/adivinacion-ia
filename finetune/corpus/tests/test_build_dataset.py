@@ -124,6 +124,106 @@ class FiltroDeDominio(unittest.TestCase):
         self.assertEqual(bd.domain_score("oposición y trígono"), (2, 0))
 
 
+class DensidadDeTerminosFuertes(unittest.TestCase):
+    """T12.2: min_density exige fuertes por 1.000 palabras de cuerpo."""
+
+    def test_sin_palabras_no_divide_por_cero(self):
+        self.assertEqual(bd.density_fuertes(""), 0.0)
+        self.assertEqual(bd.density_fuertes("   \n\t "), 0.0)
+        self.assertFalse(bd.is_relevant("", "", "", 2, 1.0))
+
+    def test_oposicion_sola_no_aporta_densidad(self):
+        self.assertEqual(bd.density_fuertes("oposición tras oposición siempre"), 0.0)
+
+    def test_texto_largo_con_dos_menciones_sueeltas_rechazado(self):
+        cuerpo = ("El tarot aparece una sola vez aqui. "
+                 + "palabras de relleno neutro para alargar el texto " * 1000
+                 + " Y numerologia al final del documento.")
+        self.assertTrue(bd.is_relevant("", cuerpo, "", 2))
+        self.assertLess(bd.density_fuertes(cuerpo), 2.0)
+        self.assertFalse(bd.is_relevant("", cuerpo, "", 2, 2.0))
+
+    def test_texto_corto_denso_aceptado(self):
+        cuerpo = ("El tarot, el arcano mayor y la tirada del oraculo: "
+                 "numerologia y astrologia en una lectura completa.")
+        self.assertGreaterEqual(bd.density_fuertes(cuerpo), 2.0)
+        self.assertTrue(bd.is_relevant("", cuerpo, "", 2, 2.0))
+
+    def test_por_defecto_no_cambia_el_comportamiento(self):
+        casos = [
+            ("", "El tarot y la numerologia guian la tirada.", "", 2),
+            ("", "sol luna casa mano leo", "", 2),
+            ("", "", "", 0),
+        ]
+        for topic, cuerpo, doc, mt in casos:
+            with self.subTest(cuerpo=cuerpo[:20]):
+                self.assertEqual(bd.is_relevant(topic, cuerpo, doc, mt),
+                                 bd.is_relevant(topic, cuerpo, doc, mt, 0.0))
+
+    def test_build_pairs_propaga_min_density(self):
+        md_denso = ("## El tarot de Marsella\nEl tarot de Marsella usa "
+                   "veintidos arcanos mayores y una tirada clasica del "
+                   "oraculo para leer el destino con claridad y rigor.")
+        relleno = ("bajo el sol y la luna, cada signo y cada planeta marcaba "
+                   "el ritmo de la casa y del pueblo de la region ")
+        md_disperso = ("## Historia del cielo\n" + relleno * 35
+                      + "Solo de paso se menciona la astrologia.")
+        rng = __import__("random").Random(3)
+        self.assertGreaterEqual(
+            len(bd.build_pairs("a.md", md_denso, rng, 10, 4000, 2)), 1)
+        self.assertGreaterEqual(
+            len(bd.build_pairs("b.md", md_disperso, rng, 10, 4000, 2)), 1)
+        self.assertGreaterEqual(
+            len(bd.build_pairs("a.md", md_denso, rng, 10, 4000, 2, 2.0)), 1)
+        self.assertEqual(
+            len(bd.build_pairs("b.md", md_disperso, rng, 10, 4000, 2, 2.0)), 0)
+
+    def _raw_disperso(self, tmp):
+        raw = bd.Path(tmp) / "raw"
+        raw.mkdir()
+        relleno = ("bajo el sol y la luna, cada signo y cada planeta marcaba "
+                   "el ritmo de la casa y del pueblo de la region ")
+        (raw / "mundo-musulman-astrologia.md").write_text(
+            "# Mundo musulman\n\n" + relleno * 35
+            + "Solo de paso se menciona la astrologia.",
+            encoding="utf-8")
+        return str(raw)
+
+    def test_cli_min_density_en_build_dataset(self):
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = self._raw_disperso(tmp)
+            buf_sin = io.StringIO()
+            with contextlib.redirect_stdout(buf_sin):
+                rc_sin = bd.main(["--raw", raw, "--out", tmp, "--dry-run"])
+            buf_con = io.StringIO()
+            with contextlib.redirect_stdout(buf_con):
+                rc_con = bd.main(["--raw", raw, "--out", tmp, "--dry-run",
+                                 "--min-density", "2"])
+        self.assertEqual(rc_sin, 0)
+        self.assertEqual(rc_con, 0)
+        self.assertIn("Documentos con pares: 1", buf_sin.getvalue())
+        self.assertIn("Documentos con pares: 0", buf_con.getvalue())
+
+    def test_cli_min_density_en_build_scrapy_dataset(self):
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = self._raw_disperso(tmp)
+            buf_sin = io.StringIO()
+            with contextlib.redirect_stdout(buf_sin):
+                rc_sin = bsd.main(["--raw", raw, "--out", tmp, "--dry-run"])
+            buf_con = io.StringIO()
+            with contextlib.redirect_stdout(buf_con):
+                rc_con = bsd.main(["--raw", raw, "--out", tmp, "--dry-run",
+                                  "--min-density", "2"])
+        self.assertEqual(rc_sin, 0)
+        self.assertEqual(rc_con, 0)
+        self.assertIn("pares nuevos: 1", buf_sin.getvalue())
+        self.assertIn("pares nuevos: 0", buf_con.getvalue())
+
+
 class EncabezadosMalos(unittest.TestCase):
     """T3.3: se comprueba cada segmento de la ruta, no solo el inicio."""
 
