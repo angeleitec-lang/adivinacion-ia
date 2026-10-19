@@ -139,3 +139,113 @@ def entidades():
                 "nombre": f"{_NOMBRE_POSICION[posicion]} {numero}",
             })
     return ent
+
+
+# ---------------------------------------------------------------------------
+# Cálculo de celdas a partir de evidencias etiquetadas
+# ---------------------------------------------------------------------------
+
+def _plural(n, singular, plural):
+    return f"falta {n} {singular}" if n == 1 else f"faltan {n} {plural}"
+
+
+def _carencias(n_fuentes, n_clasicas, n_modernas, n_es,
+              minimo_fuentes, minimo_clasicas, minimo_modernas, minimo_es):
+    faltan = []
+    if n_fuentes < minimo_fuentes:
+        faltan.append(_plural(minimo_fuentes - n_fuentes,
+                             "fuente independiente", "fuentes independientes"))
+    if n_clasicas < minimo_clasicas:
+        faltan.append(_plural(minimo_clasicas - n_clasicas,
+                             "fuente clásica", "fuentes clásicas"))
+    if n_modernas < minimo_modernas:
+        faltan.append(_plural(minimo_modernas - n_modernas,
+                             "fuente moderna", "fuentes modernas"))
+    if n_es < minimo_es:
+        faltan.append(_plural(minimo_es - n_es,
+                             "fuente en español", "fuentes en español"))
+    return faltan
+
+
+def _fuentes_independientes(evidencias):
+    """Deduplica por fuente_id y, entre las web, por dominio.
+
+    La primera evidencia de cada fuente fija sus atributos (periodo, idioma).
+    """
+    vistas_fuente = set()
+    dominios_web = set()
+    unicas = []
+    for ev in evidencias:
+        fuente = ev.get("fuente_id")
+        if not fuente or fuente in vistas_fuente:
+            continue
+        vistas_fuente.add(fuente)
+        if ev.get("tipo") == "web":
+            dominio = ev.get("dominio")
+            if dominio and dominio in dominios_web:
+                continue
+            if dominio:
+                dominios_web.add(dominio)
+        unicas.append(ev)
+    return unicas
+
+
+def calcular_cobertura(evidencias, catalogo=None, calidad_min=3,
+                       minimo_fuentes=5, minimo_clasicas=1, minimo_modernas=2,
+                       minimo_es=1):
+    """Calcula la matriz completa de cobertura.
+
+    `evidencias`: iterable de dicts con entidad_id, faceta, fuente_id, dominio,
+    idioma, periodo, calidad y tipo. Las evidencias de entidad o faceta
+    desconocidas se ignoran y se cuentan en `ignoradas`.
+
+    Devuelve {"celdas": [...], "completas": n, "ignoradas": n}, con una celda
+    por cada combinación entidad × faceta del catálogo.
+    """
+    if catalogo is None:
+        catalogo = entidades()
+    validas = {}
+    for e in catalogo:
+        for faceta in FACETAS_POR_FAMILIA[e["familia"]]:
+            validas.setdefault((e["entidad_id"], faceta), []).append(None)
+
+    por_celda = {}
+    ignoradas = 0
+    for ev in evidencias:
+        clave = (ev.get("entidad_id"), ev.get("faceta"))
+        if clave not in validas:
+            ignoradas += 1
+            continue
+        try:
+            calidad = int(ev.get("calidad", 0))
+        except (TypeError, ValueError):
+            calidad = 0
+        if calidad < calidad_min:
+            continue
+        por_celda.setdefault(clave, []).append(ev)
+
+    celdas = []
+    completas = 0
+    for (entidad_id, faceta) in validas:
+        fuentes = _fuentes_independientes(por_celda.get((entidad_id, faceta), []))
+        n_fuentes = len(fuentes)
+        n_clasicas = sum(1 for f in fuentes if f.get("periodo") == "clasica")
+        n_modernas = sum(1 for f in fuentes if f.get("periodo") == "moderna")
+        n_es = sum(1 for f in fuentes if f.get("idioma") == "es")
+        faltan = _carencias(n_fuentes, n_clasicas, n_modernas, n_es,
+                           minimo_fuentes, minimo_clasicas, minimo_modernas,
+                           minimo_es)
+        completa = not faltan
+        if completa:
+            completas += 1
+        celdas.append({
+            "entidad_id": entidad_id,
+            "faceta": faceta,
+            "n_fuentes": n_fuentes,
+            "n_clasicas": n_clasicas,
+            "n_modernas": n_modernas,
+            "n_es": n_es,
+            "completa": completa,
+            "faltan": faltan,
+        })
+    return {"celdas": celdas, "completas": completas, "ignoradas": ignoradas}

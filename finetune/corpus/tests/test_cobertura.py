@@ -85,5 +85,164 @@ class CatalogoEntidades(unittest.TestCase):
             self.assertEqual(len(facetas), len(set(facetas)), f"facetas duplicadas en {familia}")
 
 
+def _ev(entidad="tarot-mayor-01", faceta="significado_general", fuente="f1",
+        dominio="d.com", idioma="en", periodo="moderna", calidad=4, tipo="web"):
+    return {"entidad_id": entidad, "faceta": faceta, "fuente_id": fuente,
+            "dominio": dominio, "idioma": idioma, "periodo": periodo,
+            "calidad": calidad, "tipo": tipo}
+
+
+def _celda(resultado, entidad, faceta):
+    for c in resultado["celdas"]:
+        if c["entidad_id"] == entidad and c["faceta"] == faceta:
+            return c
+    raise AssertionError(f"celda no encontrada: {entidad} × {faceta}")
+
+
+class CalculoDeCeldas(unittest.TestCase):
+    """Cálculo por celda: independencia, descartes y carencias."""
+
+    def test_celda_completa(self):
+        evidencias = [
+            _ev(fuente="waite", dominio="archive.org", periodo="clasica",
+                calidad=5, tipo="libro"),
+            _ev(fuente="pollack", dominio="pollack.com", periodo="moderna",
+                calidad=4, tipo="libro"),
+            _ev(fuente="biddy", dominio="biddytarot.com", periodo="moderna",
+                calidad=4, tipo="web"),
+            _ev(fuente="tarotes_es", dominio="tarotes.es", idioma="es",
+                periodo="moderna", calidad=3, tipo="web"),
+            _ev(fuente="jodorowsky", dominio="google.com", idioma="es",
+                periodo="moderna", calidad=4, tipo="libro"),
+        ]
+        res = cobertura.calcular_cobertura(evidencias)
+        c = _celda(res, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c["n_fuentes"], 5)
+        self.assertEqual(c["n_clasicas"], 1)
+        self.assertEqual(c["n_modernas"], 4)
+        self.assertEqual(c["n_es"], 2)
+        self.assertTrue(c["completa"])
+        self.assertEqual(c["faltan"], [])
+
+    def test_independencia_por_fuente_id(self):
+        evidencias = [
+            _ev(fuente="waite", dominio="archive.org", periodo="clasica", tipo="libro"),
+            _ev(fuente="waite", dominio="archive.org", periodo="clasica", tipo="libro"),
+            _ev(fuente="pollack", dominio="pollack.com"),
+            _ev(fuente="biddy", dominio="biddytarot.com"),
+            _ev(fuente="tarotes_es", dominio="tarotes.es", idioma="es"),
+            _ev(fuente="jodorowsky", dominio="google.com", idioma="es"),
+        ]
+        res = cobertura.calcular_cobertura(evidencias)
+        c = _celda(res, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c["n_fuentes"], 5, "la misma fuente cuenta una vez")
+
+    def test_independencia_por_dominio_web(self):
+        evidencias = [
+            _ev(fuente="waite", dominio="archive.org", periodo="clasica", tipo="libro"),
+            _ev(fuente="pollack", dominio="pollack.com", periodo="moderna", tipo="libro"),
+            _ev(fuente="biddy", dominio="biddytarot.com"),
+            _ev(fuente="tarotes_es", dominio="tarotes.es", idioma="es"),
+            # Dos fuentes web distintas del mismo dominio cuentan una vez:
+            _ev(fuente="otro_blog", dominio="biddytarot.com"),
+        ]
+        res = cobertura.calcular_cobertura(evidencias)
+        c = _celda(res, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c["n_fuentes"], 4)
+
+    def test_descarte_por_calidad(self):
+        evidencias = [
+            _ev(fuente="mala", calidad=2),
+            _ev(fuente="waite", dominio="archive.org", periodo="clasica", tipo="libro"),
+            _ev(fuente="pollack", dominio="pollack.com"),
+            _ev(fuente="biddy", dominio="biddytarot.com"),
+            _ev(fuente="tarotes_es", dominio="tarotes.es", idioma="es"),
+        ]
+        res = cobertura.calcular_cobertura(evidencias)
+        c = _celda(res, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c["n_fuentes"], 4)
+        self.assertFalse(c["completa"])
+
+    def test_calidad_min_configurable(self):
+        evidencias = [_ev(fuente="f1", dominio="a.com", calidad=2),
+                     _ev(fuente="f2", dominio="b.com", calidad=3)]
+        res = cobertura.calcular_cobertura(evidencias, calidad_min=2)
+        c = _celda(res, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c["n_fuentes"], 2)
+        res3 = cobertura.calcular_cobertura(evidencias)
+        c3 = _celda(res3, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c3["n_fuentes"], 1)
+
+    def test_falta_una_fuente_en_espanol(self):
+        evidencias = [
+            _ev(fuente="waite", dominio="archive.org", periodo="clasica", tipo="libro"),
+            _ev(fuente="pollack", dominio="pollack.com"),
+            _ev(fuente="biddy", dominio="biddytarot.com"),
+            _ev(fuente="jodorowsky", dominio="google.com"),
+            _ev(fuente="hand", dominio="hand.com"),
+        ]
+        res = cobertura.calcular_cobertura(evidencias)
+        c = _celda(res, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c["faltan"], ["falta 1 fuente en español"])
+
+    def test_faltan_dos_fuentes_modernas(self):
+        evidencias = [
+            _ev(fuente="waite", dominio="archive.org", periodo="clasica", tipo="libro"),
+            _ev(fuente="papus", dominio="wikisource.org", idioma="es",
+                periodo="clasica", tipo="libro"),
+            _ev(fuente="mathers", dominio="archive.org", periodo="clasica", tipo="libro"),
+            _ev(fuente="case", dominio="archive.org", periodo="clasica", tipo="libro"),
+            _ev(fuente="wirth", dominio="archive.org", periodo="clasica", tipo="libro"),
+        ]
+        res = cobertura.calcular_cobertura(evidencias)
+        c = _celda(res, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c["faltan"], ["faltan 2 fuentes modernas"])
+
+    def test_faltan_tres_fuentes_independientes(self):
+        evidencias = [
+            _ev(fuente="waite", dominio="archive.org", periodo="clasica", tipo="libro"),
+            _ev(fuente="tarotes_es", dominio="tarotes.es", idioma="es"),
+        ]
+        res = cobertura.calcular_cobertura(evidencias)
+        c = _celda(res, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c["faltan"], [
+            "faltan 3 fuentes independientes",
+            "falta 1 fuente moderna",
+        ])
+
+    def test_carencias_multiple_orden(self):
+        evidencias = [_ev(fuente="f1", dominio="d1.com", idioma="en",
+                         periodo="clasica", tipo="libro")]
+        res = cobertura.calcular_cobertura(evidencias)
+        c = _celda(res, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c["faltan"], [
+            "faltan 4 fuentes independientes",
+            "faltan 2 fuentes modernas",
+            "falta 1 fuente en español",
+        ])
+
+    def test_entidad_o_faceta_desconocida_se_ignora(self):
+        evidencias = [
+            _ev(entidad="noexiste|signo"),
+            _ev(faceta="faceta_fantasma"),
+            _ev(entidad="otro_falso|xyz", faceta="tampoco"),
+            _ev(fuente="buena", dominio="d.net", periodo="clasica", tipo="libro"),
+        ]
+        res = cobertura.calcular_cobertura(evidencias)
+        self.assertEqual(res["ignoradas"], 3)
+        c = _celda(res, "tarot-mayor-01", "significado_general")
+        self.assertEqual(c["n_fuentes"], 1)
+
+    def test_sin_evidencias_todas_las_celdas_bajo_minimo(self):
+        res = cobertura.calcular_cobertura([])
+        total = sum(
+            len(cobertura.FACETAS_POR_FAMILIA[e["familia"]])
+            for e in cobertura.entidades()
+        )
+        self.assertEqual(len(res["celdas"]), total)
+        self.assertEqual(res["completas"], 0)
+        self.assertEqual(res["ignoradas"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
