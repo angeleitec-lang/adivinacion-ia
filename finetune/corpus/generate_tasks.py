@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 import swisseph as swe
 
 from calculos import numerologia as calc_num
+from calculos.astro import carta_natal
 
 ROOT = Path(__file__).resolve().parent.parent
 KB_DIR = ROOT / "corpus" / "kb"
@@ -156,42 +157,38 @@ def casa_de(lon, cuspides):
 
 
 def calcular_carta(fecha, hora, lat, lon, tz):
-    d = dt.datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
-    # La hora de nacimiento es local: se convierte a UT antes del cálculo juliano.
-    d = d.replace(tzinfo=ZoneInfo(tz)).astimezone(dt.timezone.utc)
-    jd = swe.julday(d.year, d.month, d.day, d.hour + d.minute / 60.0)
-    cuspides, ascmc = swe.houses(jd, lat, lon, b"P")
-    cusp = list(cuspides[1:13]) if len(cuspides) >= 13 else list(cuspides[:12])
+    """Carta natal delegada en calculos.astro, adaptada al formato de siempre.
+
+    calculos.astro redondea los minutos (el código viejo los truncaba): la
+    tolerancia de no-regresión de 1 minuto queda fijada en
+    tests/test_equivalencia_calculos.py contra valores congelados.
+    """
+    carta = carta_natal(fecha, hora, lat, lon, tz)
     planetas = {}
-    for pid, nombre in PLANETAS:
-        xx, _ = swe.calc_ut(jd, pid, swe.FLG_SWIEPH | swe.FLG_SPEED)
-        l = xx[0]
-        planetas[nombre] = {
-            "signo": signo_de(l),
-            "grados": fmt_grados(l),
-            "lon": l,
-            "casa": casa_de(l, cusp),
+    for p in carta["planetas"]:
+        planetas[p["nombre"]] = {
+            "signo": p["signo"],
+            "grados": f"{p['grado']}°{p['minuto']:02d}'",
+            "lon": p["lon"],
+            "casa": p["casa"],
         }
-    aspectos = []
-    nombres = [n for _, n in PLANETAS]
-    for i in range(len(nombres)):
-        for j in range(i + 1, len(nombres)):
-            a = planetas[nombres[i]]["lon"]
-            b = planetas[nombres[j]]["lon"]
-            diff = abs((a - b + 180) % 360 - 180)
-            for ang, nom, orbe in ASPECTOS:
-                if abs(diff - ang) <= orbe:
-                    aspectos.append({
-                        "a": nombres[i], "b": nombres[j], "aspecto": nom,
-                        "orbe": round(abs(diff - ang), 1),
-                    })
-                    break
+    asc = carta["ascendente"]
+    mc = carta["medio_cielo"]
+    aspectos = [
+        {
+            "a": a["planeta_a"],
+            "b": a["planeta_b"],
+            "aspecto": a["aspecto"],
+            "orbe": round(a["orbe"], 1),
+        }
+        for a in carta["aspectos"]
+    ]
     return {
         "fecha": fecha, "hora": hora,
         "planetas": planetas,
-        "ascendente": {"signo": signo_de(ascmc[0]), "grados": fmt_grados(ascmc[0])},
-        "mc": {"signo": signo_de(ascmc[1]), "grados": fmt_grados(ascmc[1])},
-        "aspectos": mejores_aspectos(aspectos),
+        "ascendente": {"signo": asc["signo"], "grados": f"{asc['grado']}°{asc['minuto']:02d}'"},
+        "mc": {"signo": mc["signo"], "grados": f"{mc['grado']}°{mc['minuto']:02d}'"},
+        "aspectos": aspectos,
     }
 
 
