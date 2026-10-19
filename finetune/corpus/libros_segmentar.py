@@ -356,6 +356,11 @@ def _es_frente_materia(texto):
     return sum(1 for m in _MARCAS_LEGALES if m in crudo) >= 2
 
 
+def _una_marca_legal(texto):
+    """True si el texto contiene al menos una marca legal de créditos."""
+    return any(m in _sin_tildes(texto or "").lower() for m in _MARCAS_LEGALES)
+
+
 _VOCALES = set("aeiouyáéíóúñ")
 
 
@@ -595,6 +600,10 @@ def segmentar(texto_limpio, familia, id_libro=""):
             if intro:
                 titulo = intro
             elif _es_frente_materia(parte["texto"]):
+                titulo = "Material preliminar"
+                frente_materia = True
+            elif (posicion == 0 and len(parte["texto"]) < 1500
+                    and _una_marca_legal(parte["texto"])):
                 titulo = "Material preliminar"
                 frente_materia = True
             else:
