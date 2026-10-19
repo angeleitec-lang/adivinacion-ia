@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import llm_client
+import yt_clean
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +119,30 @@ def validar_clasificacion(d: Dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Localización y limpieza del transcript VTT
+# ---------------------------------------------------------------------------
+
+def localizar_vtt(video_id: str, vtt_dir: Path) -> Optional[Path]:
+    """Localiza el VTT de un vídeo: manual (.es.vtt) antes que automático
+    (.es-orig.vtt), en cualquier subcarpeta de canal bajo vtt_dir."""
+    if not vtt_dir.exists():
+        return None
+    manual = sorted(vtt_dir.glob(f"*/{video_id}.es.vtt"))
+    if manual:
+        return manual[0]
+    auto = sorted(vtt_dir.glob(f"*/{video_id}.es-orig.vtt"))
+    if auto:
+        return auto[0]
+    return None
+
+
+def texto_limpio_vtt(ruta_vtt: Path) -> str:
+    """Convierte un VTT en texto limpio usando yt_clean."""
+    texto_vtt = ruta_vtt.read_text(encoding="utf-8", errors="replace")
+    return yt_clean.limpiar(yt_clean.vtt_a_frases(texto_vtt))
+
+
+# ---------------------------------------------------------------------------
 # Clasificación de un vídeo
 # ---------------------------------------------------------------------------
 
@@ -151,12 +176,17 @@ def procesar_clasificacion(
     out_dir: Path,
     client: llm_client.LLMClient,
     limite: Optional[int] = None,
+    vtt_dir: Optional[Path] = None,
 ) -> Dict[str, int]:
     """Procesa el catálogo clasificando vídeos con subtítulos descargados.
 
     Escribe `clasificacion.jsonl` con una línea por vídeo.
     Reanudable: salta IDs ya presentes en clasificacion.jsonl.
+    Si hay VTT del vídeo (manual antes que es-orig), clasifica con el
+    transcript limpio; si no, cae al título+descripción (`texto_fuente`).
     """
+    if vtt_dir is None:
+        vtt_dir = fetch_path.parent / "raw_vtt"
     out_path = out_dir / "clasificacion.jsonl"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -204,9 +234,23 @@ def procesar_clasificacion(
                 stats["sin_subtitulo"] += 1
                 continue
 
-            # Leer texto del VTT (simplificado: usamos título+descripción si no hay VTT)
-            # En producción real se leería el VTT limpio
-            texto_muestra = muestrear_texto(f"{entrada.get('titulo', '')} {entrada.get('descripcion', '')}")
+            # Leer el transcript limpio del VTT si existe; si no, título+descripción
+            texto_fuente = "titulo"
+            ruta_vtt = localizar_vtt(video_id, vtt_dir)
+            if ruta_vtt is not None:
+                try:
+                    limpio = texto_limpio_vtt(ruta_vtt)
+                except Exception:
+                    limpio = ""
+                if limpio.strip():
+                    texto_muestra = muestrear_texto(limpio)
+                    texto_fuente = "transcript"
+                else:
+                    texto_muestra = muestrear_texto(
+                        f"{entrada.get('titulo', '')} {entrada.get('descripcion', '')}")
+            else:
+                texto_muestra = muestrear_texto(
+                    f"{entrada.get('titulo', '')} {entrada.get('descripcion', '')}")
 
             try:
                 clasif = clasificar_video(
@@ -217,6 +261,7 @@ def procesar_clasificacion(
                     client=client,
                 )
                 clasif["video_id"] = video_id
+                clasif["texto_fuente"] = texto_fuente
                 f_out.write(json.dumps(clasif, ensure_ascii=False) + "\n")
                 f_out.flush()
                 stats["ok"] += 1
@@ -244,13 +289,14 @@ def main() -> int:
     parser.add_argument("--fetch", required=True, help="Ruta a fetch.jsonl")
     parser.add_argument("--out-dir", required=True, help="Directorio de salida")
     parser.add_argument("--limite", type=int, help="Máximo de vídeos a clasificar")
+    parser.add_argument("--vtt-dir", help="Directorio raw_vtt (por defecto: <dir de fetch>/raw_vtt)")
     parser.add_argument("--simulado", action="store_true", help="Usar cliente simulado")
     args = parser.parse_args()
 
     # Cliente simulado para tests
     if args.simulado:
         def simulado_ok(sistema, usuario):
-            return '```json\n{"tipo": "lectura_individual", "familia": "tarot-lectura", "tirada": "tres_cartas", "n_cartas": 3, "calidad": 4, "motivo": "ok"}\n```'
+            return '```json\n{"tipo": "lectura_individual", "familia": "tarot-lectura", "tirada": "3_cartas", "n_cartas": 3, "calidad": 4, "motivo": "ok"}\n```'
         client = llm_client.LLMClient(simulado=simulado_ok)
     else:
         client = llm_client.LLMClient()
@@ -261,6 +307,7 @@ def main() -> int:
         out_dir=Path(args.out_dir),
         client=client,
         limite=args.limite,
+        vtt_dir=Path(args.vtt_dir) if args.vtt_dir else None,
     )
 
     print(f"OK: {stats['ok']} | Saltados: {stats['saltados']} | Sin subtítulo: {stats['sin_subtitulo']} | Errores: {stats['error']}")

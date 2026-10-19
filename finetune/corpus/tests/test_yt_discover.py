@@ -275,5 +275,76 @@ class Descubrimiento(unittest.TestCase):
             self.assertEqual(len(ids), len(set(ids)))
 
 
+class FiltroIdioma(unittest.TestCase):
+    def test_titulos_reales_ingles_fallan(self):
+        for titulo in [
+            "Work and Money",
+            "What's Coming for Your FINANCES: Money Reading",
+            "HOW TO READ A 3-CARD READING - TAROT RIDER COURSE",
+            "Tarot Readings for Work and Projects",
+        ]:
+            self.assertFalse(yt_discover.es_probablemente_espanol(titulo, ""),
+                           f"debería descartar: {titulo}")
+
+    def test_titulos_reales_espanol_pasan(self):
+        for titulo in [
+            "🌺SU PENSAMIENTO MÁS RECIENTE SOBRE TI Y LO VUESTRO🌺",
+            "CURSO DE TAROT. LAS 3 TIRADAS BÁSICAS DE TAROT PARA EMPEZAR",
+            "🧭PIENSA EN UNA PERSONA Y TE DIRÉ QUE SIGNIFICAS PARA EL/ELLA",
+        ]:
+            self.assertTrue(yt_discover.es_probablemente_espanol(titulo, ""),
+                           f"debería aceptar: {titulo}")
+
+    def test_titulo_neuro_canal_espagnol_pasa(self):
+        self.assertTrue(yt_discover.es_probablemente_espanol(
+            "Tarot 2026", "Tarot con María"))
+
+    def test_titulo_neutro_canal_ingles_falla(self):
+        self.assertFalse(yt_discover.es_probablemente_espanol(
+            "Tarot 2026", "English Tarot Channel"))
+
+    def test_mixed_gana_senal_espanola(self):
+        self.assertTrue(yt_discover.es_probablemente_espanol(
+            "Lectura de tarot para ti", ""))
+
+    def test_vacio_falla(self):
+        self.assertFalse(yt_discover.es_probablemente_espanol("", ""))
+
+
+class DescubrimientoSoloEspanol(unittest.TestCase):
+    def _respuestas(self):
+        return {
+            "ytsearch2:lectura de tarot amor": [
+                _crudo(id="es1", title="TIRADA DE TAROT PARA HOY",
+                       channel_id="UC_ES", channel="Tarot con María"),
+                _crudo(id="en1", title="What's Coming for Your FINANCES: Money Reading",
+                       channel_id="UC_EN", channel="English Tarot"),
+            ],
+        }
+
+    def test_descarta_ingles_por_defecto(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stats = yt_discover.descubrir(
+                out_dir=tmp, n_por_consulta=2, pausa=0.0,
+                max_consultas=1, clase_ydl=_doble(self._respuestas()))
+            with open(os.path.join(tmp, "catalogo.jsonl"), encoding="utf-8") as fh:
+                ids = [json.loads(l)["id"] for l in fh if l.strip()]
+            self.assertIn("es1", ids)
+            self.assertNotIn("en1", ids)
+            self.assertEqual(stats["descartados_idioma"], 1)
+
+    def test_desactivado_conserva_todo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stats = yt_discover.descubrir(
+                out_dir=tmp, n_por_consulta=2, pausa=0.0,
+                max_consultas=1, solo_espanol=False,
+                clase_ydl=_doble(self._respuestas()))
+            with open(os.path.join(tmp, "catalogo.jsonl"), encoding="utf-8") as fh:
+                ids = [json.loads(l)["id"] for l in fh if l.strip()]
+            self.assertIn("es1", ids)
+            self.assertIn("en1", ids)
+            self.assertEqual(stats.get("descartados_idioma", 0), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

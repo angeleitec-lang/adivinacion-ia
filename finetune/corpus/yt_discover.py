@@ -137,6 +137,66 @@ def construir_consultas(familia: str) -> List[str]:
     return list(consultas)
 
 
+# ---------------------------------------------------------------------------
+# Filtro de idioma (determinista, sin LLM)
+# ---------------------------------------------------------------------------
+
+# Caracteres propios del español (no aparecen en inglés)
+_CARACTERES_ES = ("á", "é", "í", "ó", "ú", "ñ", "¿", "¡")
+
+# Palabras funcionales y del dominio frecuentes en español
+_PALABRAS_ES = frozenset({
+    "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "al",
+    "en", "y", "que", "qué", "para", "con", "por", "su", "sus", "te", "tu",
+    "ti", "mi", "mis", "se", "es", "son", "esta", "este", "estos", "estas",
+    "lo", "más", "mas", "como", "pero", "porque", "cuando", "donde", "quien",
+    "cual", "tus", "os", "vuestro", "vuestra", "vosotros", "ella", "ellos",
+    "hoy", "muy", "ya", "si", "sí", "tirada", "tiradas", "cartas", "carta",
+    "baraja", "lectura", "lecturas", "significado", "significa", "consejo",
+    "consejos", "amor", "trabajo", "dinero", "pasado", "presente", "futuro",
+    "cruz", "celta", "herradura", "suenos", "sueños", "personal", "anonima",
+    "anónima",
+})
+
+# Palabras funcionales frecuentes en inglés
+_PALABRAS_EN = frozenset({
+    "the", "your", "you", "this", "that", "reading", "readings", "message",
+    "for", "and", "with", "what", "whats", "how", "to", "from", "will",
+    "are", "it", "he", "she", "they", "we", "our", "his", "her", "its",
+    "card", "cards", "work", "money", "finance", "finances", "course",
+    "horoscope", "finds", "find", "come", "coming", "get", "got", "has",
+    "have", "was", "were", "be", "been", "new", "best", "top",
+})
+
+
+def _tokenizar(texto: str) -> List[str]:
+    return re.findall(r"[a-záéíóúñü]+", (texto or "").lower())
+
+
+def es_probablemente_espanol(titulo: str, canal: str = "") -> bool:
+    """Heurística determinista de idioma por título y canal.
+
+    Puntúa caracteres propios del español (á é í ó ú ñ ¿ ¡) y palabras
+    funcionales españolas frente a inglesas. Con título con señal se decide
+    por el título; con título neutro se usa el canal. Umbral conservador:
+    en empate gana español (mejor dejar pasar un dudoso que perder un bueno;
+    el filtro definitivo es el idioma del subtítulo).
+    """
+    bruto_titulo = (titulo or "").lower()
+    es_t = sum(1 for ch in bruto_titulo if ch in _CARACTERES_ES)
+    es_t += sum(1 for t in _tokenizar(titulo) if t in _PALABRAS_ES)
+    en_t = sum(1 for t in _tokenizar(titulo) if t in _PALABRAS_EN)
+
+    if es_t > 0 or en_t > 0:
+        return es_t > 0 and es_t >= en_t
+
+    bruto_canal = (canal or "").lower()
+    es_c = sum(1 for ch in bruto_canal if ch in _CARACTERES_ES)
+    es_c += sum(1 for t in _tokenizar(canal) if t in _PALABRAS_ES)
+    en_c = sum(1 for t in _tokenizar(canal) if t in _PALABRAS_EN)
+    return es_c > 0 and es_c >= en_c
+
+
 def _a_int(v):
     try:
         if v is None:
@@ -301,13 +361,15 @@ def _normalizar_fila(entrada: Dict[str, Any], familia: str, consulta: str) -> Di
 
 def descubrir(out_dir: str, n_por_consulta: int = 25, pausa: float = 1.5,
               max_consultas: Optional[int] = None, expandir_canales: bool = False,
-              clase_ydl: Optional[Callable] = None) -> Dict[str, Any]:
+              clase_ydl: Optional[Callable] = None,
+              solo_espanol: bool = True) -> Dict[str, Any]:
     out_path = os.path.join(out_dir, "catalogo.jsonl")
     catalogo = _cargar_catalogo(out_path)
 
     YDL = clase_ydl or (lambda opciones=None: yt_dlp.YoutubeDL(opciones or {}) if yt_dlp else None)
 
-    stats = {"nuevos": 0, "filtrados": 0, "canales_expandidos": 0}
+    stats = {"nuevos": 0, "filtrados": 0, "canales_expandidos": 0,
+             "descartados_idioma": 0}
 
     # flat mode
     opts_flat = {
@@ -360,6 +422,9 @@ def descubrir(out_dir: str, n_por_consulta: int = 25, pausa: float = 1.5,
             if not vid or vid in catalogo:
                 continue
             fila = _normalizar_fila(e, familia, consulta)
+            if solo_espanol and not es_probablemente_espanol(fila["titulo"], fila["canal"]):
+                stats["descartados_idioma"] += 1
+                continue
             catalogo[vid] = fila
             stats["nuevos"] += 1
         stats["filtrados"] += len(entries) - len(candidatos)
@@ -384,6 +449,9 @@ def descubrir(out_dir: str, n_por_consulta: int = 25, pausa: float = 1.5,
                 if not vid or vid in catalogo:
                     continue
                 fila = _normalizar_fila(e, "tarot-lectura", f"channel:{cid}")
+                if solo_espanol and not es_probablemente_espanol(fila["titulo"], fila["canal"]):
+                    stats["descartados_idioma"] += 1
+                    continue
                 catalogo[vid] = fila
                 stats["nuevos"] += 1
             stats["filtrados"] += len(entries) - len(candidatos)
@@ -404,9 +472,13 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("--pausa", type=float, default=1.5)
     parser.add_argument("--max-consultas", type=int)
     parser.add_argument("--expandir-canales", action="store_true")
+    parser.add_argument("--solo-espanol", action=argparse.BooleanOptionalAction,
+                       default=True,
+                       help="Descartar vídeos probablemente no españoles (activado por defecto)")
     args = parser.parse_args()
     descubrir(args.out_dir, args.n_por_consulta, args.pausa,
-              args.max_consultas, args.expandir_canales)
+              args.max_consultas, args.expandir_canales,
+              solo_espanol=args.solo_espanol)
 
 
 if __name__ == "__main__":
