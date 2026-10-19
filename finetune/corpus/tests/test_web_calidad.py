@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Tests de web_calidad: auditoría determinista de páginas web descargadas."""
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+import unittest
+
+from web_calidad import (
+    bandera_corta,
+    bandera_mojibake,
+    bandera_titulo_pobre,
+    leer_pagina,
+    leer_paginas,
+    analizar_paginas,
+)
+
+
+FM = """---
+url: "https://ejemplo.com/pagina"
+dominio: {dominio}
+titulo: {titulo}
+entidad_id: null
+faceta: null
+familia: astrologia
+idioma: es
+fecha: null
+sha256: {sha}
+licencia_hint: consultar
+---
+
+{cuerpo}
+"""
+
+
+def _escribir_pagina(base: Path, dominio: str, nombre: str, titulo: str,
+                     cuerpo: str, sha: str = "abc123") -> Path:
+    carpeta = base / dominio
+    carpeta.mkdir(parents=True, exist_ok=True)
+    ruta = carpeta / nombre
+    ruta.write_text(FM.format(dominio=dominio, titulo=titulo, sha=sha, cuerpo=cuerpo), encoding="utf-8")
+    return ruta
+
+
+class LecturaPaginasTests(unittest.TestCase):
+    def test_lee_front_matter_y_cuerpo(self):
+        with tempfile.TemporaryDirectory() as td:
+            ruta = _escribir_pagina(
+                Path(td), "ejemplo.com", "uno.md", "Carta astral",
+                "Contenido de la página con suficientes palabras.",
+            )
+            pagina = leer_pagina(ruta)
+            self.assertEqual(pagina["titulo"], "Carta astral")
+            self.assertEqual(pagina["dominio"], "ejemplo.com")
+            self.assertEqual(pagina["sha256"], "abc123")
+            self.assertNotIn("---", pagina["cuerpo"])
+            self.assertIn("Contenido de la página", pagina["cuerpo"])
+            self.assertEqual(pagina["ruta"], str(ruta))
+
+    def test_titulo_entre_comillas_y_dos_puntos(self):
+        with tempfile.TemporaryDirectory() as td:
+            ruta = _escribir_pagina(
+                Path(td), "ejemplo.com", "dos.md",
+                '"Tarot: guía básica"', "Texto cualquiera.",
+            )
+            pagina = leer_pagina(ruta)
+            self.assertEqual(pagina["titulo"], "Tarot: guía básica")
+
+    def test_sin_front_matter_usa_primer_encabezado(self):
+        with tempfile.TemporaryDirectory() as td:
+            carpeta = Path(td) / "sinfm.com"
+            carpeta.mkdir()
+            ruta = carpeta / "uno.md"
+            ruta.write_text("# Numerología básica\n\nTexto del cuerpo.", encoding="utf-8")
+            pagina = leer_pagina(ruta)
+            self.assertEqual(pagina["titulo"], "Numerología básica")
+            self.assertEqual(pagina["dominio"], "sinfm.com")
+            self.assertIn("Texto del cuerpo", pagina["cuerpo"])
+
+    def test_lee_todas_las_paginas_por_dominio(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            _escribir_pagina(base, "a.com", "uno.md", "Uno", "Cuerpo uno.")
+            _escribir_pagina(base, "b.com", "dos.md", "Dos", "Cuerpo dos.")
+            (base / "notas.txt").write_text("no es markdown", encoding="utf-8")
+            paginas = leer_paginas(base)
+            self.assertEqual(len(paginas), 2)
+            self.assertEqual({p["dominio"] for p in paginas}, {"a.com", "b.com"})
+
+
+class BanderaCortaTests(unittest.TestCase):
+    def test_texto_menor_de_mil_caracteres(self):
+        self.assertTrue(bandera_corta("x" * 999))
+
+    def test_texto_de_mil_o_mas_caracteres(self):
+        self.assertFalse(bandera_corta("x" * 1000))
+
+    def test_ignora_espacios_del_borde(self):
+        self.assertFalse(bandera_corta("  " + "x" * 1000 + "  "))
+
+
+class BanderaMojibakeTests(unittest.TestCase):
+    def test_detecta_secuencias_rotas(self):
+        for muestra in ("Ã©", "Ã±", "â€™", "â€œ", "Â¿", "�"):
+            with self.subTest(muestra=muestra):
+                self.assertTrue(bandera_mojibake(f"Texto con {muestra} roto."))
+
+    def test_texto_espanol_correcto_no_tiene_bandera(self):
+        self.assertFalse(bandera_mojibake("Canción, niño, ¿qué tal? «Comillas»."))
+
+
+class BanderaTituloPobreTests(unittest.TestCase):
+    def test_titulo_vacio(self):
+        self.assertTrue(bandera_titulo_pobre(""))
+        self.assertTrue(bandera_titulo_pobre("   "))
+
+    def test_titulo_demasiado_corto(self):
+        self.assertTrue(bandera_titulo_pobre("abc"))
+
+    def test_titulo_acaba_en_dos_puntos(self):
+        self.assertTrue(bandera_titulo_pobre("Significado de la carta:"))
+
+    def test_titulo_con_markdown(self):
+        self.assertTrue(bandera_titulo_pobre("**El Loco**"))
+
+    def test_titulo_correcto(self):
+        self.assertFalse(bandera_titulo_pobre("El Loco en el tarot"))
+
+
+class AnalizarPaginasTests(unittest.TestCase):
+    def test_marca_banderas_de_cada_pagina(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            _escribir_pagina(base, "a.com", "corta.md", "abc", "Texto breve.")
+            _escribir_pagina(
+                base, "a.com", "larga.md", "Título correcto",
+                "Contenido limpio. " * 100,
+            )
+            paginas = analizar_paginas(leer_paginas(base))
+            por_nombre = {Path(p["ruta"]).name: p for p in paginas}
+            self.assertEqual(
+                por_nombre["corta.md"]["banderas"], ["corta", "titulo_pobre"]
+            )
+            self.assertEqual(por_nombre["larga.md"]["banderas"], [])
+            self.assertGreater(por_nombre["larga.md"]["caracteres"], 1000)
+
+
+if __name__ == "__main__":
+    unittest.main()
