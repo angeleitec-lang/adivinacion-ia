@@ -131,7 +131,7 @@ def _palabras(texto: str) -> list[str]:
 
 
 def extraer(fila: dict) -> tuple[str, str]:
-    """Devuelve (prompt, respuesta) de una fila ShareGPT."""
+    """Devuelve (prompt, respuesta) de una fila ShareGPT: el ultimo par."""
     prompt = respuesta = ""
     for c in fila.get("conversations", []):
         if c.get("from") == "human":
@@ -139,6 +139,20 @@ def extraer(fila: dict) -> tuple[str, str]:
         elif c.get("from") == "gpt":
             respuesta = c.get("value", "")
     return prompt, respuesta
+
+
+def extraer_pares(fila: dict) -> list[tuple[str, str]]:
+    """Devuelve [(human, gpt), ...] de todos los turnos, en orden."""
+    pares: list[tuple[str, str]] = []
+    humano = None
+    for c in fila.get("conversations", []):
+        origen = c.get("from")
+        if origen == "human":
+            humano = c.get("value", "")
+        elif origen == "gpt" and humano is not None:
+            pares.append((humano, c.get("value", "")))
+            humano = None
+    return pares
 
 
 def _tema(prompt: str) -> str:
@@ -248,9 +262,9 @@ def _licencia_permitida(fila: dict) -> bool | None:
     return license_filter.is_allowed(fila["source"])
 
 
-def puntuar(fila: dict, licencia: str | None = None) -> tuple[float, list[str], str]:
-    """Puntúa un par: (score 0-1, motivos de penalización, tipo)."""
-    prompt, respuesta = extraer(fila)
+def _puntuar_par(prompt: str, respuesta: str, fila: dict,
+                 licencia: str | None = None) -> tuple[float, list[str], str]:
+    """Puntua un unico par: (score 0-1, motivos de penalizacion, tipo)."""
     motivos: list[str] = []
     if criterio_prompt_generico(prompt):
         motivos.append("prompt_generico")
@@ -273,6 +287,28 @@ def puntuar(fila: dict, licencia: str | None = None) -> tuple[float, list[str], 
     return max(0.0, min(1.0, score)), motivos, tipo
 
 
+def puntuar(fila: dict, licencia: str | None = None) -> tuple[float, list[str], str]:
+    """Puntua TODOS los pares de la fila: score = minimo, motivos por turno.
+
+    En filas de un turno el comportamiento es identico al de siempre (sin
+    prefijos); en multi-turno cada motivo se prefija con t1:, t2:, ... y la
+    puntuacion es el minimo de los pares (un par malo hunde la fila).
+    """
+    pares = extraer_pares(fila)
+    if len(pares) <= 1:
+        prompt, respuesta = pares[0] if pares else ("", "")
+        return _puntuar_par(prompt, respuesta, fila, licencia)
+    peor_score: float | None = None
+    peor_tipo = "otros"
+    motivos: list[str] = []
+    for i, (prompt, respuesta) in enumerate(pares, start=1):
+        score, ms, tipo = _puntuar_par(prompt, respuesta, fila, licencia)
+        motivos.extend(f"t{i}:{m}" for m in ms)
+        if peor_score is None or score < peor_score:
+            peor_score, peor_tipo = score, tipo
+    return max(0.0, min(1.0, peor_score or 0.0)), motivos, peor_tipo
+
+
 def _minhash(shingles: set, n: int = 64) -> list[int]:
     return [min((hash((s, sh)) for sh in shingles), default=0) for s in range(n)]
 
@@ -290,21 +326,23 @@ def auditar_pares(filas: list[dict], min_score: float = 0.6,
     vistos: set[str] = set()
     shingles: list[set] = []
     for fila in filas:
-        prompt, respuesta = extraer(fila)
+        pares = extraer_pares(fila)
+        unido_nl = "\n".join(f"{p}\n{r}" for p, r in pares)
+        unido_esp = " ".join(f"{p} {r}" for p, r in pares)
         score, motivos, tipo = puntuar(fila, licencia)
-        texto_norm = " ".join(_palabras(prompt + "\n" + respuesta))
+        texto_norm = " ".join(_palabras(unido_nl))
         exacto = hashlib.sha1(texto_norm.encode("utf-8")).hexdigest()
         if exacto in vistos:
             motivos = motivos + ["duplicado"]
             score = 0.0
         vistos.add(exacto)
-        shingles.append(_shingles(prompt + "\n" + respuesta))
+        shingles.append(_shingles(unido_nl))
         resultados.append({
             "fila": fila,
             "score": score,
             "motivos": motivos,
             "tipo": tipo,
-            "bloque": inferir_bloque(fila, prompt + " " + respuesta),
+            "bloque": inferir_bloque(fila, unido_esp),
             "aceptado": score >= min_score,
         })
 
@@ -361,8 +399,7 @@ def construir_informe(resultados: list[dict], min_score: float, seed: int = 42) 
 
     cobertura: dict[str, dict[str, int]] = {"arcanos": {}, "signos": {}, "numeros": {}}
     for r in aceptados:
-        prompt, respuesta = extraer(r["fila"])
-        t = (prompt + " " + respuesta).lower()
+        t = " ".join(f"{p} {rta}" for p, rta in extraer_pares(r["fila"])).lower()
         for a in ARCANOS_MAYORES:
             cobertura["arcanos"][a] = cobertura["arcanos"].get(a, 0) + (1 if a.lower() in t else 0)
         for s in SIGNOS:
@@ -372,10 +409,14 @@ def construir_informe(resultados: list[dict], min_score: float, seed: int = 42) 
                 1 if (d in t or palabra in t) else 0)
     huecos = {k: sorted(n for n, c in v.items() if c < 10) for k, v in cobertura.items()}
 
-    longitudes = [len(extraer(r["fila"])[1]) for r in aceptados]
+    longitudes = [len("\n".join(rta for _, rta in extraer_pares(r["fila"]))) for r in aceptados]
     rnd = random.Random(seed)
     ej_ok = rnd.sample(aceptados, min(10, len(aceptados)))
     ej_no = rnd.sample(rechazados, min(10, len(rechazados)))
+
+    def primer_prompt(fila: dict) -> str:
+        pares = extraer_pares(fila)
+        return pares[0][0] if pares else ""
 
     return {
         "umbral": min_score,
@@ -395,11 +436,11 @@ def construir_informe(resultados: list[dict], min_score: float, seed: int = 42) 
             "max": max(longitudes) if longitudes else 0,
         },
         "ejemplos_aceptados": [
-            {"prompt": extraer(r["fila"])[0][:160], "score": round(r["score"], 3),
+            {"prompt": primer_prompt(r["fila"])[:160], "score": round(r["score"], 3),
              "bloque": r["bloque"], "tipo": r["tipo"]} for r in ej_ok
         ],
         "ejemplos_rechazados": [
-            {"prompt": extraer(r["fila"])[0][:160], "score": round(r["score"], 3),
+            {"prompt": primer_prompt(r["fila"])[:160], "score": round(r["score"], 3),
              "motivos": r["motivos"], "bloque": r["bloque"]} for r in ej_no
         ],
     }

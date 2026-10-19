@@ -1,11 +1,13 @@
-"""Tests de merge_final: extracción del tema del prompt y descarte de pares basura."""
+"""Tests de merge_final: extraccion del tema del prompt y descarte de pares basura."""
 import os
+import json
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from merge_final import extraer_tema, is_junk_pair, fusionar
+from merge_final import extraer_tema, is_junk_pair, fusionar, lang_counts
 from validate_synthetic import sha
 
 
@@ -14,6 +16,14 @@ def fila(human: str, gpt: str) -> dict:
         {"from": "human", "value": human},
         {"from": "gpt", "value": gpt},
     ]}
+
+
+def fila_multi(pares: list) -> dict:
+    msgs = []
+    for h, g in pares:
+        msgs.append({"from": "human", "value": h})
+        msgs.append({"from": "gpt", "value": g})
+    return {"conversations": msgs, "turnos": len(pares)}
 
 
 RESPUESTA_VALIDA = ("El tarot es una baraja de 78 cartas; el arcano mayor "
@@ -194,6 +204,158 @@ class TestFusionar(unittest.TestCase):
         self.assertEqual(res["report"]["synth_dups_vs_real"], 1)
         self.assertEqual(res["report"]["descartes"]["duplicado_exacto"], 1)
         self.assertEqual(len(res["train"]), 1)
+
+
+class TestMultiTurnoFusion(unittest.TestCase):
+    def setUp(self):
+        self.cfg = {"seed": 42, "train_ratio": 0.8, "val_ratio": 0.1, "include_en": False}
+
+    def test_junk_en_turno_dos_descarta(self):
+        f = fila_multi([
+            ("Explícame El Loco de forma clara y completa.", RESPUESTA_VALIDA),
+            ("Explica en detalle: Sección 3.", RESPUESTA_VALIDA),
+        ])
+        self.assertTrue(is_junk_pair(f))
+
+    def test_multi_turno_bueno_no_es_junk(self):
+        f = fila_multi([
+            ("Explícame El Loco de forma clara y completa.", RESPUESTA_VALIDA),
+            ("¿Y qué me dice el tarot sobre el Ermitaño?", RESPUESTA_VALIDA),
+        ])
+        self.assertFalse(is_junk_pair(f))
+
+    def test_idioma_detecta_turno_dos_ingles(self):
+        v = fila_multi([
+            ("Explícame el tarot de forma clara.", RESPUESTA_VALIDA),
+            ("¿Y el Ermitaño?",
+             "The Hermit is a card of the tarot that, like palmistry reads the hand, "
+             "represents introspection and inner search in the Marseille tradition."),
+        ])
+        res = fusionar([], [v], [], [], self.cfg)
+        self.assertEqual(res["report"]["descartes"]["idioma"], 1)
+        self.assertEqual(len(res["val"]) + len(res["test"]), 0)
+
+    def test_lang_counts_considera_todas_las_respuestas(self):
+        f = fila_multi([
+            ("Explícame el tarot.", RESPUESTA_VALIDA),
+            ("Seguimiento", RESPUESTA_VALIDA + " y una segunda lectura del arcano."),
+        ])
+        c = lang_counts([f])
+        self.assertEqual(c.get("es"), 2)
+
+    def test_misma_gpt1_distinta_gpt2_no_duplicada(self):
+        t = fila_multi([
+            ("Explícame El Loco de forma clara y completa.", RESPUESTA_VALIDA),
+            ("Seguimiento uno", RESPUESTA_VALIDA + " El Loco invita a empezar de cero."),
+        ])
+        v = fila_multi([
+            ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA),
+            ("Seguimiento dos", RESPUESTA_VALIDA + " El Colgado pide pausa y perspectiva."),
+        ])
+        res = fusionar([t], [v], [], [], self.cfg)
+        self.assertEqual(res["report"]["descartes"]["duplicado_exacto"], 0)
+        self.assertEqual(len(res["val"]) + len(res["test"]), 1)
+
+    def test_multi_turno_identica_si_es_duplicada(self):
+        par = [("Explícame El Loco de forma clara y completa.", RESPUESTA_VALIDA),
+               ("Seguimiento", RESPUESTA_VALIDA + " cierre idéntico del arcano.")]
+        t = fila_multi(par)
+        v = fila_multi(list(par))
+        res = fusionar([t], [v], [], [], self.cfg)
+        self.assertEqual(res["report"]["descartes"]["duplicado_exacto"], 1)
+
+    def test_dedupe_prefijo_multi_turno(self):
+        base = "z" * 300
+        t = fila_multi([
+            ("Explícame El Loco de forma clara y completa.", RESPUESTA_VALIDA + " " + base),
+            ("Seguimiento", RESPUESTA_VALIDA),
+        ])
+        v = fila_multi([
+            ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA + " " + base),
+            ("Seguimiento", RESPUESTA_VALIDA + " final distinto tras el prefijo comun."),
+        ])
+        res = fusionar([t], [v], [], [], self.cfg)
+        self.assertEqual(res["report"]["descartes"]["duplicado_prefijo"], 1)
+        self.assertEqual(len(res["val"]) + len(res["test"]), 0)
+
+
+class TestRepartoSinFuga(unittest.TestCase):
+    def setUp(self):
+        self.cfg = {"seed": 42, "train_ratio": 0.8, "val_ratio": 0.1, "include_en": False}
+
+    def test_val_real_mismo_primer_human_mismo_lado(self):
+        a = fila_multi([
+            ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA),
+            ("Seguimiento A", RESPUESTA_VALIDA + " Variante A del seguimiento con mas texto."),
+        ])
+        b = fila_multi([
+            ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA),
+            ("Seguimiento B", RESPUESTA_VALIDA + " Variante B del seguimiento con otro texto."),
+        ])
+        res = fusionar([], [a, b], [], [], self.cfg)
+        en_val = a in res["val"] and b in res["val"]
+        en_test = a in res["test"] and b in res["test"]
+        self.assertTrue(en_val or en_test)
+
+    def test_synth_mismo_primer_human_mismo_split(self):
+        par1 = ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA)
+        s1 = fila_multi([par1, ("Seguimiento A", RESPUESTA_VALIDA + " texto A distinto.")])
+        s2 = fila_multi([par1, ("Seguimiento B", RESPUESTA_VALIDA + " texto B distinto.")])
+        synth = [s1, s2]
+        meta = [{"block": "tarot"}, {"block": "tarot"}]
+        res = fusionar([], [], synth, meta, self.cfg)
+        en_train = all(r in res["train"] for r in synth)
+        en_val = all(r in res["val"] for r in synth)
+        en_test = all(r in res["test"] for r in synth)
+        self.assertTrue(en_train or en_val or en_test)
+
+    def test_synth_distinto_human_puede_repartirse(self):
+        synth = [fila(f"Explícame tema{i} de forma clara y completa.",
+                     RESPUESTA_VALIDA + f" Detalle {i}.") for i in range(20)]
+        meta = [{"block": "tarot"}] * 20
+        res = fusionar([], [], synth, meta, self.cfg)
+        self.assertGreater(len(res["train"]), 0)
+        self.assertGreater(len(res["val"]) + len(res["test"]), 0)
+
+
+class TestE2EDirectorioTemporal(unittest.TestCase):
+    def test_seis_filas_end_to_end(self):
+        from merge_final import main
+        filas = [
+            fila("Explícame El Loco de forma clara y completa.",
+                 RESPUESTA_VALIDA + " Uno."),
+            fila("Explícame La Luna de forma clara y completa.",
+                 RESPUESTA_VALIDA + " Dos."),
+            fila("Explícame El Sol de forma clara y completa.",
+                 RESPUESTA_VALIDA + " Tres."),
+            fila_multi([
+                ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA),
+                ("¿Y su invertida?", RESPUESTA_VALIDA + " Invertida."),
+            ]),
+            fila_multi([
+                ("Explícame El Carro de forma clara y completa.", RESPUESTA_VALIDA),
+                ("Explica en detalle: Sección 3.", RESPUESTA_VALIDA),
+            ]),
+            fila("Explícame El Loco de forma clara y completa.",
+                 RESPUESTA_VALIDA + " Uno."),
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            rt = os.path.join(td, "real_train.jsonl")
+            with open(rt, "w", encoding="utf-8") as f:
+                for r in filas:
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            out = os.path.join(td, "final")
+            main(["--real-train", rt, "--real-val", os.path.join(td, "none.jsonl"),
+                 "--synth", os.path.join(td, "none.jsonl"),
+                 "--synth-meta", os.path.join(td, "none.meta.jsonl"),
+                 "--out-dir", out])
+            train = [json.loads(l) for l in
+                     open(os.path.join(out, "train.jsonl"), encoding="utf-8") if l.strip()]
+            rep = json.load(open(os.path.join(out, "report.json"), encoding="utf-8"))
+            self.assertEqual(len(train), 4)
+            self.assertEqual(rep["descartes"]["junk"], 1)
+            self.assertEqual(rep["descartes"]["duplicado_exacto"], 1)
+            self.assertEqual(rep["real_train_kept"], 4)
 
 
 if __name__ == "__main__":
