@@ -241,6 +241,41 @@ class PipelineCompleto(unittest.TestCase):
         self.assertTrue((self.work / "dataset.jsonl").exists())
 
 
+class CursoSinAfirmaciones(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.work = Path(self._tmp.name) / "work"
+        self.catalogo = self.work / "catalogo.jsonl"
+        _escribir_catalogo(self.catalogo)
+        self.addCleanup(self._tmp.cleanup)
+
+    def _simulado_curso_vacio(self, sistema, usuario):
+        if "Clasifica según el esquema" in usuario:
+            return json.dumps({
+                "tipo": "curso_conocimiento", "familia": "tarot-conocimiento",
+                "tirada": "otras", "n_cartas": 1, "calidad": 3, "motivo": "curso",
+            }, ensure_ascii=False)
+        if "Extrae afirmaciones de conocimiento" in usuario:
+            return json.dumps({"tipo": "conocimiento",
+                              "familia": "tarot-conocimiento", "afirmaciones": []},
+                             ensure_ascii=False)
+        return "respuesta irrelevante"
+
+    def test_curso_vacio_se_marca_y_no_se_reprocesa(self):
+        client = llm_client.LLMClient(simulado=self._simulado_curso_vacio)
+        ydl = _clase_ydl(RESPUESTAS_OK)
+        res1 = yt_pipeline.procesar_pipeline(
+            str(self.work), catalogo=str(self.catalogo), pausa=0.0,
+            client=client, clase_ydl=ydl, hasta="extraer")
+        self.assertEqual(res1["extraer"]["conocimiento"], 0)
+        self.assertEqual(res1["extraer"]["conocimiento_vacio"], 2)
+        res2 = yt_pipeline.procesar_pipeline(
+            str(self.work), catalogo=str(self.catalogo), pausa=0.0,
+            client=client, clase_ydl=ydl, hasta="extraer")
+        self.assertEqual(res2["extraer"]["saltados"], 2)
+        self.assertEqual(res2["extraer"]["conocimiento_vacio"], 0)
+
+
 class TodasLasLecturasDescartadas(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

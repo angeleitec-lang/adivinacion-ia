@@ -133,7 +133,7 @@ def _etapa_extraer(
             hechos.add(reg["video_id"])
 
     stats = {"lecturas_ok": 0, "lecturas_descartadas": 0, "conocimiento": 0,
-             "saltados": 0, "sin_texto": 0}
+             "conocimiento_vacio": 0, "saltados": 0, "sin_texto": 0}
     procesadas = 0
 
     for reg in _leer_jsonl(clasif_path):
@@ -159,14 +159,16 @@ def _etapa_extraer(
         canal, titulo = canal_por_id.get(vid, ("", reg.get("titulo", "")))
         if es_curso:
             conocimiento = yt_extract.extraer_conocimiento(texto, client)
+            _append_jsonl(conocimiento_path, {
+                "video_id": vid,
+                "canal": canal,
+                "titulo": titulo,
+                "conocimiento": conocimiento,
+            })
             if conocimiento.get("afirmaciones"):
-                _append_jsonl(conocimiento_path, {
-                    "video_id": vid,
-                    "canal": canal,
-                    "titulo": titulo,
-                    "conocimiento": conocimiento,
-                })
                 stats["conocimiento"] += 1
+            else:
+                stats["conocimiento_vacio"] += 1
         else:
             lectura = yt_extract.extraer_lectura(texto, client)
             valida, motivos = yt_extract.validar_lectura(lectura, texto)
