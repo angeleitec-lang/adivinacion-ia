@@ -1,6 +1,8 @@
-"""Tests de merge_final: extracción del tema del prompt y descarte de pares basura."""
+"""Tests de merge_final: extraccion del tema del prompt y descarte de pares basura."""
 import os
+import json
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -314,6 +316,46 @@ class TestRepartoSinFuga(unittest.TestCase):
         res = fusionar([], [], synth, meta, self.cfg)
         self.assertGreater(len(res["train"]), 0)
         self.assertGreater(len(res["val"]) + len(res["test"]), 0)
+
+
+class TestE2EDirectorioTemporal(unittest.TestCase):
+    def test_seis_filas_end_to_end(self):
+        from merge_final import main
+        filas = [
+            fila("Explícame El Loco de forma clara y completa.",
+                 RESPUESTA_VALIDA + " Uno."),
+            fila("Explícame La Luna de forma clara y completa.",
+                 RESPUESTA_VALIDA + " Dos."),
+            fila("Explícame El Sol de forma clara y completa.",
+                 RESPUESTA_VALIDA + " Tres."),
+            fila_multi([
+                ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA),
+                ("¿Y su invertida?", RESPUESTA_VALIDA + " Invertida."),
+            ]),
+            fila_multi([
+                ("Explícame El Carro de forma clara y completa.", RESPUESTA_VALIDA),
+                ("Explica en detalle: Sección 3.", RESPUESTA_VALIDA),
+            ]),
+            fila("Explícame El Loco de forma clara y completa.",
+                 RESPUESTA_VALIDA + " Uno."),
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            rt = os.path.join(td, "real_train.jsonl")
+            with open(rt, "w", encoding="utf-8") as f:
+                for r in filas:
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            out = os.path.join(td, "final")
+            main(["--real-train", rt, "--real-val", os.path.join(td, "none.jsonl"),
+                 "--synth", os.path.join(td, "none.jsonl"),
+                 "--synth-meta", os.path.join(td, "none.meta.jsonl"),
+                 "--out-dir", out])
+            train = [json.loads(l) for l in
+                     open(os.path.join(out, "train.jsonl"), encoding="utf-8") if l.strip()]
+            rep = json.load(open(os.path.join(out, "report.json"), encoding="utf-8"))
+            self.assertEqual(len(train), 4)
+            self.assertEqual(rep["descartes"]["junk"], 1)
+            self.assertEqual(rep["descartes"]["duplicado_exacto"], 1)
+            self.assertEqual(rep["real_train_kept"], 4)
 
 
 if __name__ == "__main__":
