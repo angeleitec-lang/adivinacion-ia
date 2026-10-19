@@ -356,3 +356,48 @@ class CreditosPrimeraSeccion(unittest.TestCase):
         self.assertTrue(secciones[0].get("front_matter"))
         self.assertEqual(secciones[0]["titulo"], "Material preliminar")
         self.assertIn("Capítulo 1", [s["titulo"] for s in secciones])
+
+
+class RuidoT19b(unittest.TestCase):
+    def test_restos_de_ruido_no_son_encabezado(self):
+        for ruido in ("ENS DS", "FUESEIEAES", "PAGE", "CHAP. PAQK"):
+            texto = ("Introducción breve del libro.\n\n" + ruido + "\n\n"
+                     + cuerpo(30))
+            secciones = segmentar(texto, "tarot")
+            titulos = [s["titulo"] for s in secciones]
+            self.assertNotIn(ruido, titulos)
+            self.assertEqual(len(secciones), 1)
+
+    def test_silaba_corta_sin_vocales_en_titulo_corto_es_ruido(self):
+        from libros_segmentar import _titulo_es_ruido
+        self.assertTrue(_titulo_es_ruido("ENS DS"))
+        self.assertTrue(_titulo_es_ruido("DS KRT"))
+
+    def test_palabra_larga_con_sobredosis_de_vocales_es_ruido(self):
+        from libros_segmentar import _titulo_es_ruido
+        self.assertTrue(_titulo_es_ruido("FUESEIEAES"))
+
+    def test_titulo_repetido_consecutivo_se_funde(self):
+        texto = ("Introducción.\n\nTAROTS\n\n" + cuerpo(5)
+                 + "\n\nTAROTS\n\n" + cuerpo(5)
+                 + "\n\nCAPÍTULO FINAL\n\n" + cuerpo(10))
+        secciones = segmentar(texto, "tarot")
+        titulos = [s["titulo"] for s in secciones]
+        self.assertEqual(titulos.count("TAROTS"), 1)
+        self.assertIn("CAPÍTULO FINAL", titulos)
+        self.assertEqual(len(secciones), 3)
+
+    def test_titulos_no_ruido_t19b(self):
+        from libros_segmentar import _titulo_es_ruido
+        legitimos = ("THE FOOL", "EL LOCO", "PREFACE", "Chapter 1",
+                    "ACE OF CUPS", "XIII", "Strength", "Death", "Justice",
+                    "PASSIVITY")
+        for t in legitimos:
+            self.assertFalse(_titulo_es_ruido(t), t)
+
+    def test_chap_con_titulo_real_se_conserva(self):
+        texto = ("Introducción.\n\nCHAP. III. THE LOVERS\n\n" + cuerpo(10))
+        secciones = segmentar(texto, "tarot")
+        titulos = [s["titulo"] for s in secciones]
+        self.assertIn("The Lovers", titulos)
+        self.assertEqual(len(secciones), 2)
