@@ -18,7 +18,8 @@ class Capitulos(unittest.TestCase):
                  "# CAPÍTULO II\n\n" + cuerpo())
         secciones = segmentar(texto, "tarot", id_libro="libro-1")
         titulos = [s["titulo"] for s in secciones]
-        self.assertEqual(titulos, ["Introducción", "CAPÍTULO I", "CAPÍTULO II"])
+        self.assertEqual(titulos, ["Sección 1 — Introducción general del libro",
+                                  "CAPÍTULO I", "CAPÍTULO II"])
         self.assertEqual([s["seccion"] for s in secciones], [1, 2, 3])
         self.assertEqual([s["posicion"] for s in secciones], [0, 1, 2])
         self.assertEqual(secciones[0]["id_libro"], "libro-1")
@@ -160,3 +161,101 @@ class Cartas(unittest.TestCase):
         titulos = self._titulos(texto, "numerologia")
         for numero in ("11", "22", "33"):
             self.assertIn(numero, titulos)
+
+
+class FrenteMateria(unittest.TestCase):
+    def test_preambulo_de_creditos_no_da_titulo_sintetico_basura(self):
+        portada = ("Tarot para principiantes\n\nÁngel González\n\n"
+                   "Copyright © 2020 Ángel González\n"
+                   "Todos los derechos reservados\n"
+                   "ISBN 978-84-1234-567-8\n\n"
+                   "Índice\nIntroducción ....... 3\nCapítulo 1 ..... 7\n\n")
+        texto = portada + "# Capítulo 1\n\n" + cuerpo(30)
+        secciones = segmentar(texto, "tarot")
+        primera = secciones[0]
+        self.assertTrue(primera.get("front_matter"))
+        self.assertNotIn("Sección", primera["titulo"])
+        self.assertNotIn("Copyright", primera["titulo"])
+        self.assertNotIn("ISBN", primera["titulo"])
+        self.assertNotIn("González", primera["titulo"])
+        titulos = [s["titulo"] for s in secciones]
+        self.assertIn("Capítulo 1", titulos)
+
+    def test_texto_genuino_sin_cabeceras_conserva_titulo_sintetico(self):
+        texto = cuerpo(40)
+        secciones = segmentar(texto, "general")
+        self.assertTrue(secciones[0]["titulo"].startswith("Sección "))
+        self.assertFalse(secciones[0].get("front_matter", False))
+
+    def test_introduccion_real_conserva_su_titulo(self):
+        texto = "Introducción\n\n" + cuerpo(30)
+        secciones = segmentar(texto, "general")
+        self.assertEqual(secciones[0]["titulo"], "Introducción")
+        self.assertFalse(secciones[0].get("front_matter", False))
+
+    def test_prologo_real_conserva_su_titulo(self):
+        texto = "Prólogo\n\n" + cuerpo(30)
+        secciones = segmentar(texto, "general")
+        self.assertEqual(secciones[0]["titulo"], "Prólogo")
+        self.assertFalse(secciones[0].get("front_matter", False))
+
+    def test_mencion_aislada_de_copyright_no_es_front_matter(self):
+        texto = ("El tarot y el copyright en la edición moderna de mazos. "
+                 * 30).strip()
+        secciones = segmentar(texto, "general")
+        self.assertTrue(secciones[0]["titulo"].startswith("Sección "))
+        self.assertFalse(secciones[0].get("front_matter", False))
+
+    def test_frase_con_contents_no_es_front_matter(self):
+        texto = ("Contents of the cup are poured out by the figure in the "
+                 "card, which signals emotional release. " + cuerpo(30))
+        secciones = segmentar(texto, "tarot")
+        self.assertFalse(secciones[0].get("front_matter", False))
+        self.assertTrue(secciones[0]["titulo"].startswith("Sección "))
+
+    def test_frase_con_indice_no_es_front_matter(self):
+        texto = ("Indice de masa corporal no tiene relación con el tarot, "
+                "pero el Ermitaño sugiere introspección. " + cuerpo(30))
+        secciones = segmentar(texto, "tarot")
+        self.assertFalse(secciones[0].get("front_matter", False))
+        self.assertTrue(secciones[0]["titulo"].startswith("Sección "))
+
+    def test_marcas_ambiguas_sin_marca_legal_no_es_front_matter(self):
+        texto = ("La baraja Rider-Waite fue publicada por Rider (published "
+                 "by Rider) en 1909; la first edition incluía la Rueda de "
+                 "la Fortuna. " + cuerpo(30))
+        secciones = segmentar(texto, "tarot")
+        self.assertFalse(secciones[0].get("front_matter", False))
+        self.assertTrue(secciones[0]["titulo"].startswith("Sección "))
+
+    def test_indice_toc_con_index_si_es_front_matter(self):
+        texto = ("Contents Introduction Page 7 THE MINOR ARCANA 23 Chapter "
+                 "1. Wands 25 2. Cups 48 3. Swords 71 4. Pentacles 94 "
+                 "Index 207")
+        secciones = segmentar(texto, "general")
+        self.assertTrue(secciones[0].get("front_matter"))
+        self.assertNotIn("Sección", secciones[0]["titulo"])
+
+    def test_aviso_internet_archive_si_es_front_matter(self):
+        texto = ("This book was produced in EPUB format by the Internet "
+                 "Archive. " + cuerpo(20))
+        secciones = segmentar(texto, "general")
+        self.assertTrue(secciones[0].get("front_matter"))
+
+    def test_intro_en_frase_no_es_titulo_de_introduccion(self):
+        from libros_segmentar import _titulo_intro
+        self.assertIsNone(_titulo_intro(
+            "Introduction of a new cycle: the Fool begins his journey "
+            "with trust."))
+        self.assertIsNone(_titulo_intro(
+            "Introducción general del libro y sus usos."))
+
+    def test_titulo_intro_acepta_numero_y_signos(self):
+        from libros_segmentar import _titulo_intro
+        self.assertEqual(_titulo_intro("Introducción\n\n" + cuerpo(10)),
+                         "Introducción")
+        self.assertEqual(_titulo_intro("INTRODUCTION.\n\n" + cuerpo(10)),
+                         "Introducción")
+        self.assertEqual(_titulo_intro("1. Introduction\n\n" + cuerpo(10)),
+                         "Introducción")
+        self.assertEqual(_titulo_intro("Prólogo\n\n" + cuerpo(10)), "Prólogo")

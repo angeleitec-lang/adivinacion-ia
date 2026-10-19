@@ -297,11 +297,63 @@ def _preprocesar_cartas(texto, familia):
     return "\n".join(salida)
 
 
-def _dice_introduccion(texto):
+_INTRO_TITULOS = {
+    "introduccion": "Introducción", "introduction": "Introducción",
+    "prologo": "Prólogo", "prologue": "Prólogo",
+    "prefacio": "Prefacio", "preface": "Prefacio", "foreword": "Foreword",
+}
+_INTRO_RE = re.compile(
+    r"^(?:(?:capitulo|chapter)\s+)?(?:\d{1,3}\s*)?(%s)$"
+    % "|".join(_INTRO_TITULOS))
+
+
+def _titulo_intro(texto):
+    """Título si la primera línea es solo la cabecera (no una frase que empiece por ella)."""
     for linea in texto.splitlines():
         if linea.strip():
-            return _clave(linea).startswith("introduccion")
-    return False
+            match = _INTRO_RE.match(_clave(linea))
+            return _INTRO_TITULOS[match.group(1)] if match else None
+    return None
+
+
+# Aperturas inequívocas de portada/página legal: valen con cualquier longitud.
+_APERTURAS_INEQUIVOCAS = (
+    "this book was produced", "produced in epub format", "internet archive",
+    "all rights reserved", "derechos reservados", "table of contents",
+)
+# Aperturas que solo valen como cabecera corta (≤6 palabras y sin punto final).
+_APERTURAS_CABECERA = ("contents", "indice", "copyright", "pagina legal")
+
+# Marcas legales inequívocas de créditos/portada (texto sin tildes, en minúsculas).
+# Las ambiguas (published by, first edition, portada…) ya no cuentan: una frase
+# genuina puede mencionarlas sin ser material preliminar.
+_MARCAS_LEGALES = (
+    "copyright", "©", "all rights reserved", "derechos reservados",
+    "reservados todos", "isbn", "978-", "979-", "library of congress",
+    "printed in", "impreso en",
+)
+
+
+def _es_frente_materia(texto):
+    """True si el texto es portada, créditos o índice, no contenido genuino."""
+    primera = ""
+    for linea in (texto or "").splitlines():
+        if linea.strip():
+            primera = _sin_tildes(linea).lower().strip()
+            break
+    if any(primera.startswith(a) for a in _APERTURAS_INEQUIVOCAS):
+        return True
+    palabras = primera.split()
+    if palabras and len(palabras) <= 6 and not primera.endswith("."):
+        if palabras[0] in _APERTURAS_CABECERA:
+            return True
+    if palabras and palabras[0] in ("contents", "indice"):
+        resto = " ".join(palabras[1:])
+        if (re.search(r"\bindex\b", resto)
+                or len(re.findall(r"\b\d{1,3}\b", primera)) >= 3):
+            return True
+    crudo = _sin_tildes(texto or "").lower()[:2000]
+    return sum(1 for m in _MARCAS_LEGALES if m in crudo) >= 2
 
 
 def _titulo_de_linea(linea, familia):
@@ -470,17 +522,25 @@ def segmentar(texto_limpio, familia, id_libro=""):
             titulo = _limpiar_titulo(parte["titulo"])
         else:
             titulo = None
+        frente_materia = False
         if titulo is None:
-            if posicion == 0 and _dice_introduccion(parte["texto"]):
-                titulo = "Introducción"
+            intro = _titulo_intro(parte["texto"])
+            if intro:
+                titulo = intro
+            elif _es_frente_materia(parte["texto"]):
+                titulo = "Material preliminar"
+                frente_materia = True
             else:
                 titulo = _titulo_sintetico(parte["texto"], posicion + 1)
-        secciones.append({
+        seccion = {
             "seccion": posicion + 1,
             "titulo": titulo,
             "texto": parte["texto"],
             "chars": len(parte["texto"]),
             "id_libro": id_libro,
             "posicion": posicion,
-        })
+        }
+        if frente_materia:
+            seccion["front_matter"] = True
+        secciones.append(seccion)
     return secciones
