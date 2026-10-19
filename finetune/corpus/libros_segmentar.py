@@ -297,11 +297,53 @@ def _preprocesar_cartas(texto, familia):
     return "\n".join(salida)
 
 
-def _dice_introduccion(texto):
+_INTRO_TITULOS = {
+    "introduccion": "Introducción", "introduction": "Introducción",
+    "prologo": "Prólogo", "prologue": "Prólogo",
+    "prefacio": "Prefacio", "preface": "Prefacio", "foreword": "Foreword",
+}
+_INTRO_RE = re.compile(r"^(%s)\b" % "|".join(_INTRO_TITULOS))
+
+
+def _titulo_intro(texto):
+    """Título de introducción si la primera línea lo dice; None en caso contrario."""
     for linea in texto.splitlines():
         if linea.strip():
-            return _clave(linea).startswith("introduccion")
+            match = _INTRO_RE.match(_clave(linea))
+            return _INTRO_TITULOS[match.group(1)] if match else None
     return False
+
+
+# Aperturas típicas de portada, página legal o índice (sobre texto sin tildes).
+_FRENTE_APERTURA_RE = re.compile(
+    r"^(this book was produced|produced in epub format|internet archive|"
+    r"contents|table of contents|indice|pagina legal|copyright|"
+    r"all rights reserved|derechos reservados)\b")
+
+# Marcas de créditos/portada en español e inglés (texto sin tildes, en minúsculas).
+_MARCAS_CREDITO = (
+    "copyright", "©", "all rights reserved", "derechos reservados",
+    "reservados todos", "isbn", "978-", "979-", "library of congress",
+    "primera edicion", "first edition", "reimpresion", "printed in",
+    "impreso en", "published by", "publicado por", "distributed by",
+    "distribuido por", "translated by", "traducido por", "ilustrado por",
+    "cubierta", "portada", "produced in epub format",
+    "optical character recognition",
+)
+
+
+def _es_frente_materia(texto):
+    """True si el texto es portada, créditos o índice, no contenido genuino."""
+    primera = ""
+    for linea in (texto or "").splitlines():
+        if linea.strip():
+            primera = _sin_tildes(linea).lower()
+            break
+    if _FRENTE_APERTURA_RE.match(primera):
+        return True
+    crudo = _sin_tildes(texto or "").lower()[:2000]
+    distintas = {m for m in _MARCAS_CREDITO if m in crudo}
+    return len(distintas) >= 2
 
 
 def _titulo_de_linea(linea, familia):
@@ -470,17 +512,25 @@ def segmentar(texto_limpio, familia, id_libro=""):
             titulo = _limpiar_titulo(parte["titulo"])
         else:
             titulo = None
+        frente_materia = False
         if titulo is None:
-            if posicion == 0 and _dice_introduccion(parte["texto"]):
-                titulo = "Introducción"
+            intro = _titulo_intro(parte["texto"])
+            if intro:
+                titulo = intro
+            elif _es_frente_materia(parte["texto"]):
+                titulo = "Material preliminar"
+                frente_materia = True
             else:
                 titulo = _titulo_sintetico(parte["texto"], posicion + 1)
-        secciones.append({
+        seccion = {
             "seccion": posicion + 1,
             "titulo": titulo,
             "texto": parte["texto"],
             "chars": len(parte["texto"]),
             "id_libro": id_libro,
             "posicion": posicion,
-        })
+        }
+        if frente_materia:
+            seccion["front_matter"] = True
+        secciones.append(seccion)
     return secciones
