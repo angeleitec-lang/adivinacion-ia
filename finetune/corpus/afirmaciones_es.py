@@ -20,12 +20,17 @@ Diseño en tres pasos:
 
 from __future__ import annotations
 
+import argparse
 import glob
 import json
 import os
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 
 import cartas
 import juez
+import cobertura
+from llm_client import LLMClient
 
 MAX_AFIRMACIONES = 12
 MAX_PALABRAS = 40
@@ -257,3 +262,195 @@ def registro_afirmacion(evidencia, afirmacion):
         "calidad": evidencia.get("calidad"),
         "afirmacion": afirmacion,
     }
+
+
+# ---------------------------------------------------------------------------
+# T29.3: CLI reanudable e informe
+# ---------------------------------------------------------------------------
+
+DEFAULT_EVIDENCIAS = "/Users/angelgonzalez/fase0/evidencias_web/evidencias.jsonl"
+DEFAULT_WEB_DIR = "/Users/angelgonzalez/fase0/web"
+DEFAULT_OUT_DIR = "/Users/angelgonzalez/fase0/afirmaciones"
+
+
+def _catalogo_familias():
+    """entidad_id -> familia según `cobertura.entidades()`."""
+    return {e["entidad_id"]: e.get("familia")
+            for e in cobertura.entidades() if e.get("entidad_id")}
+
+
+def familia_de_entidad(entidad_id, catalogo=None):
+    """Familia de una entidad, con reserva por sufijo si no está en el catálogo."""
+    if catalogo is None:
+        catalogo = _catalogo_familias()
+    if entidad_id in catalogo:
+        return catalogo[entidad_id]
+    eid = entidad_id or ""
+    if eid.startswith("tarot-"):
+        return "tarot"
+    if eid.startswith("naipe-"):
+        return "baraja_espanola"
+    if eid.endswith("|signo") or eid.endswith("|aspecto"):
+        return "astrologia"
+    if "|destino" in eid or "|alma" in eid or "|personalidad" in eid:
+        return "numerologia"
+    return "otra"
+
+
+def _cargar_procesados(ruta):
+    """Claves (hash_seccion, entidad_id, faceta) ya procesadas antes."""
+    claves = set()
+    if not os.path.exists(ruta):
+        return claves
+    with open(ruta, encoding="utf-8") as fh:
+        for linea in fh:
+            linea = linea.strip()
+            if not linea:
+                continue
+            try:
+                d = json.loads(linea)
+            except ValueError:
+                continue
+            claves.add((d.get("hash_seccion"), d.get("entidad_id"),
+                        d.get("faceta")))
+    return claves
+
+
+def _simulado_vacio(sistema, usuario):
+    return '{"afirmaciones": []}'
+
+
+def procesar_evidencia(evidencia, indice, cliente):
+    """Procesa una evidencia: localiza texto y extrae afirmaciones."""
+    texto = texto_seccion(evidencia, indice)
+    if texto is None:
+        return {"estado": "sin_texto", "afirmaciones": [], "descartadas": []}
+    return extraer_afirmaciones(cliente, evidencia.get("entidad_id"),
+                               evidencia.get("faceta"), texto)
+
+
+def escribir_informe(ruta, stats):
+    """Informe Markdown del estado de la extracción."""
+    lineas = [
+        "# Informe de afirmaciones (T29)",
+        "",
+        "- Evidencias procesadas: %d" % stats["procesadas"],
+        "- Sin texto localizable (`sin_texto`): %d" % stats["sin_texto"],
+        "- Errores del modelo: %d" % stats["errores"],
+        "- Afirmaciones aceptadas: %d" % stats["afirmaciones"],
+        "",
+        "## Descartadas por motivo",
+        "",
+    ]
+    if stats["descartadas"]:
+        for motivo, n in sorted(stats["descartadas"].items(),
+                               key=lambda kv: -kv[1]):
+            lineas.append("- %s: %d" % (motivo, n))
+    else:
+        lineas.append("- (ninguna)")
+    lineas += ["", "## Afirmaciones por familia", "",
+               "| Familia | Afirmaciones |", "|---|---|"]
+    if stats["por_familia"]:
+        for familia, n in sorted(stats["por_familia"].items(),
+                                key=lambda kv: -kv[1]):
+            lineas.append("| %s | %d |" % (familia, n))
+    else:
+        lineas.append("| (ninguna) | 0 |")
+    lineas.append("")
+    with open(ruta, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lineas))
+
+
+def main(argv=None, cliente=None):
+    """Punto de entrada del extractor de afirmaciones (T29.3)."""
+    parser = argparse.ArgumentParser(
+        description="Extrae afirmaciones atomicas en espanol de las "
+                    "evidencias web (T29).")
+    parser.add_argument("--evidencias", default=DEFAULT_EVIDENCIAS)
+    parser.add_argument("--web-dir", default=DEFAULT_WEB_DIR)
+    parser.add_argument("--out-dir", default=DEFAULT_OUT_DIR)
+    parser.add_argument("--limite", type=int, default=0,
+                       help="Maximo de evidencias a procesar (0 = todas).")
+    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--simulado", action="store_true",
+                       help="Usa un cliente simulado (sin nodos GPU).")
+    args = parser.parse_args(argv)
+
+    evidencias = []
+    with open(args.evidencias, encoding="utf-8") as fh:
+        for linea in fh:
+            linea = linea.strip()
+            if linea:
+                evidencias.append(json.loads(linea))
+    if args.limite:
+        evidencias = evidencias[:args.limite]
+
+    os.makedirs(args.out_dir, exist_ok=True)
+    ruta_af = os.path.join(args.out_dir, "afirmaciones.jsonl")
+    ruta_pr = os.path.join(args.out_dir, "procesados.jsonl")
+    ruta_in = os.path.join(args.out_dir, "afirmaciones_informe.md")
+
+    procesados = _cargar_procesados(ruta_pr)
+    indice = IndiceWeb(args.web_dir)
+    catalogo = _catalogo_familias()
+    if cliente is None:
+        cliente = LLMClient(simulado=_simulado_vacio) if args.simulado \
+            else LLMClient()
+
+    stats = {
+        "procesadas": 0,
+        "sin_texto": 0,
+        "errores": 0,
+        "afirmaciones": 0,
+        "descartadas": Counter(),
+        "por_familia": Counter(),
+    }
+
+    def trabajar(ev):
+        clave = (ev.get("hash_seccion"), ev.get("entidad_id"),
+                ev.get("faceta"))
+        if clave in procesados:
+            return None
+        return ev, procesar_evidencia(ev, indice, cliente)
+
+    if args.workers > 1:
+        with ThreadPoolExecutor(max_workers=args.workers) as ex:
+            resultados = list(ex.map(trabajar, evidencias))
+    else:
+        resultados = [trabajar(ev) for ev in evidencias]
+
+    with open(ruta_pr, "a", encoding="utf-8") as fp, \
+            open(ruta_af, "a", encoding="utf-8") as fa:
+        for r in resultados:
+            if r is None:
+                continue
+            ev, res = r
+            for a in res["afirmaciones"]:
+                fa.write(json.dumps(registro_afirmacion(ev, a),
+                                   ensure_ascii=False) + "\n")
+                stats["por_familia"][
+                    familia_de_entidad(ev.get("entidad_id"), catalogo)] += 1
+            for _, motivo in res["descartadas"]:
+                stats["descartadas"][motivo] += 1
+            fp.write(json.dumps({
+                "hash_seccion": ev.get("hash_seccion"),
+                "entidad_id": ev.get("entidad_id"),
+                "faceta": ev.get("faceta"),
+                "estado": res["estado"],
+                "n_afirmaciones": len(res["afirmaciones"]),
+            }, ensure_ascii=False) + "\n")
+            fp.flush()
+            stats["procesadas"] += 1
+            if res["estado"] == "sin_texto":
+                stats["sin_texto"] += 1
+            elif res["estado"] == "error":
+                stats["errores"] += 1
+            else:
+                stats["afirmaciones"] += len(res["afirmaciones"])
+
+    escribir_informe(ruta_in, stats)
+    return stats
+
+
+if __name__ == "__main__":
+    main()

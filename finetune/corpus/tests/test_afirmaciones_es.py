@@ -229,5 +229,81 @@ class ExtraccionConModelo(unittest.TestCase):
         self.assertEqual(reg["afirmacion"], "Representa la union afectiva.")
 
 
+class PipelineCLI(unittest.TestCase):
+    """T29.3: CLI reanudable con sidecar de procesados e informe."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.web = os.path.join(self.tmp.name, "web")
+        dom = os.path.join(self.web, "example.com")
+        os.makedirs(dom)
+        with open(os.path.join(dom, "dos-copas.md"), "w",
+                  encoding="utf-8") as fh:
+            fh.write(_md("https://example.com/dos-copas", "example.com",
+                        CUERPO))
+        self.ev_path = os.path.join(self.tmp.name, "evidencias.jsonl")
+        with open(self.ev_path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(_evidencia(), ensure_ascii=False) + "\n")
+            ev_sin = _evidencia(url="https://example.com/absente")
+            fh.write(json.dumps(ev_sin, ensure_ascii=False) + "\n")
+        self.out = os.path.join(self.tmp.name, "out")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _run(self, extra=(), cliente=None):
+        argv = ["--evidencias", self.ev_path, "--web-dir", self.web,
+                "--out-dir", self.out] + list(extra)
+        return af.main(argv, cliente=cliente)
+
+    def _lineas(self, nombre):
+        ruta = os.path.join(self.out, nombre)
+        if not os.path.exists(ruta):
+            return []
+        with open(ruta, encoding="utf-8") as fh:
+            return [l for l in fh.read().splitlines() if l.strip()]
+
+    def test_procesa_y_escribe_archivos(self):
+        cliente = _cliente_simulado(_json_afs([
+            "Representa la union y el afecto mutuo.",
+        ]))
+        stats = self._run(cliente=cliente)
+        self.assertEqual(stats["procesadas"], 2)
+        self.assertEqual(stats["sin_texto"], 1)
+        self.assertEqual(stats["errores"], 0)
+        self.assertEqual(stats["afirmaciones"], 1)
+        self.assertEqual(len(self._lineas("afirmaciones.jsonl")), 1)
+        self.assertEqual(len(self._lineas("procesados.jsonl")), 2)
+        informe = os.path.join(self.out, "afirmaciones_informe.md")
+        self.assertTrue(os.path.exists(informe))
+        with open(informe, encoding="utf-8") as fh:
+            texto = fh.read()
+        self.assertIn("sin_texto", texto)
+        self.assertIn("tarot", texto)
+
+    def test_reanudable_no_reprocesa(self):
+        cliente = _cliente_simulado(_json_afs([
+            "Representa la union y el afecto mutuo.",
+        ]))
+        self._run(cliente=cliente)
+        stats2 = self._run(cliente=cliente)
+        self.assertEqual(stats2["procesadas"], 0)
+        self.assertEqual(len(self._lineas("afirmaciones.jsonl")), 1)
+        self.assertEqual(len(self._lineas("procesados.jsonl")), 2)
+
+    def test_limite_de_evidencias(self):
+        cliente = _cliente_simulado(_json_afs([]))
+        stats = self._run(extra=["--limite", "1"], cliente=cliente)
+        self.assertEqual(stats["procesadas"], 1)
+
+    def test_descartadas_se_cuentan_por_motivo(self):
+        cliente = _cliente_simulado(_json_afs([
+            "Predice una herencia millonaria e inmediata.",
+        ]))
+        stats = self._run(cliente=cliente)
+        self.assertEqual(stats["descartadas"].get("vocabulario"), 1)
+        self.assertEqual(stats["afirmaciones"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
