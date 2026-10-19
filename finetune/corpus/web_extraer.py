@@ -153,29 +153,40 @@ def _sha256(texto: str) -> str:
 # Reparación de mojibake (UTF-8 leído como cp1252)
 # ---------------------------------------------------------------------------
 
-_MOJIBAKE_PATRON = re.compile(r"Ã[\u0080-\u00bf]|â€")
+# Caracteres que cp1252 usa para los bytes 0x80-0xBF (posibles segundos bytes
+# de una secuencia UTF-8 mal leída). Se calculan del propio códec.
+_CARACTERES_80_BF = "".join(
+    ch
+    for ch in (bytes([b]).decode("cp1252", errors="ignore") for b in range(0x80, 0xC0))
+    if ch
+)
+_CLASE_80_BF = "".join(re.escape(ch) for ch in _CARACTERES_80_BF)
+
+# Secuencias mojibake: «Ã» + 1 byte de continuación, o «â» + 1-2 bytes.
+_MOJIBAKE_SEQ = re.compile(
+    "Ã[" + _CLASE_80_BF + "]|â[" + _CLASE_80_BF + "]{1,2}"
+)
+
+
+def _reparar_secuencia(match: "re.Match") -> str:
+    """Repara una secuencia mojibake; si no decodifica, la deja intacta."""
+    try:
+        return match.group(0).encode("cp1252").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return match.group(0)
 
 
 def reparar_mojibake(texto: str) -> str:
     """Repara texto UTF-8 que fue leído como cp1252 (mojibake tipo «aÃ±os»).
 
-    Si se detectan secuencias de mojibake, intenta re-codificar como cp1252 y
-    decodificar de nuevo como UTF-8. Acepta el resultado solo si reduce el
-    número de secuencias de mojibake y no introduce el carácter de reemplazo.
-    Si no, devuelve el texto original intacto.
+    Repara secuencia a secuencia (T30c): cada «Ã»/«â» + bytes de continuación se
+    re-codifica por separado como cp1252 y se decodifica como UTF-8. Las
+    secuencias irrecuperables (p. ej. una «Ã» sin su segundo byte) se quedan
+    intactas y no impiden reparar las demás.
     """
-    originales = len(_MOJIBAKE_PATRON.findall(texto))
-    if originales == 0:
+    if not _MOJIBAKE_SEQ.search(texto):
         return texto
-    try:
-        reparado = texto.encode("cp1252", errors="ignore").decode("utf-8")
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        return texto
-    if "\ufffd" in reparado:
-        return texto
-    if len(_MOJIBAKE_PATRON.findall(reparado)) < originales:
-        return reparado
-    return texto
+    return _MOJIBAKE_SEQ.sub(_reparar_secuencia, texto)
 
 
 # ---------------------------------------------------------------------------

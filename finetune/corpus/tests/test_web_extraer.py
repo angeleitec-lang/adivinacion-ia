@@ -132,10 +132,10 @@ class MojibakeTests(unittest.TestCase):
         t = "El loco anuncia un nuevo comienzo con ilusión."
         self.assertEqual(reparar_mojibake(t), t)
 
-    def test_rechaza_si_introduce_reemplazo(self):
-        # «ï¿½» re-codificado produce U+FFFD: la reparación se rechaza
+    def test_secuencias_no_mojibake_quedan_intactas(self):
+        # «ï¿½» no empieza por Ã/â: no es secuencia mojibake, se deja tal cual
         t = "aÃ±os \u00ef\u00bf\u00bd"
-        self.assertEqual(reparar_mojibake(t), t)
+        self.assertEqual(reparar_mojibake(t), "años \u00ef\u00bf\u00bd")
 
     def test_caso_adverso_texto_mixto_T30c(self):
         """T30c: «sÃ» irrecuperable no debe impedir reparar el resto."""
