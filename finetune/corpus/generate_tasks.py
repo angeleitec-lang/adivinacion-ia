@@ -109,6 +109,74 @@ FOCOS_ASTRO = [
 
 FOCOS_SIN = ["compatibilidad amorosa", "sociedad laboral", "amistad", "vínculo familiar", "proyecto en común"]
 
+# Seguimientos del consultante para la fase 2 del multi-turno real (T16). Elegidos
+# por contexto; algunos arrancan refiriéndose a lo dicho en la lectura anterior.
+SEGUIMIENTOS = {
+    "amor": [
+        "Dijiste que hay confusión entre nosotros, ¿cómo la despejo?",
+        "No me convence eso de que deba esperar, ¿qué más puedo hacer?",
+        "¿Y si hago lo contrario de lo que me sugieres?",
+        "Lo que me has dicho de la carta, ¿se aplica también a su lado de la relación?",
+        "¿Esto significa que debo dar el paso o dejar que llegue solo?",
+        "¿Y si él no siente lo mismo que yo?",
+        "¿Cuánto tiempo puede durar esta situación?",
+        "¿Qué error estoy cometiendo con mi pareja?",
+    ],
+    "trabajo": [
+        "Dijiste que conviene esperar, ¿hasta cuándo debo aguantar en el empleo?",
+        "No me convence eso de que no mueva ficha, ¿doy el paso?",
+        "¿Y si pido el cambio que llevo tiempo pensando?",
+        "Lo de la carta, ¿se refiere a mi jefe o a la empresa?",
+        "¿Me conviene más la seguridad o el riesgo en este momento?",
+        "¿Cómo sé si la oferta que me han hecho es buena para mí?",
+        "¿Debería hablar con mi jefe o buscar fuera?",
+        "¿Qué habilidad me falta para desbloquear mi carrera?",
+    ],
+    "dinero": [
+        "Dijiste que hay que ordenar las cuentas, ¿por dónde empiezo?",
+        "No me convence eso de no invertir, ¿y si pierdo la oportunidad?",
+        "¿Y si hago lo contrario y pido el préstamo?",
+        "Lo de la carta, ¿significa que el dinero llegará o que debo buscarlo?",
+        "¿Es momento de gastar o de ahorrar?",
+        "¿Cómo salgo del agujero económico en el que estoy?",
+        "¿Me fío de esa oportunidad que me han ofrecido?",
+        "¿Qué estoy haciendo mal con el dinero?",
+    ],
+    "salud": [
+        "Dijiste que debo descansar, ¿cómo lo hago si no puedo parar?",
+        "No me convence eso de que sea estrés, ¿y si es algo más serio?",
+        "¿Y si hago caso omiso y sigo al ritmo de siempre?",
+        "Lo de la carta, ¿se refiere a mi cuerpo o a mis emociones?",
+        "¿Qué hábito debería cambiar primero?",
+        "¿Voy a recuperarme si pongo de mi parte?",
+        "¿Cuándo notaré mejoría?",
+        "¿Debo preocuparme o mantener la calma?",
+    ],
+    "espiritual": [
+        "Dijiste que suelte algo, ¿cómo sé qué es exactamente?",
+        "No me convence eso de que todo tiene un propósito, ¿y el dolor?",
+        "¿Y si hago lo contrario de lo que la carta me pide?",
+        "Lo de la carta, ¿es una advertencia o una guía?",
+        "¿Qué práctica me ayuda a conectar con esto?",
+        "¿Cómo sé si estoy en el camino correcto?",
+        "¿Debo meditar o actuar en el mundo?",
+        "¿Qué aprendizaje me llevo de esta etapa?",
+    ],
+    "general": [
+        "Dijiste que hay un bloqueo, ¿cómo lo identifico?",
+        "No me convence eso de priorizar, ¿y si todo es urgente?",
+        "¿Y si hago lo contrario de lo que me recomiendas?",
+        "Lo de la carta, ¿se refiere a hoy o a las próximas semanas?",
+        "¿Qué es lo primero que debo hacer mañana?",
+        "¿Cómo sé si la decisión que pienso es la buena?",
+        "¿Debo actuar ya o esperar una señal?",
+        "¿Qué me estoy perdiendo de esta situación?",
+    ],
+}
+
+INSTRUCCION_FASE2 = ("Responde solo a la nueva pregunta, manteniendo el hilo "
+                     "de la lectura anterior y sin repetirla.")
+
 def load_kb(nombre):
     p = KB_DIR / nombre
     with p.open(encoding="utf-8") as fh:
@@ -593,31 +661,27 @@ class Builder:
         return out
 
     def multiturno(self, n=800):
-        """Simula la continuación en un solo turno; un multi-turno real requiere
-        generación en dos fases (pendiente)."""
+        """Multi-turno real en dos fases: el prompt es la lectura de fase 1 y el
+        payload lleva el seguimiento y la instrucción de la fase 2 (T16)."""
         out = []
         for _ in range(n):
             ctx = self.rng.choice(CONTEXTOS)
             carta = self.tirada(1)[0]
             preg1 = self.rng.choice(PREGUNTAS[ctx])
-            seguimiento = self.rng.choice([
-                "¿Y qué debería hacer yo al respecto?",
-                "¿Y si la situación no cambia en un mes?",
-                "¿Qué parte de esto depende de mí?",
-                "¿Cómo afecta esto a mi entorno cercano?",
-                "¿Qué señal debería observar para saber si voy bien?",
-            ])
-            previo = (
-                f"En la consulta anterior salió {carta_txt(carta)} en contexto de {ctx}; "
-                f"el consultante preguntó: «{preg1}»"
-            )
+            seguimiento = self.rng.choice(SEGUIMIENTOS[ctx])
             prompt = unir_con_referencia(
-                f"Continuación de una consulta de tarot.\n\n{previo}\n\n"
-                f'Nueva pregunta del consultante: "{seguimiento}"',
+                f"Tirada de una carta de tarot.\n\n"
+                f"Carta: {carta_txt(carta)}.\nContexto: {ctx}.\n"
+                f'Pregunta del consultante: "{preg1}"',
                 referencia_tarot([carta], self.cartas, ctx),
-                "Responde solo a la nueva pregunta, manteniendo el hilo de la lectura.",
+                "Interpreta la carta para esta persona, en el contexto indicado.",
             )
-            out.append(self.job("multiturno", prompt, {"carta": carta, "contexto": ctx}, 900))
+            payload = {
+                "fase2": {"seguimiento": seguimiento, "instruccion": INSTRUCCION_FASE2},
+                "carta": carta,
+                "contexto": ctx,
+            }
+            out.append(self.job("multiturno", prompt, payload, 900))
         return out
 
     def _pares_etica(self):

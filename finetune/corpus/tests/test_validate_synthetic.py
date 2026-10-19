@@ -414,5 +414,101 @@ class TestIaMeta(unittest.TestCase):
         self.assertTrue(ok, why)
 
 
+G1_MT = ("La luna nueva te invita a soltar viejas heridas y abrir un ciclo de "
+         "calma interior; hoy el tarot sugiere paciencia y escucha atenta.")
+G2_MT = ("Sobre esa misma calma, la carta recomienda dar el primer paso sin "
+         "ruido: escribe hoy una nota breve y clara para ti.")
+
+
+def _fila_mt(system="SYS", h1="Pregunta uno", g1=G1_MT, h2="Pregunta dos", g2=G2_MT):
+    return {
+        "turnos": 2,
+        "conversations": [
+            {"from": "system", "value": system},
+            {"from": "human", "value": h1},
+            {"from": "gpt", "value": g1},
+            {"from": "human", "value": h2},
+            {"from": "gpt", "value": g2},
+        ],
+    }
+
+
+class TestTurnosDe(unittest.TestCase):
+    def test_empareja_humano_gpt(self):
+        pares = vs.turnos_de(_fila_mt())
+        self.assertEqual(len(pares), 2)
+        self.assertEqual(pares[0][0], "Pregunta uno")
+        self.assertEqual(pares[1][1], G2_MT)
+
+    def test_un_turno(self):
+        pares = vs.turnos_de(_fila(human="h", gpt="g"))
+        self.assertEqual(pares, [("h", "g")])
+
+    def test_human_final_sin_gpt_se_ignora(self):
+        row = _fila_mt()
+        row["conversations"].append({"from": "human", "value": "colgando"})
+        self.assertEqual(len(vs.turnos_de(row)), 2)
+
+
+class TestValidarMultiturno(unittest.TestCase):
+    def test_bueno_pasa(self):
+        ok, why = vs.validate(_fila_mt(), _args())
+        self.assertTrue(ok, why)
+
+    def test_turno2_copia_total(self):
+        row = _fila_mt(g2=G1_MT)
+        ok, why = vs.validate(row, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "turno2_copia_turno1")
+
+    def test_turno2_copia_por_frases(self):
+        g1 = ("La luna nueva trae calma interior. El tarot sugiere paciencia "
+              "hoy. Suelta las viejas heridas poco a poco. Escucha tu voz "
+              "interior cada mañana. Descansa sin culpa esta semana.")
+        g2 = ("La luna nueva trae calma interior. El tarot sugiere paciencia "
+              "hoy. Suelta las viejas heridas poco a poco. En marzo escribe "
+              "una nota breve y clara para ti.")
+        ok, why = vs.validate(_fila_mt(g1=g1, g2=g2), _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "turno2_copia_turno1")
+
+    def test_turno2_sin_hilo(self):
+        g2 = ("El reloj marca las tres de la madrugada y fuera llueve con "
+              "fuerza sobre los tejados de la ciudad dormida, ajena a todo.")
+        ok, why = vs.validate(_fila_mt(g2=g2), _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "turno2_sin_hilo")
+
+    def test_turno2_corto(self):
+        ok, why = vs.validate(_fila_mt(g2="Vale, gracias."), _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "turno2_corto")
+
+    def test_primer_par_corto_usa_corto(self):
+        ok, why = vs.validate(_fila_mt(g1="Corta."), _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "corto")
+
+    def test_idioma_en_segundo_turno(self):
+        g2 = ("The moon brings you calm and the cards suggest patience and "
+             "inner listening today, my dear friend, rest well and breathe.")
+        ok, why = vs.validate(_fila_mt(g2=g2), _args())
+        self.assertFalse(ok)
+        self.assertTrue(why.startswith("idioma_"))
+
+    def test_boilerplate_en_segundo_turno(self):
+        g2 = ("Sobre esa calma, la carta recomienda lo mismo: for entertainment "
+             "purposes only, nothing more to add here about your reading today.")
+        ok, why = vs.validate(_fila_mt(g2=g2), _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "boilerplate")
+
+    def test_un_turno_no_aplica_reglas_mt(self):
+        fila = _fila(human="¿Qué sale hoy?",
+                    gpt=G1_MT + " " + G2_MT)
+        ok, why = vs.validate(fila, _args())
+        self.assertTrue(ok, why)
+
+
 if __name__ == "__main__":
     unittest.main()

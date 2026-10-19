@@ -32,13 +32,15 @@ def es_score(text):
     return hits / len(words)
 
 
-def call_llm(base, model, system, user, max_tokens, timeout, retries=2):
-    payload = {
-        "model": model,
-        "messages": [
+def call_llm(base, model, system, user, max_tokens, timeout, retries=2, messages=None):
+    if messages is None:
+        messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
-        ],
+        ]
+    payload = {
+        "model": model,
+        "messages": messages,
         "temperature": 0.8,
         "top_p": 0.95,
         "max_tokens": max_tokens,
@@ -86,13 +88,13 @@ def claim(con, worker, only=None):
             time.sleep(1)
     if only:
         row = con.execute(
-            "SELECT id, bloque, system, prompt, max_tokens FROM jobs "
+            "SELECT id, bloque, system, prompt, max_tokens, payload FROM jobs "
             "WHERE status='pending' AND bloque=? ORDER BY id LIMIT 1",
             (only,),
         ).fetchone()
     else:
         row = con.execute(
-            "SELECT id, bloque, system, prompt, max_tokens FROM jobs "
+            "SELECT id, bloque, system, prompt, max_tokens, payload FROM jobs "
             "WHERE status='pending' ORDER BY id LIMIT 1"
         ).fetchone()
     if row:
@@ -121,6 +123,23 @@ def finish(con, job_id, ok, error=None):
     con.commit()
 
 
+def _chequea_respuesta(texto, min_chars):
+    if len(texto) < min_chars:
+        raise RuntimeError(f"respuesta corta ({len(texto)} chars)")
+    if es_score(texto) < 0.10:
+        raise RuntimeError("respuesta no parece espanol")
+
+
+def _conversacion_multiturno(system, prompt, gpt1, human2, gpt2):
+    return [
+        {"from": "system", "value": system},
+        {"from": "human", "value": prompt},
+        {"from": "gpt", "value": gpt1},
+        {"from": "human", "value": human2},
+        {"from": "gpt", "value": gpt2},
+    ]
+
+
 def worker_loop(args, tag, stats, lock):
     con = sqlite3.connect(args.db, timeout=60)
     con.execute("PRAGMA journal_mode=WAL")
@@ -141,24 +160,54 @@ def worker_loop(args, tag, stats, lock):
             with lock:
                 stats["started"] += 1
         vacios = 0
-        job_id, bloque, system, prompt, max_tokens = row
+        job_id, bloque, system, prompt, max_tokens, payload_raw = row
         try:
-            texto = call_llm(args.endpoint, args.model, system, prompt, max_tokens, args.timeout)
-            if len(texto) < args.min_chars:
-                raise RuntimeError(f"respuesta corta ({len(texto)} chars)")
-            if es_score(texto) < 0.10:
-                raise RuntimeError("respuesta no parece espanol")
+            try:
+                payload = json.loads(payload_raw) if payload_raw else {}
+            except (TypeError, ValueError):
+                payload = {}
+            fase2 = payload.get("fase2") if isinstance(payload, dict) else None
+            if fase2:
+                gpt1 = call_llm(args.endpoint, args.model, system, prompt,
+                               max_tokens, args.timeout)
+                _chequea_respuesta(gpt1, args.min_chars)
+                human2 = "{}\n\n{}".format(
+                    fase2.get("seguimiento", ""),
+                    fase2.get("instruccion", ""),
+                ).strip()
+                gpt2 = call_llm(
+                    args.endpoint, args.model, system, human2, max_tokens,
+                    args.timeout,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": prompt},
+                        {"role": "assistant", "content": gpt1},
+                        {"role": "user", "content": human2},
+                    ],
+                )
+                _chequea_respuesta(gpt2, args.min_chars)
+                conversaciones = _conversacion_multiturno(
+                    system, prompt, gpt1, human2, gpt2)
+                turnos = 2
+            else:
+                texto = call_llm(args.endpoint, args.model, system, prompt,
+                                max_tokens, args.timeout)
+                _chequea_respuesta(texto, args.min_chars)
+                conversaciones = [
+                    {"from": "system", "value": system},
+                    {"from": "human", "value": prompt},
+                    {"from": "gpt", "value": texto},
+                ]
+                turnos = 1
             fila = {
                 "job_id": job_id,
                 "bloque": bloque,
                 "endpoint": args.endpoint,
                 "generated_at": now(),
-                "conversations": [
-                    {"from": "system", "value": system},
-                    {"from": "human", "value": prompt},
-                    {"from": "gpt", "value": texto},
-                ],
+                "conversations": conversaciones,
             }
+            if turnos == 2:
+                fila["turnos"] = 2
             dst = args.out / f"{bloque}.{tag}.jsonl"
             with open(dst, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(fila, ensure_ascii=False) + "\n")

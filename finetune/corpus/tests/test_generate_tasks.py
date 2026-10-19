@@ -1,6 +1,7 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import json
 import random
 import unittest
 
@@ -221,18 +222,62 @@ class TestNumerologiaCalculo(unittest.TestCase):
 
 
 class TestMultiturno(unittest.TestCase):
-    def test_sin_te_preguntaste(self):
+    def setUp(self):
         kb_tarot, kb_astro, kb_num = kbs_para_test()
-        b = gt.Builder(random.Random(5), kb_tarot, kb_astro, kb_num)
-        for _bloque, _system, prompt, _payload, _mt in b.multiturno(50):
+        self.b = gt.Builder(random.Random(5), kb_tarot, kb_astro, kb_num)
+
+    def test_sin_te_preguntaste(self):
+        for _bloque, _system, prompt, _payload, _mt in self.b.multiturno(50):
             self.assertNotIn("Te preguntaste", prompt)
 
-    def test_previo_honesto(self):
-        kb_tarot, kb_astro, kb_num = kbs_para_test()
-        b = gt.Builder(random.Random(5), kb_tarot, kb_astro, kb_num)
-        for _bloque, _system, prompt, _payload, _mt in b.multiturno(10):
-            self.assertIn("En la consulta anterior salió", prompt)
-            self.assertIn("el consultante preguntó: «", prompt)
+    def test_sin_simulacion_de_historial(self):
+        # El multi-turno real no simula el historial dentro del prompt de fase 1.
+        for _bloque, _system, prompt, _payload, _mt in self.b.multiturno(50):
+            self.assertNotIn("En la consulta anterior salió", prompt)
+            self.assertNotIn("Nueva pregunta del consultante", prompt)
+
+    def test_fase1_es_lectura_normal(self):
+        # El prompt de la fila es una lectura normal de una carta con su Referencia.
+        for _bloque, _system, prompt, payload, _mt in self.b.multiturno(10):
+            self.assertIn("Tirada de una carta de tarot.", prompt)
+            self.assertIn("Referencia (significados de la tradición", prompt)
+            datos = json.loads(payload)
+            self.assertIn("Carta: " + datos["carta"]["nombre"], prompt)
+            self.assertIn("Contexto: " + datos["contexto"], prompt)
+            self.assertIn('Pregunta del consultante: "', prompt)
+
+    def test_payload_con_fase2(self):
+        for _bloque, _system, _prompt, payload, _mt in self.b.multiturno(20):
+            datos = json.loads(payload)
+            fase2 = datos["fase2"]
+            seg = fase2["seguimiento"]
+            ctx = datos["contexto"]
+            self.assertIn(seg, gt.SEGUIMIENTOS[ctx])
+            self.assertIn("sin repetirla", fase2["instruccion"])
+
+    def test_seguimientos_con_tildes(self):
+        for lista in gt.SEGUIMIENTOS.values():
+            for seg in lista:
+                inicio = seg.lstrip("¿¡")
+                self.assertTrue(seg and inicio[0].isupper())
+        plano = "".join(seg for lista in gt.SEGUIMIENTOS.values() for seg in lista)
+        self.assertTrue(any(c in plano for c in "áéíóúñ¿¡"))
+
+    def test_variedad_seguimientos(self):
+        # En 200 trabajos, al menos 25 seguimientos distintos.
+        segs = {json.loads(p)["fase2"]["seguimiento"]
+                for _b, _s, _p, p, _m in self.b.multiturno(200)}
+        self.assertGreaterEqual(len(segs), 25)
+
+    def test_lista_amplia(self):
+        total = sum(len(v) for v in gt.SEGUIMIENTOS.values())
+        self.assertGreaterEqual(total, 40)
+        for ctx in ("amor", "trabajo", "dinero", "salud", "espiritual"):
+            self.assertIn(ctx, gt.SEGUIMIENTOS)
+
+    def test_targets_multiturno(self):
+        self.assertEqual(gt.TARGETS["multiturno"], 800)
+        self.assertEqual(sum(gt.TARGETS.values()), 10636)
 
 
 class TestEtica(unittest.TestCase):

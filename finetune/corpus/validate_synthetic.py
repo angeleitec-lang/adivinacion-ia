@@ -198,6 +198,58 @@ def system_of(row: dict) -> str:
     return ""
 
 
+def turnos_de(row: dict) -> list:
+    """[(human, gpt), ...] siguiendo el orden de conversations."""
+    pares = []
+    humano = None
+    for c in row.get("conversations", []):
+        origen = c.get("from")
+        if origen == "human":
+            humano = c.get("value", "")
+        elif origen == "gpt" and humano is not None:
+            pares.append((humano, c.get("value", "")))
+            humano = None
+    return pares
+
+
+# Funciones vacías españolas (normalizadas, sin tildes) para medir contenido.
+STOP_CONTENIDO = frozenset("""
+de la que el en y a los del se las un por con no una su para es al lo como
+mas pero sus le ya o si porque esta entre cuando muy sin sobre tambien me hasta
+hay donde quien desde todo nos durante todos uno les ni contra otros ese eso
+ante ellos e esto mi antes algunos yo ha han has fue fueron ser sido estar esta
+estan estaba este estos estas esa esos esas aquel aquella lo mismo puede pueden
+hace hacer hizo hay dia cosa vez veces asi alla aqui alli
+""".split())
+
+
+def _contenido(texto: str) -> set:
+    return {w for w in norm(texto).split()
+            if w not in STOP_CONTENIDO and len(w) >= 3}
+
+
+def _copia_turno1(g1: str, g2: str) -> bool:
+    """True si g2 repite demasiado a g1 (Jaccard > 0,6 o > 50% de frases)."""
+    w1 = set(norm(g1).split())
+    w2 = set(norm(g2).split())
+    if not w1 or not w2:
+        return False
+    if len(w1 & w2) / len(w1 | w2) > 0.6:
+        return True
+    frases = [norm(s) for s in re.split(r"[.!?]+", g2)]
+    frases = [f for f in frases if len(f.split()) >= 4]
+    if not frases:
+        return False
+    n1 = norm(g1)
+    copiadas = sum(1 for f in frases if f in n1)
+    return copiadas / len(frases) > 0.5
+
+
+def _sin_hilo(g1: str, g2: str) -> bool:
+    """True si g2 no comparte ninguna palabra de contenido con g1."""
+    return len(_contenido(g1) & _contenido(g2)) < 1
+
+
 # Marcas que reconocen una carta invertida en la respuesta (texto normalizado).
 INVERT_RECONOC = (
     "invertid", "al reves", "bloque", "sombra", "resist", "retraso", "interior",
@@ -288,6 +340,44 @@ def grounding(prompt: str, answer: str) -> bool:
     return True
 
 
+def _validar_multiturno(pares: list, args, bloque: str | None) -> tuple[bool, str]:
+    for i, (humano, gpt) in enumerate(pares):
+        if not humano or not gpt:
+            return False, "sin_turnos"
+        if len(gpt) < args.min_chars:
+            return False, "turno2_corto" if i == 1 else "corto"
+        if len(gpt) > args.max_chars:
+            return False, "largo"
+        low = gpt.lower()
+        if any(m in low for m in JUNK):
+            return False, "boilerplate"
+        lang = detect_language(gpt)
+        if lang not in ("es", "mixed"):
+            return False, f"idioma_{lang}"
+        if repetition_ratio(gpt) > args.max_repetition:
+            return False, "repeticion"
+        if bloque != "etica" and ia_meta(gpt):
+            return False, "ia_meta"
+    (h1, g1), (_, g2) = pares[0], pares[1]
+    m = QUESTION_RE.search(h1)
+    if m:
+        q = normalize(m.group(1))
+        if len(q) > 25 and normalize(g1[:120]).startswith(q[:40]):
+            return False, "eco_pregunta"
+    if not grounding(h1, g1):
+        return False, "sin_datos_del_prompt"
+    if not orientacion_ok(h1, g1):
+        return False, "orientacion"
+    if bloque != "etica":
+        if eco_prompt(h1, g1):
+            return False, "eco_prompt"
+    if _copia_turno1(g1, g2):
+        return False, "turno2_copia_turno1"
+    if _sin_hilo(g1, g2):
+        return False, "turno2_sin_hilo"
+    return True, "ok"
+
+
 def validate(row: dict, args, bloque: str | None = None) -> tuple[bool, str]:
     answer = answer_of(row)
     prompt = human_of(row)
@@ -296,6 +386,9 @@ def validate(row: dict, args, bloque: str | None = None) -> tuple[bool, str]:
     texto_prompt = (system_of(row) + "\n" + prompt).lower()
     if any(marca in texto_prompt for marca in SIN_TILDES_MARCAS):
         return False, "prompt_sin_tildes"
+    pares = turnos_de(row)
+    if len(pares) >= 2:
+        return _validar_multiturno(pares, args, bloque)
     if len(answer) < args.min_chars:
         return False, "corto"
     if len(answer) > args.max_chars:
