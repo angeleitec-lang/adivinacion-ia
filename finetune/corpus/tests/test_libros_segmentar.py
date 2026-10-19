@@ -160,3 +160,47 @@ class Cartas(unittest.TestCase):
         titulos = self._titulos(texto, "numerologia")
         for numero in ("11", "22", "33"):
             self.assertIn(numero, titulos)
+
+
+class FrenteMateria(unittest.TestCase):
+    def test_preambulo_de_creditos_no_da_titulo_sintetico_basura(self):
+        portada = ("Tarot para principiantes\n\nÁngel González\n\n"
+                   "Copyright © 2020 Ángel González\n"
+                   "Todos los derechos reservados\n"
+                   "ISBN 978-84-1234-567-8\n\n"
+                   "Índice\nIntroducción ....... 3\nCapítulo 1 ..... 7\n\n")
+        texto = portada + "# Capítulo 1\n\n" + cuerpo(30)
+        secciones = segmentar(texto, "tarot")
+        primera = secciones[0]
+        self.assertTrue(primera.get("front_matter"))
+        self.assertNotIn("Sección", primera["titulo"])
+        self.assertNotIn("Copyright", primera["titulo"])
+        self.assertNotIn("ISBN", primera["titulo"])
+        self.assertNotIn("González", primera["titulo"])
+        titulos = [s["titulo"] for s in secciones]
+        self.assertIn("Capítulo 1", titulos)
+
+    def test_texto_genuino_sin_cabeceras_conserva_titulo_sintetico(self):
+        texto = cuerpo(40)
+        secciones = segmentar(texto, "general")
+        self.assertTrue(secciones[0]["titulo"].startswith("Sección "))
+        self.assertFalse(secciones[0].get("front_matter", False))
+
+    def test_introduccion_real_conserva_su_titulo(self):
+        texto = "Introducción\n\n" + cuerpo(30)
+        secciones = segmentar(texto, "general")
+        self.assertEqual(secciones[0]["titulo"], "Introducción")
+        self.assertFalse(secciones[0].get("front_matter", False))
+
+    def test_prologo_real_conserva_su_titulo(self):
+        texto = "Prólogo\n\n" + cuerpo(30)
+        secciones = segmentar(texto, "general")
+        self.assertEqual(secciones[0]["titulo"], "Prólogo")
+        self.assertFalse(secciones[0].get("front_matter", False))
+
+    def test_mencion_aislada_de_copyright_no_es_front_matter(self):
+        texto = ("El tarot y el copyright en la edición moderna de mazos. "
+                 * 30).strip()
+        secciones = segmentar(texto, "general")
+        self.assertTrue(secciones[0]["titulo"].startswith("Sección "))
+        self.assertFalse(secciones[0].get("front_matter", False))
