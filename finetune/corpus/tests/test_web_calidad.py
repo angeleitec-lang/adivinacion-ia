@@ -12,10 +12,14 @@ import unittest
 from web_calidad import (
     bandera_corta,
     bandera_mojibake,
+    bandera_no_espanol,
+    bandera_repeticion_interna,
+    bandera_ruido_navegacion,
     bandera_titulo_pobre,
     leer_pagina,
     leer_paginas,
     analizar_paginas,
+    parrafos_repetidos,
 )
 
 
@@ -150,3 +154,96 @@ class AnalizarPaginasTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class BanderaNoEspanolTests(unittest.TestCase):
+    def test_texto_largo_en_espanol(self):
+        texto = (
+            "El tarot es un sistema de símbolos que se utiliza para interpretar "
+            "la vida y las decisiones de quien consulta. "
+        ) * 8
+        self.assertFalse(bandera_no_espanol(texto))
+
+    def test_texto_largo_en_ingles(self):
+        texto = (
+            "The tarot is a system of symbols that people use to interpret life "
+            "and to find meaning in the world around them. "
+        ) * 8
+        self.assertTrue(bandera_no_espanol(texto))
+
+    def test_texto_corto_no_se_evalua(self):
+        self.assertFalse(bandera_no_espanol("Short English text with the and of."))
+
+
+class BanderaRuidoNavegacionTests(unittest.TestCase):
+    def test_menu_consecutivo(self):
+        texto = "Inicio\nQuiénes somos\nContacto\nAviso legal\nPolítica de cookies"
+        self.assertTrue(bandera_ruido_navegacion(texto))
+
+    def test_prosa_no_es_ruido(self):
+        texto = (
+            "La carta del Loco representa el inicio de un camino.\n"
+            "Su energía invita a confiar en lo desconocido.\n"
+            "En una tirada indica un salto hacia adelante."
+        )
+        self.assertFalse(bandera_ruido_navegacion(texto))
+
+    def test_dos_lineas_no_bastan(self):
+        self.assertFalse(bandera_ruido_navegacion("Inicio\nContacto"))
+
+    def test_pie_con_copyright(self):
+        texto = (
+            "Texto introductorio de la página.\n"
+            "© 2024 Todos los derechos reservados\n"
+            "Aviso legal\n"
+            "Política de privacidad"
+        )
+        self.assertTrue(bandera_ruido_navegacion(texto))
+
+
+class BanderaRepeticionInternaTests(unittest.TestCase):
+    def test_parrafo_repetido_tres_veces(self):
+        parrafo = "Este párrafo se repite varias veces dentro de la misma página."
+        texto = "\n\n".join([parrafo, "Otro párrafo distinto.", parrafo, parrafo])
+        self.assertTrue(bandera_repeticion_interna(texto))
+        repetidos = parrafos_repetidos(texto)
+        self.assertEqual(len(repetidos), 1)
+        self.assertEqual(repetidos[0][1], 3)
+
+    def test_parrafo_repetido_dos_veces(self):
+        parrafo = "Este párrafo aparece solo dos veces en esta página de prueba."
+        texto = "\n\n".join([parrafo, parrafo])
+        self.assertFalse(bandera_repeticion_interna(texto))
+
+    def test_ignora_variaciones_de_espacios_y_mayusculas(self):
+        parrafo = "La misma frase repetida con variaciones de formato."
+        texto = "\n".join([
+            parrafo,
+            "  LA MISMA FRASE   repetida con variaciones de formato.  ",
+            parrafo,
+        ])
+        self.assertTrue(bandera_repeticion_interna(texto))
+
+
+class AnalizarPaginasT312Tests(unittest.TestCase):
+    def test_incluye_banderas_de_lenguaje_ruido_y_repeticion(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            ingles = (
+                "The tarot is a system of symbols that people use to interpret "
+                "life and to find meaning in the world around them. "
+            ) * 8
+            _escribir_pagina(base, "a.com", "ingles.md", "Tarot guide", ingles)
+            parrafo = "Este párrafo se repite varias veces dentro de la misma página."
+            _escribir_pagina(
+                base, "a.com", "repite.md", "Página repetida",
+                "\n".join([parrafo, parrafo, parrafo]),
+            )
+            paginas = analizar_paginas(leer_paginas(base))
+            por_nombre = {Path(p["ruta"]).name: p for p in paginas}
+            self.assertIn("no_espanol", por_nombre["ingles.md"]["banderas"])
+            self.assertIn(
+                "repeticion_interna", por_nombre["repite.md"]["banderas"]
+            )
+            self.assertGreaterEqual(
+                len(por_nombre["repite.md"]["detalles"]["repeticion_interna"]), 1
+            )
