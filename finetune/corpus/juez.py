@@ -208,3 +208,142 @@ def candidatos_seccion(seccion):
               catalogo.get(entidad_id, {}).get("nombre", entidad_id))
 
     return [candidatos[k] for k in sorted(candidatos)]
+
+
+# ---------------------------------------------------------------------------
+# Paso 2: respuesta del LLM (parser, validador y llamada con un reintento)
+# ---------------------------------------------------------------------------
+
+TIPOS_VALIDOS = {"conocimiento", "lectura_trabajada", "publicidad",
+                 "relleno", "ficcion", "otro"}
+
+IDIOMAS_VALIDOS = {"es", "en", "otro"}
+
+MAX_TEXTO_PROMPT = 6000
+
+SISTEMA_PROMPT = (
+    "Eres un juez documental de textos sobre tarot, baraja española, "
+    "astrología y numerología. Clasifica el fragmento que recibes y "
+    "etiqueta qué entidades y facetas documenta. Responde SOLO con un "
+    "objeto JSON válido, sin texto adicional."
+)
+
+
+def _extraer_json(texto):
+    """Primer objeto JSON del texto: bloque ```json, bloque ``` o llaves."""
+    for marca in ("```json", "```"):
+        inicio = texto.find(marca)
+        if inicio != -1:
+            desde = inicio + len(marca)
+            fin = texto.find("```", desde)
+            if fin != -1:
+                try:
+                    return json.loads(texto[desde:fin].strip())
+                except json.JSONDecodeError:
+                    pass
+    inicio = texto.find("{")
+    if inicio != -1:
+        nivel = 0
+        for i in range(inicio, len(texto)):
+            if texto[i] == "{":
+                nivel += 1
+            elif texto[i] == "}":
+                nivel -= 1
+                if nivel == 0:
+                    try:
+                        return json.loads(texto[inicio:i + 1])
+                    except json.JSONDecodeError:
+                        break
+    raise ValueError("No se encontró JSON válido en la respuesta")
+
+
+def parsear_respuesta(texto, candidatos):
+    """Extrae y valida el juicio del LLM contra la lista de candidatos.
+
+    Devuelve un dict normalizado con `tipo` (en TIPOS_VALIDOS), `calidad`
+    (entero 1-5), `idioma` (es|en|otro) y `entidades` con solo ids de
+    `candidatos` y facetas de `FACETAS_POR_FAMILIA` de su familia. Las
+    entidades o facetas inventadas se descartan sin error; un JSON ilegible
+    o campos obligatorios ausentes/inválidos lanzan ValueError.
+    """
+    datos = _extraer_json(texto)
+    if not isinstance(datos, dict):
+        raise ValueError("La respuesta no es un objeto JSON")
+    tipo = datos.get("tipo")
+    if tipo not in TIPOS_VALIDOS:
+        raise ValueError("Campo «tipo» ausente o inválido: %r" % (tipo,))
+    calidad = datos.get("calidad")
+    if isinstance(calidad, bool) or not isinstance(calidad, (int, float)) \
+            or not 1 <= int(calidad) <= 5:
+        raise ValueError("Campo «calidad» fuera de 1-5: %r" % (calidad,))
+    calidad = int(calidad)
+    idioma = datos.get("idioma")
+    if idioma not in IDIOMAS_VALIDOS:
+        idioma = "otro"
+    crudo = datos.get("entidades")
+    if not isinstance(crudo, list):
+        raise ValueError("Campo «entidades» ausente o no es lista")
+    familias = {c["entidad_id"]: c["familia"] for c in candidatos}
+    entidades = []
+    for ent in crudo:
+        if not isinstance(ent, dict):
+            continue
+        entidad_id = ent.get("entidad_id")
+        if entidad_id not in familias:
+            continue
+        permitidas = cobertura.FACETAS_POR_FAMILIA[familias[entidad_id]]
+        facetas = ent.get("facetas")
+        limpias = []
+        if isinstance(facetas, list):
+            for faceta in facetas:
+                if faceta in permitidas and faceta not in limpias:
+                    limpias.append(faceta)
+        entidades.append({"entidad_id": entidad_id, "facetas": limpias})
+    return {"tipo": tipo, "calidad": calidad, "idioma": idioma,
+            "entidades": entidades}
+
+
+def construir_prompt(seccion, candidatos):
+    """(sistema, usuario) para juzgar una sección con sus candidatos."""
+    lineas = []
+    for c in candidatos:
+        facetas = ", ".join(cobertura.FACETAS_POR_FAMILIA[c["familia"]])
+        lineas.append('- %s (%s, familia %s). Facetas permitidas: %s'
+                      % (c["entidad_id"], c["nombre"], c["familia"], facetas))
+    texto = (seccion.get("texto") or "")[:MAX_TEXTO_PROMPT]
+    usuario = (
+        "FRAGMENTO (título: %s):\n%s\n\n"
+        "CANDIDATOS (elige SOLO entre estos ids y sus facetas permitidas):\n%s\n\n"
+        'Responde con JSON: {"tipo":"conocimiento|lectura_trabajada|'
+        'publicidad|relleno|ficcion|otro","calidad":1-5,"idioma":"es|en|otro",'
+        '"entidades":[{"entidad_id":"...","facetas":["..."]}]}'
+        % (seccion.get("titulo") or "(sin título)", texto, "\n".join(lineas)))
+    return SISTEMA_PROMPT, usuario
+
+
+def juzgar_seccion(cliente, seccion, candidatos, reintentos=1):
+    """Juzga una sección con el LLM. Un JSON inválido admite `reintentos`
+    llamadas más; si persiste el fallo, devuelve `{"tipo": "error", ...}`.
+    """
+    sistema, usuario = construir_prompt(seccion, candidatos)
+    motivo = None
+    llamadas = 0
+    for intento in range(reintentos + 1):
+        try:
+            respuesta = cliente.chat(sistema, usuario)
+            llamadas += 1
+            juicio = parsear_respuesta(respuesta, candidatos)
+            juicio["llamadas"] = llamadas
+            return juicio
+        except ValueError as exc:
+            motivo = str(exc)
+            if intento < reintentos:
+                usuario = (usuario + "\n\n[INTENTO %d FALLÓ: %s]\n"
+                           "Responde SOLO con el JSON corregido."
+                           % (intento + 1, exc))
+        except Exception as exc:  # fallo de red u otro del endpoint
+            llamadas += 1
+            motivo = "fallo de llamada: %s" % exc
+            break
+    return {"tipo": "error", "calidad": 0, "idioma": "otro",
+            "entidades": [], "motivo": motivo, "llamadas": llamadas}

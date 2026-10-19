@@ -98,3 +98,144 @@ class CandidatosAstroNumerologia(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+import json as _json
+
+import llm_client
+
+
+_CANDIDATOS = [
+    {"entidad_id": "tarot-mayor-01", "familia": "tarot", "nombre": "El Loco"},
+    {"entidad_id": "tarot-mayor-20", "familia": "tarot", "nombre": "El Sol"},
+]
+
+
+class ParsearRespuesta(unittest.TestCase):
+    """T22.2: parser y validador estricto de la respuesta del juez."""
+
+    def _juicio(self, texto):
+        return juez.parsear_respuesta(texto, _CANDIDATOS)
+
+    def test_json_en_bloque_de_codigo(self):
+        texto = ('Aquí está mi juicio:\n```json\n'
+                 '{"tipo": "conocimiento", "calidad": 4, "idioma": "es", '
+                 '"entidades": [{"entidad_id": "tarot-mayor-01", '
+                 '"facetas": ["significado_general", "amor"]}]}'
+                 '\n```')
+        juicio = self._juicio(texto)
+        self.assertEqual(juicio["tipo"], "conocimiento")
+        self.assertEqual(juicio["calidad"], 4)
+        self.assertEqual(juicio["entidades"][0]["facetas"],
+                         ["significado_general", "amor"])
+
+    def test_json_sin_bloque(self):
+        texto = _json.dumps({
+            "tipo": "lectura_trabajada", "calidad": 3, "idioma": "en",
+            "entidades": [{"entidad_id": "tarot-mayor-20",
+                           "facetas": ["simbolismo"]}]})
+        juicio = self._juicio(texto)
+        self.assertEqual(juicio["tipo"], "lectura_trabajada")
+        self.assertEqual(juicio["idioma"], "en")
+
+    def test_faltan_campos_obligatorios(self):
+        with self.assertRaises(ValueError):
+            self._juicio('{"calidad": 4, "idioma": "es", "entidades": []}')
+
+    def test_tipo_invalido(self):
+        with self.assertRaises(ValueError):
+            self._juicio('{"tipo": "chorrada", "calidad": 4, "idioma": "es",'
+                         ' "entidades": []}')
+
+    def test_calidad_fuera_de_rango(self):
+        for calidad in (0, 6, "alta"):
+            with self.subTest(calidad=calidad):
+                with self.assertRaises(ValueError):
+                    self._juicio(_json.dumps({
+                        "tipo": "conocimiento", "calidad": calidad,
+                        "idioma": "es", "entidades": []}))
+
+    def test_entidades_fuera_de_candidatos_se_descartan(self):
+        texto = _json.dumps({
+            "tipo": "conocimiento", "calidad": 4, "idioma": "es",
+            "entidades": [{"entidad_id": "tarot-mayor-01",
+                           "facetas": ["amor"]},
+                          {"entidad_id": "venus|leo|planeta_en_signo",
+                           "facetas": ["significado_general"]}]})
+        juicio = self._juicio(texto)
+        self.assertEqual([e["entidad_id"] for e in juicio["entidades"]],
+                         ["tarot-mayor-01"])
+
+    def test_facetas_invalidas_se_descartan(self):
+        texto = _json.dumps({
+            "tipo": "conocimiento", "calidad": 4, "idioma": "es",
+            "entidades": [{"entidad_id": "tarot-mayor-01",
+                           "facetas": ["amor", "faceta_inventada",
+                                       "significado_general"]}]})
+        juicio = self._juicio(texto)
+        self.assertEqual(juicio["entidades"][0]["facetas"],
+                         ["amor", "significado_general"])
+
+    def test_idioma_desconocido_pasa_a_otro(self):
+        texto = _json.dumps({
+            "tipo": "conocimiento", "calidad": 4, "idioma": "de",
+            "entidades": []})
+        self.assertEqual(self._juicio(texto)["idioma"], "otro")
+
+    def test_json_roto_lanza_valor_error(self):
+        with self.assertRaises(ValueError):
+            self._juicio("no hay ningún json aquí")
+
+    def test_entidades_no_lista(self):
+        with self.assertRaises(ValueError):
+            self._juicio('{"tipo": "conocimiento", "calidad": 4,'
+                         ' "idioma": "es", "entidades": "tarot-mayor-01"}')
+
+
+class JuzgarSeccion(unittest.TestCase):
+    """T22.2: la llamada al LLM admite un reintento y si no, `error`."""
+
+    def test_reintento_tras_json_invalido(self):
+        respuestas = ["pura paja sin json",
+                      _json.dumps({"tipo": "conocimiento", "calidad": 4,
+                                   "idioma": "es",
+                                   "entidades": [{"entidad_id":
+                                                   "tarot-mayor-01",
+                                                   "facetas": ["amor"]}]})]
+        llamadas = []
+
+        def simulado(sistema, usuario):
+            llamadas.append(usuario)
+            return respuestas[min(len(llamadas) - 1, len(respuestas) - 1)]
+
+        cliente = llm_client.LLMClient(simulado=simulado)
+        juicio = juez.juzgar_seccion(cliente, _seccion("The Fool", "texto"),
+                                    _CANDIDATOS)
+        self.assertEqual(juicio["tipo"], "conocimiento")
+        self.assertEqual(len(llamadas), 2)
+
+    def test_error_tras_dos_fallos(self):
+        def simulado(sistema, usuario):
+            return "sin json"
+
+        cliente = llm_client.LLMClient(simulado=simulado)
+        juicio = juez.juzgar_seccion(cliente, _seccion("The Fool", "texto"),
+                                    _CANDIDATOS)
+        self.assertEqual(juicio["tipo"], "error")
+
+    def test_prompt_trunca_seccion_y_lista_candidatos(self):
+        capturado = {}
+
+        def simulado(sistema, usuario):
+            capturado["sistema"] = sistema
+            capturado["usuario"] = usuario
+            return _json.dumps({"tipo": "relleno", "calidad": 1,
+                                "idioma": "es", "entidades": []})
+
+        cliente = llm_client.LLMClient(simulado=simulado)
+        largo = "palabra " * 2000
+        juez.juzgar_seccion(cliente, _seccion("The Fool", largo),
+                            _CANDIDATOS)
+        self.assertLessEqual(len(capturado["usuario"]), 9000)
+        self.assertIn("tarot-mayor-01", capturado["usuario"])
+        self.assertIn("El Loco", capturado["usuario"])
