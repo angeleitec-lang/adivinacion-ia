@@ -215,5 +215,52 @@ class ContadorAstrologia(unittest.TestCase):
         self.assertFalse(any(k.startswith("casa:") for k in cont))
 
 
+class ContadorNumerologia(unittest.TestCase):
+    def _contar(self, pares):
+        contadores = {}
+        cobertura_dataset.contar_numerologia(pares, contadores)
+        return contadores
+
+    def test_camino_de_vida(self):
+        cont = self._contar([("", "tu camino de vida es 7")])
+        self.assertEqual(cont["numero:07"]["pares_respuesta"], 1)
+        self.assertEqual(cont["numero:07"]["etiqueta"], "Número 7")
+        self.assertEqual(cont["numero:07"]["familia"], "numerologia")
+
+    def test_numero_maestro(self):
+        cont = self._contar([
+            ("", "el número 11 se repite"),
+            ("", "tu número es 22"),
+            ("", "el 33 es maestro"),
+        ])
+        self.assertEqual(cont["numero:11"]["pares_respuesta"], 1)
+        self.assertEqual(cont["numero:22"]["pares_respuesta"], 1)
+        self.assertEqual(cont["numero:33"]["pares_respuesta"], 1)
+
+    def test_ano_personal_y_reducido(self):
+        cont = self._contar([
+            ("", "el año personal 3 trae cambios"),
+            ("", "tu número reducido es 9"),
+            ("", "la expresión 5 te define"),
+        ])
+        self.assertEqual(cont["numero:03"]["pares_respuesta"], 1)
+        self.assertEqual(cont["numero:09"]["pares_respuesta"], 1)
+        self.assertEqual(cont["numero:05"]["pares_respuesta"], 1)
+
+    def test_numero_a_secas_no_cuenta(self):
+        cont = self._contar([("", "me dio 3 cartas y salieron 2 espadas")])
+        self.assertFalse(any(k.startswith("numero:") for k in cont))
+
+    def test_diez_no_es_numero_numerologico(self):
+        # Solo 1-9 y maestros 11, 22, 33; «camino de vida 10» no se cuenta.
+        cont = self._contar([("", "tu camino de vida 10 no existe")])
+        self.assertFalse(any(k.startswith("numero:") for k in cont))
+
+    def test_una_vez_por_par_ambito(self):
+        cont = self._contar([("", "camino de vida 7 y año personal 3")])
+        self.assertEqual(cont["numero:07"]["pares_respuesta"], 1)
+        self.assertEqual(cont["numero:03"]["pares_respuesta"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

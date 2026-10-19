@@ -262,6 +262,62 @@ def contar_astrologia(pares, contadores):
                 c["pares_pregunta"] += 1
 
 
+# ---------------------------------------------------------------------------
+# Numerología: números 1-9 y maestros 11, 22, 33 solo en contexto (T15.4)
+# ---------------------------------------------------------------------------
+
+# Contextos que confirman que el número habla de numerología y no de cualquier
+# cifra suelta («me dio 3 cartas»). El texto se normaliza con cartas.norm (sin
+# tildes). «maestro» inmediatamente después también vale («el 33 es maestro»).
+_CONTEXTO_NUMERO_ANTES_RE = re.compile(
+    r"\bcamino de vida\b|\bnumero\b|\bano personal\b|"
+    r"\bexpresion\b|\bmotivacion\b|\bdestino\b|"
+    r"\bnumero maestro\b|\bpersona[lr]\b")
+_CONTEXTO_NUMERO_DESPUES_RE = re.compile(r"^\s+(es\s+)?maestros?\b")
+
+_NUMEROS_VALIDOS = set(range(1, 10)) | {11, 22, 33}
+
+
+def _menciones_numerologia(texto):
+    """Devuelve {clave: nombre} de números numerológicos en contexto."""
+    tn = cartas.norm(texto)
+    hallazgos = {}
+    if not tn:
+        return hallazgos
+    for m in re.finditer(r"(?<![0-9a-z])(1[0-9]|2[0-9]|3[0-9]|[1-9])(?![0-9a-z])",
+                         tn):
+        n = int(m.group(1))
+        if n not in _NUMEROS_VALIDOS:
+            continue
+        anterior = tn[max(0, m.start() - 40):m.start()]
+        posterior = tn[m.end():m.end() + 20]
+        if not (_CONTEXTO_NUMERO_ANTES_RE.search(anterior)
+                or _CONTEXTO_NUMERO_DESPUES_RE.search(posterior)):
+            continue
+        hallazgos.setdefault("numero:%02d" % n, "Número %d" % n)
+    return hallazgos
+
+
+def contar_numerologia(pares, contadores):
+    """Cuenta los números numerológicos (1-9, 11, 22, 33) mencionados en contexto.
+
+    Las claves son «numero:<nn>». Un número suelto sin contexto numerológico
+    no se cuenta, y solo se aceptan 1-9 y los maestros 11, 22 y 33.
+    """
+    for pregunta, respuesta in pares:
+        en_resp = _menciones_numerologia(respuesta)
+        en_preg = _menciones_numerologia(pregunta)
+        for clave in sorted(set(en_resp) | set(en_preg)):
+            c = _contador(contadores, clave, en_resp.get(clave)
+                          or en_preg[clave], "numerologia")
+            if clave in en_resp:
+                c["pares_respuesta"] += 1
+                if clave not in en_preg:
+                    c["solo_en_respuesta"] += 1
+            if clave in en_preg:
+                c["pares_pregunta"] += 1
+
+
 if __name__ == "__main__":
     import argparse
 
