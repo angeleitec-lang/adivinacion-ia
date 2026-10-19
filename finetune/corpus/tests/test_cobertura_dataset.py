@@ -99,5 +99,52 @@ class LectorShareGPT(unittest.TestCase):
             self.assertEqual(pares[0][1], "parte1 parte2")
 
 
+class ContadorCartas(unittest.TestCase):
+    def _contar(self, pares):
+        contadores = {}
+        cobertura_dataset.contar_cartas(pares, contadores)
+        return contadores
+
+    def test_loco_invertido_en_respuesta(self):
+        cont = self._contar([("otras cosas", "El Loco invertido anuncia un cambio.")])
+        c = cont["tarot:tarot-mayor-01"]
+        self.assertEqual(c["etiqueta"], "El Loco")
+        self.assertEqual(c["familia"], "tarot")
+        self.assertEqual(c["pares_respuesta"], 1)
+        self.assertEqual(c["pares_pregunta"], 0)
+        self.assertEqual(c["solo_en_respuesta"], 1)
+        self.assertEqual(c["invertidas"], 1)
+
+    def test_menores_de_tarot(self):
+        cont = self._contar([("", "veo el tres de copas, el as de oros y la sota de espadas")])
+        self.assertEqual(cont["tarot:tarot-copas-03"]["pares_respuesta"], 1)
+        self.assertEqual(cont["tarot:tarot-oros-01"]["pares_respuesta"], 1)
+        self.assertEqual(cont["tarot:tarot-espadas-11"]["pares_respuesta"], 1)
+        self.assertEqual(cont["tarot:tarot-copas-03"]["invertidas"], 0)
+
+    def test_repetida_en_el_mismo_par_cuenta_una_vez(self):
+        cont = self._contar([("", "el dos de bastos y de nuevo el dos de bastos")])
+        self.assertEqual(cont["tarot:tarot-bastos-02"]["pares_respuesta"], 1)
+
+    def test_negativo_loco_del_pueblo_no_es_carta(self):
+        cont = self._contar([("", "el loco del pueblo cruzó corriendo la plaza")])
+        self.assertNotIn("tarot:tarot-mayor-01", cont)
+
+    def test_baraja_espanola_en_su_familia(self):
+        cont = self._contar([("¿el tres de bastos?", "salió el tres de bastos")])
+        espanola = cont["espanol:naipe-bastos-03"]
+        self.assertEqual(espanola["familia"], "espanola")
+        self.assertEqual(espanola["pares_respuesta"], 1)
+        self.assertEqual(espanola["pares_pregunta"], 1)
+        self.assertEqual(espanola["solo_en_respuesta"], 0)
+
+    def test_solo_en_pregunta(self):
+        cont = self._contar([("¿Qué significa la reina de copas?", "hablo de otra cosa")])
+        c = cont["tarot:tarot-copas-13"]
+        self.assertEqual(c["pares_respuesta"], 0)
+        self.assertEqual(c["pares_pregunta"], 1)
+        self.assertEqual(c["solo_en_respuesta"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

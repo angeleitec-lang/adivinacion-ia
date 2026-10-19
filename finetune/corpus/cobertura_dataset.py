@@ -9,12 +9,15 @@ de un mínimo. Formato de entrada: ShareGPT ({"conversations": [{"from":
 
 API:
     leer_pares(rutas)                       -> ([(pregunta, respuesta)], stats)
+    contar_cartas(pares, contadores)        -> rellena contadores por carta
 Diseñado para no depender de la matriz de cobertura de fuentes (T14).
 """
 
 from __future__ import annotations
 
 import json
+
+import cartas
 
 
 def leer_pares(rutas):
@@ -61,6 +64,58 @@ def leer_pares(rutas):
                 pares.append((" ".join(humano), " ".join(gpt)))
     stats["pares"] = len(pares)
     return pares, stats
+
+
+_FAMILIAS_CARTAS = (("tarot", "tarot"), ("espanol", "espanola"))
+
+
+def _contador(contadores, clave, etiqueta, familia):
+    """Devuelve (creándolo si falta) el contador de una entidad."""
+    if clave not in contadores:
+        contadores[clave] = {
+            "etiqueta": etiqueta,
+            "familia": familia,
+            "pares_respuesta": 0,
+            "pares_pregunta": 0,
+            "solo_en_respuesta": 0,
+        }
+    return contadores[clave]
+
+
+def _menciones_cartas(texto, mazo):
+    """Menciones de cartas del mazo agrupadas por clave; «invertida» es True
+    si alguna mención del texto viene invertida. Se apoya en
+    cartas.extraer_cartas (no reimplementa el reconocimiento)."""
+    por_clave = {}
+    for m in cartas.extraer_cartas(texto, mazo=mazo):
+        clave = "{}:{}".format(mazo, m["carta"]["id"])
+        dato = por_clave.setdefault(
+            clave, {"nombre": m["carta"]["nombre"], "invertida": False})
+        if m["orientacion"] == "invertida":
+            dato["invertida"] = True
+    return por_clave
+
+
+def contar_cartas(pares, contadores):
+    """Cuenta los pares que mencionan cada carta de tarot y de baraja
+    española. Una carta cuenta una sola vez por par; en «invertidas» se
+    suman los pares cuya respuesta la trae invertida. Clave: «<mazo>:<id>»."""
+    for pregunta, respuesta in pares:
+        for mazo, familia in _FAMILIAS_CARTAS:
+            en_resp = _menciones_cartas(respuesta, mazo)
+            en_preg = _menciones_cartas(pregunta, mazo)
+            for clave in sorted(set(en_resp) | set(en_preg)):
+                dato = en_resp[clave] if clave in en_resp else en_preg[clave]
+                c = _contador(contadores, clave, dato["nombre"], familia)
+                c.setdefault("invertidas", 0)
+                if clave in en_resp:
+                    c["pares_respuesta"] += 1
+                    if clave not in en_preg:
+                        c["solo_en_respuesta"] += 1
+                    if en_resp[clave]["invertida"]:
+                        c["invertidas"] += 1
+                if clave in en_preg:
+                    c["pares_pregunta"] += 1
 
 
 if __name__ == "__main__":
