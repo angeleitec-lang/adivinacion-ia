@@ -1,0 +1,179 @@
+{
+  "descripcion": "Índices de sitios web en español para el pipeline T25 (baraja española, tarot, astrología, numerología). Verificados con sondeo real 2026-10-19: todos los índices responden 200 y los robots.txt permiten las rutas usadas.",
+  "sitios": [
+    {
+      "nombre": "forotarot.net",
+      "tipo": "foro",
+      "indice": [
+        "https://www.forotarot.net/foro-interpretaciones",
+        "https://www.forotarot.net/foro-combinaciones",
+        "https://www.forotarot.net/foro-tiradas-de-cartas"
+      ],
+      "regex": "/tema-[^/?#]+$",
+      "dominio": "forotarot.net",
+      "familia": "baraja_espanola",
+      "prioridad": "alta",
+      "nota": "Foro MyBB. Secciones /foro-*, hilos públicos /tema-<slug>. Robots prohíbe /usercp, /login, /post/*; los hilos están permitidos."
+    },
+    {
+      "nombre": "eragon8.blogspot.com",
+      "tipo": "blog",
+      "indice": [
+        "https://eragon8.blogspot.com/2013/02/la-baraja-espanola.html",
+        "https://eragon8.blogspot.com/2013/05/",
+        "https://eragon8.blogspot.com/2013/04/"
+      ],
+      "regex": "/2013/\\d{2}/[^/?#]+\\.html$",
+      "dominio": "eragon8.blogspot.com",
+      "familia": "baraja_espanola",
+      "prioridad": "alta",
+      "nota": "Serie de baraja española: entrega II en 2013/02, entrega 3 (combinaciones) en 2013/05. No usar /search/label (prohibido por robots)."
+    },
+    {
+      "nombre": "tarotdestrella.blogspot.com",
+      "tipo": "blog",
+      "indice": [
+        "https://tarotdestrella.blogspot.com/2019/03/baraja-espanola-combinaciones-i.html"
+      ],
+      "regex": "/\\d{4}/\\d{2}/[^/?#]+\\.html$",
+      "dominio": "tarotdestrella.blogspot.com",
+      "familia": "baraja_espanola",
+      "prioridad": "alta",
+      "nota": "Combinaciones de baraja española; el post enlaza entradas de 2017-2019 del mismo tema."
+    },
+    {
+      "nombre": "astrologuias.com",
+      "tipo": "guia",
+      "indice": [
+        "https://astrologuias.com/baraja-espanola/"
+      ],
+      "regex": "/baraja-espanola/[^/?#]+/$",
+      "dominio": "astrologuias.com",
+      "familia": "baraja_espanola",
+      "prioridad": "alta",
+      "nota": "Guía completa: una página por naipe (as, 2-9, caballo, sota, rey de copas, bastos, espadas y oros)."
+    },
+    {
+      "nombre": "instantesconrosmeris.com",
+      "tipo": "blog",
+      "indice": [
+        "https://instantesconrosmeris.com/"
+      ],
+      "regex": "(?:baraja|cartas)-espanolas?",
+      "dominio": "instantesconrosmeris.com",
+      "familia": "baraja_espanola",
+      "prioridad": "media",
+      "nota": "La portada enlaza artículos de baraja y cartas españolas (historia, combinaciones, tiradas)."
+    },
+    {
+      "nombre": "tarotsevilla.com",
+      "tipo": "blog",
+      "indice": [
+        "https://tarotsevilla.com/blog/cartas-espanolas-tarot/"
+      ],
+      "regex": "/blog/[^/?#]+/$",
+      "dominio": "tarotsevilla.com",
+      "familia": "baraja_espanola",
+      "prioridad": "media",
+      "nota": "Cuatro posts de cartas españolas, tiradas y significado."
+    },
+    {
+      "nombre": "tarotsevilla.top",
+      "tipo": "guia",
+      "indice": [
+        "https://tarotsevilla.top/baraja-espanola/",
+        "https://tarotsevilla.top/articulos/"
+      ],
+      "regex": "/(?:as|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|caballo|sota|rey)-de-(?:bastos|copas|espadas|oros)/",
+      "dominio": "tarotsevilla.top",
+      "familia": "baraja_espanola",
+      "prioridad": "media",
+      "nota": "Páginas por naipe enlazadas desde /baraja-espanola/ y /articulos/."
+    },
+    {
+      "nombre": "brisademartarot.blogspot.com",
+      "tipo": "blog",
+      "indice": [
+        "https://brisademartarot.blogspot.com/"
+      ],
+      "regex": "/p/(?!baraja-francesa)[^/?#]+\\.html$",
+      "dominio": "brisademartarot.blogspot.com",
+      "familia": "tarot",
+      "prioridad": "media",
+      "nota": "Mazos diversos (gitano-ruso, egipcio, hadas, oráculos). El lookahead excluye baraja francesa para no mezclar sistemas."
+    },
+    {
+      "nombre": "tarotsi.gratis",
+      "tipo": "guia",
+      "indice": [
+        "https://tarotsi.gratis/tarot-baraja-espanola-interpretacion-de-las-48-cartas.html",
+        "https://tarotsi.gratis/interpretaciones-tarot-y-oraculos"
+      ],
+      "regex": "/tarot-[^/?#]+\\.html$",
+      "dominio": "tarotsi.gratis",
+      "familia": "tarot",
+      "prioridad": "media",
+      "nota": "Guías de interpretación por mazo (48 cartas españolas, osho, egipcio, gitano, runico...)."
+    },
+    {
+      "nombre": "euroresidentes.com",
+      "tipo": "curso",
+      "indice": [
+        "https://www.euroresidentes.com/entretenimiento/curso-tarot/"
+      ],
+      "regex": "/entretenimiento/curso-tarot/[^/?#]+/$",
+      "dominio": "euroresidentes.com",
+      "familia": "tarot",
+      "prioridad": "alta",
+      "nota": "Curso de tarot de ~23 lecciones bien estructuradas."
+    },
+    {
+      "nombre": "eclectica.com.ar",
+      "tipo": "blog",
+      "indice": [
+        "https://www.eclectica.com.ar/blog/"
+      ],
+      "regex": "/\\d{4}/\\d{2}/\\d{2}/[^/?#]+/$",
+      "dominio": "eclectica.com.ar",
+      "familia": "tarot",
+      "prioridad": "media",
+      "nota": "Blog con posts fechados sobre tarot y cartomancia."
+    },
+    {
+      "nombre": "angelestarotyvidencia.com",
+      "tipo": "guia",
+      "indice": [
+        "https://angelestarotyvidencia.com/articulos/combinaciones-del-tarot/"
+      ],
+      "regex": "/articulos/combinaciones-del-tarot/[^/?#]+/$",
+      "dominio": "angelestarotyvidencia.com",
+      "familia": "tarot",
+      "prioridad": "alta",
+      "nota": "Doce artículos de combinaciones de cartas, uno por combinación."
+    },
+    {
+      "nombre": "grupovenus.com",
+      "tipo": "curso",
+      "indice": [
+        "https://grupovenus.com/cursos/"
+      ],
+      "regex": "/cursos/[^/?#]+\\.htm$",
+      "dominio": "grupovenus.com",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "Cursos de astrología (curso base, kryon, astroreloj, solar)."
+    },
+    {
+      "nombre": "losarcanos.com",
+      "tipo": "herramientas",
+      "indice": [
+        "https://losarcanos.com/camino-de-la-vida.php"
+      ],
+      "regex": "/(?:camino-de-la-vida|arcano-de-vida|arcano_dia|matriz-del-destino|numero)\\.php$",
+      "dominio": "losarcanos.com",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "Herramientas y explicaciones de numerología aplicada al tarot."
+    }
+  ]
+}
