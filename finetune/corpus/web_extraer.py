@@ -62,25 +62,6 @@ def _yaml_dumper(data: Dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Frases de navegación/comercial a eliminar (insensible a mayúsculas)
-# ---------------------------------------------------------------------------
-
-FRASES_RUIDO = [
-    "suscríbete", "suscribete", "subscribe",
-    "compra", "comprar", "buy", "añadir al carrito", "añadir al carrito",
-    "agregar al carrito", "add to cart", "ver productos", "ver productos relacionados",
-    "lee también", "leer también", "read also", "continúa leyendo", "continuar leyendo",
-    "regístrate", "registrate", "sign up", "iniciar sesión", "iniciar sesion",
-    "cookie", "política de privacidad", "privacy policy", "términos de uso",
-    "terms of service", "aceptar cookies", "accept cookies",
-    "publicidad", "advertisement", "anuncio", "sponsored",
-    "newsletter", "boletín", "boletin", "no te pierdas",
-    "síguenos", "siguenos", "follow us", "compártelo", "compartelo",
-    "share", "whatsapp", "telegram", "facebook", "twitter", "instagram",
-]
-
-
-# ---------------------------------------------------------------------------
 # Funciones de limpieza
 # ---------------------------------------------------------------------------
 
@@ -135,6 +116,35 @@ def _limpiar_ruido(texto: str) -> str:
     return "\n".join(limpias)
 
 
+def _limpiar_marcas_titulo(t: str) -> str:
+    """Quita marcas de negrita/cursiva y normaliza espacios del título."""
+    t = t.replace("**", "").replace("__", "")
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _extraer_titulo(md: str, html: str = "") -> str:
+    """Título: primer encabezado #/## del Markdown; si no, el <title> del HTML;
+
+    y si no, la primera línea corta (≤ 120 caracteres) sin marcas ``**``.
+    """
+    for l in md.splitlines():
+        m = re.match(r"^#{1,2}\s+(.+)$", l.strip())
+        if m:
+            t = _limpiar_marcas_titulo(m.group(1))
+            if t:
+                return t[:200]
+    m = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+    if m:
+        t = _limpiar_marcas_titulo(m.group(1))
+        if t:
+            return t[:200]
+    for l in md.splitlines():
+        s = l.strip()
+        if s and len(s) <= 120 and "**" not in s:
+            return s
+    return ""
+
+
 def _sha256(texto: str) -> str:
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()
 
@@ -186,14 +196,8 @@ def extraer(
     # Detectar idioma (simple, basado en trafilatura o heurística)
     idioma = "es"  # default para nuestro corpus
 
-    # Título: primera línea que parece título (heurística simple)
-    lineas = md.splitlines()
-    titulo = ""
-    for l in lineas:
-        l_strip = l.strip()
-        if l_strip and not l_strip.startswith("#") and len(l_strip) > 5:
-            titulo = l_strip[:200]
-            break
+    # Título: encabezado #/##, si no <title> del HTML, si no línea corta sin **
+    titulo = _extraer_titulo(md, html)
 
     chars = len(md)
     sha = hashlib.sha256(md.encode("utf-8")).hexdigest()

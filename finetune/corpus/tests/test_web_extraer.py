@@ -9,7 +9,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import unittest
 
-from web_extraer import extraer, guardar_markdown, _limpiar_ruido
+import web_extraer
+from web_extraer import extraer, guardar_markdown, _limpiar_ruido, _extraer_titulo
 
 
 class LimpiarRuidoTests(unittest.TestCase):
@@ -70,6 +71,45 @@ class LimpiarRuidoTests(unittest.TestCase):
     def test_conserva_prosa_sin_ruido(self):
         res = _limpiar_ruido("El tarot de Marsella tiene setenta y ocho cartas")
         self.assertIn("setenta y ocho", res)
+
+
+class DuplicadoFrasesTests(unittest.TestCase):
+    def test_frases_ruido_definida_una_sola_vez(self):
+        src = Path(web_extraer.__file__).read_text(encoding="utf-8")
+        self.assertEqual(src.count("FRASES_RUIDO = ["), 1)
+
+
+class TituloTests(unittest.TestCase):
+    def test_prefiere_encabezado_h2(self):
+        md = "Introducción cualquiera del cuerpo del artículo.\n\n## Elemento: **Fuego**\n\nMás texto."
+        self.assertEqual(_extraer_titulo(md, ""), "Elemento: Fuego")
+
+    def test_prefiere_encabezado_sobre_title(self):
+        md = "# La Emperatriz\n\nCuerpo del artículo."
+        html = "<html><head><title>Titulo HTML</title></head></html>"
+        self.assertEqual(_extraer_titulo(md, html), "La Emperatriz")
+
+    def test_sin_encabezado_usa_title_html(self):
+        md = "Texto plano sin ningún encabezado en el markdown."
+        html = "<html><head><title>El Colgado — Tarot</title></head></html>"
+        self.assertEqual(_extraer_titulo(md, html), "El Colgado — Tarot")
+
+    def test_sin_encabezado_ni_title_primera_linea_corta_sin_marcas(self):
+        md = "**Los nacidos bajo la influencia de Júpiter**\nEl oráculo revela el camino."
+        self.assertEqual(_extraer_titulo(md, ""), "El oráculo revela el camino.")
+
+    def test_fallback_rechaza_linea_larga(self):
+        md = "x" * 150 + "\nLínea corta válida."
+        self.assertEqual(_extraer_titulo(md, ""), "Línea corta válida.")
+
+    def test_extraer_titulo_sin_marcas_negrita(self):
+        cuerpo = "Contenido extenso sobre el elemento fuego en astrología para superar el mínimo. " * 30
+        html = ("<html><head><title>Astrologuias: fuego</title></head><body><article>"
+                "<h2>Elemento: <strong>Fuego</strong></h2><p>" + cuerpo + "</p></article></body></html>")
+        res = extraer(html, "https://astrologuias.example/fuego", min_chars=200)
+        self.assertIsNotNone(res)
+        self.assertTrue(res["titulo"])
+        self.assertNotIn("**", res["titulo"])
 
 
 class ExtraerTests(unittest.TestCase):
