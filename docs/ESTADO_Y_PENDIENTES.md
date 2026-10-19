@@ -111,6 +111,10 @@
 
 **Residuos menores:** `web_indices.py` aún deja pasar `href="/ruta/#top"` que apunta a la propia página índice (lo filtra el regex) y tiene la errata «separte» en un docstring; no se ha repetido la prueba real de A4 (≤ 5 vídeos) ni la de A2 (1–2 libros). Algunas IAs han commiteado en `main` en vez de en su rama: verificar siempre `git branch --show-current` en el prompt.
 
+## 8c. Primera cobertura real (2026-10-19, solo web en español)
+
+Datos en `/Users/angelgonzalez/fase0/` (fuera del repo): `web/` (170 páginas de 14 sitios, `informe.md`), `evidencias_web/` (146 secciones juzgadas, 1.283 evidencias, calidad media 3,93; 27 lecturas trabajadas), `cobertura_web.json|md`. Celdas con ≥ 1 fuente: baraja española 372/480, tarot 325/936, astrología+numerología 63/6.039; con ≥ 3 fuentes: 36, 24 y 0; **completas (5 fuentes, 1 clásica, 2 modernas, 1 en español): 0**, porque la web aporta solo fuentes modernas y como mucho 14 dominios independientes. Falta: libros (clásicas), YouTube, y sobre todo astrología (planeta×signo, planeta×casa, aspectos) y numerología en español.
+
 ## 9. Pendientes (el punto 1, unificar `generate_tasks.py` con `calculos/`, ya está hecho) (en este orden)
 
 0. **Orientarse (5 min):** leer este documento; `git log --oneline | head`; `./finetune/scripts/check.sh`.
