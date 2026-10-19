@@ -101,7 +101,17 @@
 
 **Aviso:** las horas que anotan IA-9 e IA-10 en sus `ESTADO.md` son inventadas (p. ej. `01:15`, `02:45` cuando eran las 00:36). No usarlas como registro.
 
-## 9. Pendientes para mañana (en este orden)
+## 8b. Actualización 2026-10-19 (tarde)
+
+**Integradas hoy en `main`:** T12 (filtro opcional `--min-density`, umbral recomendado 2,0, NO activado), T11 (el segmentador de libros ya no marca prosa como material preliminar), T10 (nodos lunares medios en trópico + tránsitos a nodos; la reexportación de biorritmos es ahora `calcular_biorritmos`), T9 (`generate_tasks.py` delega en `calculos/`; 10.636 trabajos sin cambios), T13 (descubrimiento con enlaces relativos y varios índices; `aeclectic.net` da 78 URLs y `tarotrossana.com` 78 cartas en español). Prueba real de A3 (22 URLs, 5 sitios): 21 extraídas.
+
+**En curso (worktrees en `.worktrees/`):** T14 `cobertura.py` (matriz de cobertura de fuentes), T15 `cobertura_dataset.py` (cobertura del dataset), T16 multi-turno real en dos fases (toca `generate_tasks.py`, `generate_synthetic.py`, `validate_synthetic.py`). Tras integrar T16: matar los generadores suspendidos (PID 66101, 66396) y regenerar trabajos.
+
+**Decisiones del usuario:** acceso a `Pepere45/spanish-esotericism-corpus` solicitado (sin respuesta); no tiene PDFs/EPUB propios, compra de libros digitales autorizada avisando antes; filtro de licencias estricto NO se aplica por ahora.
+
+**Residuos menores:** `web_indices.py` aún deja pasar `href="/ruta/#top"` que apunta a la propia página índice (lo filtra el regex) y tiene la errata «separte» en un docstring; no se ha repetido la prueba real de A4 (≤ 5 vídeos) ni la de A2 (1–2 libros). Algunas IAs han commiteado en `main` en vez de en su rama: verificar siempre `git branch --show-current` en el prompt.
+
+## 9. Pendientes (el punto 1, unificar `generate_tasks.py` con `calculos/`, ya está hecho) (en este orden)
 
 0. **Orientarse (5 min):** leer este documento; `git log --oneline | head`; `./finetune/scripts/check.sh`.
 1. **Unificar `generate_tasks.py` con `calculos/`:** T1 conserva sus propias `calcular_carta`, `camino_de_vida`, `anio_personal`; C1 tiene versiones independientes. Las dos están verificadas, pero hay que elegir una (la de `calculos/`) y que el generador la importe, con test de equivalencia. Pista pequeña para una IA.
