@@ -20,6 +20,16 @@ def fila(prompt, respuesta, **extra):
     return d
 
 
+def fila_multi(pares, **extra):
+    msgs = [{"from": "system", "value": "Eres una experta en adivinación."}]
+    for h, g in pares:
+        msgs.append({"from": "human", "value": h})
+        msgs.append({"from": "gpt", "value": g})
+    d = {"conversations": msgs, "turnos": len(pares)}
+    d.update(extra)
+    return d
+
+
 RESPUESTA_TAROT = (
     "En esta tirada, El Loco te habla de un comienzo inesperado en tu vida laboral. "
     "Tu carta sugiere que te atrevas a dar un salto aunque el camino no esté trazado; "
@@ -181,6 +191,89 @@ class Informe(unittest.TestCase):
         md = aud.informe_md(informe)
         self.assertIn("Informe de auditoría", md)
         self.assertIn("cobertura", md.lower())
+
+
+RESPUESTA_LUNA = (
+    "La Luna en tu tirada habla de ilusiones y miedos que aún no ves con claridad; "
+    "el tarot te pide que no tomes decisiones importantes bajo su luz engañosa, "
+    "porque los arcanos sugieren que algo se oculta tras la apariencia y que tu "
+    "intuición debe guiarte con prudencia en las próximas semanas de incertidumbre, "
+    "observando los sueños y las señales que el subconsciente te envía cada noche."
+)
+
+
+class TestMultiTurno(unittest.TestCase):
+    def test_extraer_pares_devuelve_todos_los_pares(self):
+        f = fila_multi([("¿Qué me dice El Loco?", RESPUESTA_TAROT),
+                       ("¿Y el Ermitaño?", RESPUESTA_ENCICLOPEDICA)])
+        pares = aud.extraer_pares(f)
+        self.assertEqual(len(pares), 2)
+        self.assertEqual(pares[0][0], "¿Qué me dice El Loco?")
+        self.assertEqual(pares[1][1], RESPUESTA_ENCICLOPEDICA)
+
+    def test_extraer_conserva_el_ultimo_par(self):
+        f = fila_multi([("p1", "r1"), ("p2", "r2")])
+        self.assertEqual(aud.extraer(f), ("p2", "r2"))
+
+    def test_par_malo_en_turno_dos_hunde_la_fila(self):
+        f = fila_multi([
+            ("¿Qué me dice El Loco en mi tirada sobre el trabajo?", RESPUESTA_TAROT),
+            ("¿Qué significa Televisión?",
+             "La televisión es un sistema de transmisión de imágenes y sonido."),
+        ])
+        score, motivos, _ = aud.puntuar(f)
+        self.assertLess(score, 0.6)
+        self.assertTrue(any(m.startswith("t2:") for m in motivos))
+        self.assertFalse(any(m.startswith("t1:") for m in motivos))
+
+    def test_ambos_pares_buenos_aceptada(self):
+        f = fila_multi([
+            ("¿Qué me dice El Loco en mi tirada sobre el trabajo?", RESPUESTA_TAROT),
+            ("¿Qué representa el Ermitaño en el tarot?", RESPUESTA_ENCICLOPEDICA),
+        ])
+        score, motivos, _ = aud.puntuar(f)
+        self.assertGreaterEqual(score, 0.6)
+        self.assertEqual(motivos, [])
+
+    def test_un_turno_sin_prefijo_como_hoy(self):
+        _, motivos_ok, _ = aud.puntuar(
+            fila("¿Qué me dice El Loco en mi tirada sobre el trabajo?", RESPUESTA_TAROT))
+        self.assertEqual(motivos_ok, [])
+        _, motivos_malo, _ = aud.puntuar(
+            fila("Sección 3: Historia de la imprenta",
+                 "La imprenta transformó Europa sin anclaje adivinatorio alguno."))
+        self.assertTrue(motivos_malo)
+        self.assertFalse(any(":" in m for m in motivos_malo))
+
+    def test_auditar_multi_turno_igual_es_duplicado(self):
+        par = [("¿Qué me dice El Loco en mi tirada sobre el trabajo?", RESPUESTA_TAROT),
+              ("¿Y el Ermitaño?", RESPUESTA_ENCICLOPEDICA)]
+        res = aud.auditar_pares([fila_multi(par), fila_multi(list(par))])
+        self.assertNotIn("duplicado", res[0]["motivos"])
+        self.assertIn("duplicado", res[1]["motivos"])
+        self.assertFalse(res[1]["aceptado"])
+
+    def test_auditar_multi_turno_parcialmente_igual_no_es_duplicado(self):
+        f1 = fila_multi([
+            ("¿Qué me dice El Loco en mi tirada sobre el trabajo?", RESPUESTA_TAROT),
+            ("¿Y el Ermitaño?", RESPUESTA_ENCICLOPEDICA)])
+        f2 = fila_multi([
+            ("¿Qué me dice El Loco en mi tirada sobre el trabajo?", RESPUESTA_TAROT),
+            ("¿Y La Luna?", RESPUESTA_LUNA)])
+        res = aud.auditar_pares([f1, f2])
+        self.assertNotIn("duplicado", res[0]["motivos"])
+        self.assertNotIn("duplicado", res[1]["motivos"])
+
+    def test_informe_cobertura_y_longitudes_multi_turno(self):
+        f = fila_multi([
+            ("¿Qué me dice El Loco en mi tirada sobre el trabajo?", RESPUESTA_TAROT),
+            ("¿Y La Luna?", RESPUESTA_LUNA)])
+        res = aud.auditar_pares([f])
+        informe = aud.construir_informe(res, 0.6)
+        self.assertEqual(informe["aceptados"], 1)
+        self.assertGreater(informe["longitudes"]["min"], len(RESPUESTA_TAROT))
+        self.assertEqual(informe["ejemplos_aceptados"][0]["prompt"],
+                         "¿Qué me dice El Loco en mi tirada sobre el trabajo?")
 
 
 if __name__ == "__main__":
