@@ -159,9 +159,28 @@ def domain_score(text: str) -> tuple[int, int]:
     return (len(_strong_set(text)), len(_weak_set(text)))
 
 
-def is_relevant(topic: str, body: str, doc: str, min_terms: int = 2) -> bool:
+def density_fuertes(text: str) -> float:
+    """Ocurrencias de términos fuertes por cada 1.000 palabras del texto.
+
+    Devuelve 0.0 si el texto no tiene palabras (nunca divide por cero) o si su
+    único término fuerte distinto es «oposición», que no ancla el dominio."""
+    palabras = len((text or "").split())
+    if palabras == 0:
+        return 0.0
+    ocurrencias = [m.group(1).lower() for m in STRONG_RE.finditer(text or "")]
+    if set(ocurrencias) == {"oposición"}:
+        return 0.0
+    return len(ocurrencias) * 1000.0 / palabras
+
+
+def is_relevant(topic: str, body: str, doc: str, min_terms: int = 2,
+                min_density: float = 0.0) -> bool:
     """Relevante si fuertes >= min_terms, o fuertes >= 1 y débiles >= min_terms.
-    Los débiles solos nunca bastan; min_terms <= 0 desactiva el filtro."""
+    Los débiles solos nunca bastan; min_terms <= 0 desactiva ese filtro.
+    min_density exige fuertes por 1.000 palabras de cuerpo (se aplica sobre
+    `body`, no sobre el tema); 0 lo desactiva."""
+    if min_density > 0 and density_fuertes(body) < min_density:
+        return False
     if min_terms <= 0:
         return True
     fuertes_set = _strong_raw(body) | _strong_raw(topic)
@@ -464,8 +483,12 @@ def iter_markdown(raw_dir: Path) -> list[tuple[str, str]]:
 
 def build_pairs(doc: str, md: str, rng: random.Random,
                 min_chars: int, max_chars: int,
-                min_domain_terms: int = 2) -> list[dict]:
-    """Convierte un documento markdown en pares ShareGPT."""
+                min_domain_terms: int = 2,
+                min_density: float = 0.0) -> list[dict]:
+    """Convierte un documento markdown en pares ShareGPT.
+
+    min_density exige términos fuertes por 1.000 palabras de cuerpo (0 = no
+    se aplica), para descartar secciones que solo rozan el dominio."""
     pairs = []
     for topic, body in split_sections(md, doc):
         topic = clean_inline(topic or humanize(doc))
@@ -475,7 +498,7 @@ def build_pairs(doc: str, md: str, rng: random.Random,
             continue
         if is_junk_body(body):
             continue
-        if not is_relevant(topic, body, doc, min_domain_terms):
+        if not is_relevant(topic, body, doc, min_domain_terms, min_density):
             continue
         if not es_puro(body):
             continue
@@ -534,6 +557,10 @@ def main(argv=None) -> int:
     parser.add_argument("--min-domain-terms", type=int, default=2,
                         help="Términos del dominio exigidos para aceptar un par "
                              "(0 desactiva el filtro; default: 2)")
+    parser.add_argument("--min-density", type=float, default=0.0,
+                        help="Términos fuertes por 1.000 palabras de cuerpo "
+                             "exigidos para aceptar un par (0 desactiva; "
+                             "default: 0)")
     parser.add_argument("--dry-run", action="store_true",
                         help="No escribe ficheros, solo informa de los conteos")
     parser.add_argument("--license-filter", choices=["off", "strict"],
@@ -571,7 +598,7 @@ def main(argv=None) -> int:
     by_doc: dict[str, list[dict]] = {}
     for rel, text in docs:
         pairs = build_pairs(rel, text, rng, args.min_chars, args.max_chars,
-                            args.min_domain_terms)
+                            args.min_domain_terms, args.min_density)
         if pairs:
             by_doc[rel] = pairs
 
