@@ -143,5 +143,75 @@ class Sequia(Base):
         self.assertIn("Inventario: 0 libros", salida)
 
 
+class CadenaLimpieza(Base):
+    """T24.2: limpieza → segmentación → informe sobre textos sintéticos."""
+
+    def _sembrar_crudos(self):
+        _escribir(os.path.join(self.work, "crudo", "loco-es.txt"), CRUDO_ES)
+        _escribir(os.path.join(self.work, "crudo", "the-fool-en.txt"), CRUDO_EN)
+
+    def test_cadena_hasta_informe(self):
+        self._sembrar_crudos()
+        code, _ = self.run_pipeline(work_dir=self.work,
+                                    knowledge_dir=self.knowledge,
+                                    hasta="informe", pausa=0, solo_ids="loco-es,the-fool-en")
+        self.assertEqual(code, 0)
+        for libro_id in ("loco-es", "the-fool-en"):
+            self.assertTrue(os.path.exists(os.path.join(self.work, "limpio",
+                                                        libro_id + ".txt")),
+                            "falta limpio de %s" % libro_id)
+            secciones = _leer_jsonl(os.path.join(self.work, "secciones",
+                                                 libro_id + ".jsonl"))
+            self.assertGreaterEqual(len(secciones), 1)
+            for seccion in secciones:
+                for campo in ("seccion", "titulo", "texto", "chars",
+                              "id_libro", "posicion"):
+                    self.assertIn(campo, seccion)
+                self.assertEqual(seccion["id_libro"], libro_id)
+        informe = os.path.join(self.work, "informe.md")
+        self.assertTrue(os.path.exists(informe))
+        with open(informe, encoding="utf-8") as fh:
+            texto = fh.read()
+        self.assertIn("# Informe de calidad de libros", texto)
+        self.assertIn("El loco esoterico", texto)
+
+    def test_reanudacion_no_reprocesa_limpieza(self):
+        self._sembrar_crudos()
+        self.run_pipeline(work_dir=self.work, knowledge_dir=self.knowledge,
+                          hasta="informe", pausa=0, solo_ids="loco-es,the-fool-en")
+        ruta_limpio = os.path.join(self.work, "limpio", "loco-es.txt")
+        ruta_secciones = os.path.join(self.work, "secciones", "loco-es.jsonl")
+        with open(ruta_limpio, "a", encoding="utf-8") as fh:
+            fh.write("\n#MARCA#")
+        with open(ruta_secciones, encoding="utf-8") as fh:
+            antes = fh.read()
+        self.run_pipeline(work_dir=self.work, knowledge_dir=self.knowledge,
+                          hasta="informe", pausa=0, solo_ids="loco-es,the-fool-en")
+        with open(ruta_limpio, encoding="utf-8") as fh:
+            self.assertIn("#MARCA#", fh.read())
+        with open(ruta_secciones, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), antes)
+
+    def test_epub_se_extrae_en_descarga(self):
+        import zipfile
+        capitulo = ("<html xmlns=\"http://www.w3.org/1999/xhtml\"><head>"
+                    "<title>Libro EPUB</title></head><body>"
+                    + "".join("<p>%s</p>" % _parrafo(RELLENO_ES, 10) for _ in range(8))
+                    + "</body></html>")
+        epub = os.path.join(self.base, "epubs", "epub-demo.epub")
+        os.makedirs(os.path.dirname(epub), exist_ok=True)
+        with zipfile.ZipFile(epub, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip")
+            zf.writestr("OEBPS/capitulo.xhtml", capitulo)
+        code, _ = self.run_pipeline(work_dir=self.work,
+                                    knowledge_dir=self.knowledge,
+                                    hasta="limpieza", pausa=0, solo_ids="epub-demo")
+        self.assertEqual(code, 0)
+        self.assertTrue(os.path.exists(os.path.join(self.work, "crudo",
+                                                    "epub-demo.txt")))
+        self.assertTrue(os.path.exists(os.path.join(self.work, "limpio",
+                                                    "epub-demo.txt")))
+
+
 if __name__ == "__main__":
     unittest.main()

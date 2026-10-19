@@ -23,7 +23,11 @@ import sys
 import time
 import urllib.error
 
+import libros_extraer
 import libros_fetch
+import libros_informe
+import libros_limpiar
+import libros_segmentar
 from libros_fuentes import (ARCHIVE_FILES, DECISIONES_OK, EPUB_FILE, ESTADOS_OK,
                             _leer_jsonl, _normalizar_archive, _normalizar_epub,
                             normalizar_titulo)
@@ -98,12 +102,48 @@ def _anotar(ruta_jsonl, registro):
         fh.write(json.dumps(registro, ensure_ascii=False) + "\n")
 
 
-def _etapa_descarga(libros, work_dir, pausa):
-    """Descarga los crudos que faltan y deja una línea de resumen en fetch.jsonl."""
+def _es_pagina_error(datos):
+    return datos.lstrip()[:200].lower().startswith((b"<!doctype html", b"<html"))
+
+
+def _guardar_crudo(crud_dir, libro, datos):
+    with open(os.path.join(crud_dir, libro["id"] + ".txt"), "wb") as fh:
+        fh.write(datos)
+
+
+def _extraer_epub(libro, crud_dir, errores_ruta):
+    """Extrae el texto de un EPUB local al crudo. Devuelve los bytes escritos."""
+    try:
+        texto, metricas = libros_extraer.epub_a_texto(libro["ruta_local"])
+    except Exception as exc:
+        _anotar(errores_ruta, {"id": libro["id"], "etapa": "descarga",
+                               "motivo": "epub_%s" % type(exc).__name__})
+        print("%s: error leyendo EPUB (%s)" % (libro["id"], type(exc).__name__),
+              file=sys.stderr)
+        return 0
+    if metricas.get("drm") or len(texto.strip()) < MIN_CRUDO_BYTES:
+        _anotar(errores_ruta, {"id": libro["id"], "etapa": "descarga",
+                               "motivo": "epub_con_drm" if metricas.get("drm")
+                               else "contenido_invalido"})
+        print("%s: EPUB no aprovechable" % libro["id"], file=sys.stderr)
+        return 0
+    datos = texto.encode("utf-8")
+    _guardar_crudo(crud_dir, libro, datos)
+    print("%s: extraído del EPUB (%d bytes)" % (libro["id"], len(datos)))
+    return len(datos)
+
+
+def _etapa_descarga(libros, work_dir, ctx):
+    """Baja los crudos de archive.org que falten y extrae los EPUB locales.
+
+    Deja una línea de resumen en `fetch.jsonl` por pasada; los detalles de
+    cada incidencia van a `errores.jsonl` y no cortan la ejecución.
+    """
     crud_dir = os.path.join(work_dir, "crudo")
     os.makedirs(crud_dir, exist_ok=True)
-    pendientes = pendientes_de_descarga(libros, work_dir)
     errores_ruta = os.path.join(work_dir, "errores.jsonl")
+    pausa = ctx["pausa"]
+    pendientes = pendientes_de_descarga(libros, work_dir)
     descargados = 0
     bytes_total = 0
     for i, libro in enumerate(pendientes):
@@ -114,13 +154,13 @@ def _etapa_descarga(libros, work_dir, pausa):
             motivo = "http_%d" % exc.code
         except (urllib.error.URLError, OSError):
             motivo = "error_de_red"
+        except Exception:
+            motivo = "error_inesperado"
         else:
             motivo = ""
-        if not motivo and len(datos) >= MIN_CRUDO_BYTES and not \
-                datos.lstrip()[:200].lower().startswith((b"<!doctype html", b"<html")):
-            ruta = _ruta_crudo(work_dir, libro)
-            with open(ruta, "wb") as fh:
-                fh.write(datos)
+        if not motivo and len(datos) >= MIN_CRUDO_BYTES \
+                and not _es_pagina_error(datos):
+            _guardar_crudo(crud_dir, libro, datos)
             descargados += 1
             bytes_total += len(datos)
             print("%s: descargado (%d bytes)" % (libro["id"], len(datos)))
@@ -131,10 +171,101 @@ def _etapa_descarga(libros, work_dir, pausa):
                   file=sys.stderr)
         if i < len(pendientes) - 1 and pausa > 0:
             time.sleep(pausa)
+    for libro in libros:
+        if libro["origen"] != "epub_local":
+            continue
+        if crudo_usable(_ruta_crudo(work_dir, libro)):
+            continue
+        if not libro.get("ruta_local"):
+            _anotar(errores_ruta, {"id": libro["id"], "etapa": "descarga",
+                                   "motivo": "sin_ruta_local"})
+            print("%s: sin ruta local de EPUB" % libro["id"], file=sys.stderr)
+            continue
+        bytes_extraidos = _extraer_epub(libro, crud_dir, errores_ruta)
+        descargados += 1 if bytes_extraidos else 0
+        bytes_total += bytes_extraidos
     estado = "ok" if descargados else "ya_existe"
     _anotar(os.path.join(work_dir, "fetch.jsonl"),
             {"etapa": "descarga", "estado": estado, "nuevos": descargados,
              "reutilizados": len(pendientes) - descargados, "bytes": bytes_total})
+    return 0
+
+
+def _etapa_limpieza(libros, work_dir, ctx):
+    """Pasa `libros_limpiar.limpiar` a cada crudo que aún no tenga limpio."""
+    limpio_dir = os.path.join(work_dir, "limpio")
+    os.makedirs(limpio_dir, exist_ok=True)
+    errores_ruta = os.path.join(work_dir, "errores.jsonl")
+    hechos = 0
+    for libro in libros:
+        ruta_crudo = _ruta_crudo(work_dir, libro)
+        if not crudo_usable(ruta_crudo):
+            continue
+        ruta_limpio = os.path.join(limpio_dir, libro["id"] + ".txt")
+        if os.path.exists(ruta_limpio):
+            hechos += 1
+            continue
+        with open(ruta_crudo, encoding="utf-8", errors="replace") as fh:
+            texto = fh.read()
+        limpio, informe = libros_limpiar.limpiar(texto, libro["idioma"])
+        if len(limpio.strip()) < MIN_CRUDO_BYTES:
+            _anotar(errores_ruta, {"id": libro["id"], "etapa": "limpieza",
+                                   "motivo": "texto_insuficiente"})
+            print("%s: limpieza no deja texto aprovechable" % libro["id"],
+                  file=sys.stderr)
+            continue
+        with open(ruta_limpio, "w", encoding="utf-8") as fh:
+            fh.write(limpio)
+        if informe["calidad_baja"]:
+            _anotar(errores_ruta, {"id": libro["id"], "etapa": "limpieza",
+                                   "motivo": "calidad_baja",
+                                   "ratio_comunes": informe["ratio_comunes"]})
+            print("%s: calidad baja (ratio %.2f)"
+                  % (libro["id"], informe["ratio_comunes"]), file=sys.stderr)
+        hechos += 1
+    print("limpieza: %d libros listos" % hechos)
+    return 0
+
+
+def _etapa_segmentacion(libros, work_dir, ctx):
+    """Cada limpio se segmenta con su familia en `secciones/<id>.jsonl`."""
+    secciones_dir = os.path.join(work_dir, "secciones")
+    limpio_dir = os.path.join(work_dir, "limpio")
+    os.makedirs(secciones_dir, exist_ok=True)
+    errores_ruta = os.path.join(work_dir, "errores.jsonl")
+    hechos = 0
+    for libro in libros:
+        ruta_limpio = os.path.join(limpio_dir, libro["id"] + ".txt")
+        if not os.path.exists(ruta_limpio):
+            continue
+        ruta_secciones = os.path.join(secciones_dir, libro["id"] + ".jsonl")
+        if os.path.exists(ruta_secciones):
+            hechos += 1
+            continue
+        with open(ruta_limpio, encoding="utf-8") as fh:
+            texto = fh.read()
+        secciones = libros_segmentar.segmentar(texto, libro["familia"],
+                                               libro["id"])
+        if not secciones:
+            _anotar(errores_ruta, {"id": libro["id"], "etapa": "segmentacion",
+                                   "motivo": "sin_secciones"})
+            print("%s: sin secciones" % libro["id"], file=sys.stderr)
+            continue
+        with open(ruta_secciones, "w", encoding="utf-8") as fh:
+            for seccion in secciones:
+                fh.write(json.dumps(seccion, ensure_ascii=False) + "\n")
+        hechos += 1
+        print("%s: %d secciones" % (libro["id"], len(secciones)))
+    print("segmentación: %d libros listos" % hechos)
+    return 0
+
+
+def _etapa_informe(libros, work_dir, ctx):
+    """Delega en `libros_informe` para escribir `informe.md`."""
+    ruta = os.path.join(work_dir, "informe.md")
+    contenido = libros_informe.generar_informe(work_dir, ruta,
+                                                knowledge_dir=ctx["knowledge_dir"])
+    print("informe: %s (%d líneas)" % (ruta, contenido.count("\n")))
     return 0
 
 
@@ -145,14 +276,22 @@ def _etapa_pendiente(nombre):
     return etapa
 
 
+ETAPAS_IMPLEMENTADAS = {
+    "descarga": _etapa_descarga,
+    "limpieza": _etapa_limpieza,
+    "segmentacion": _etapa_segmentacion,
+    "informe": _etapa_informe,
+}
+
+
 def plan_de_pruebas(libros, work_dir):
     """Una línea por libro: qué haría la pasada con ese libro."""
     lineas = []
     for libro in libros:
-        if libro["origen"] == "epub_local":
-            accion = "extraer EPUB"
-        elif crudo_usable(_ruta_crudo(work_dir, libro)):
+        if crudo_usable(_ruta_crudo(work_dir, libro)):
             accion = "crudo ya en disco"
+        elif libro["origen"] == "epub_local":
+            accion = "extraer EPUB"
         else:
             accion = "descargar"
         lineas.append("  - %s (%s, %s): %s"
@@ -181,12 +320,10 @@ def ejecutar(work_dir=DEFAULT_WORK_DIR, knowledge_dir=DEFAULT_KNOWLEDGE_DIR,
         print("No hay libros que procesar.")
         return 0
     ctx = {"pausa": pausa, "workers": workers, "simulado": simulado,
-           "cliente": cliente}
-    for etapa in ETAPAS[:ETAPAS.index(hasta) + 1]:
-        if etapa == "descarga":
-            code = _etapa_descarga(libros, work_dir, ctx["pausa"])
-        else:
-            code = _etapa_pendiente(etapa)(libros, work_dir, ctx)
+           "cliente": cliente, "knowledge_dir": knowledge_dir}
+    for etapa_nombre in ETAPAS[:ETAPAS.index(hasta) + 1]:
+        funcion = ETAPAS_IMPLEMENTADAS.get(etapa_nombre, _etapa_pendiente(etapa_nombre))
+        code = funcion(libros, work_dir, ctx)
         if code != 0:
             return code
     return 0
