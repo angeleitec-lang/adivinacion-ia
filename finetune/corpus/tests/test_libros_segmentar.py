@@ -347,3 +347,12 @@ class CreditosPrimeraSeccion(unittest.TestCase):
         secciones = segmentar(texto, "tarot")
         self.assertTrue(secciones[0].get("front_matter"))
         self.assertEqual(secciones[0]["titulo"], "Material preliminar")
+
+    def test_aviso_de_digitalizacion_unica_marca_en_primera_seccion(self):
+        texto = ("HAROLD a L££ 1\n\nDigitized by the Internet Archive in "
+                 "2011 with funding from a university.\n\n# Capítulo 1\n\n"
+                 + cuerpo(10))
+        secciones = segmentar(texto, "tarot")
+        self.assertTrue(secciones[0].get("front_matter"))
+        self.assertEqual(secciones[0]["titulo"], "Material preliminar")
+        self.assertIn("Capítulo 1", [s["titulo"] for s in secciones])

@@ -330,7 +330,7 @@ _APERTURAS_CABECERA = ("contents", "indice", "copyright", "pagina legal")
 _MARCAS_LEGALES = (
     "copyright", "©", "all rights reserved", "derechos reservados",
     "reservados todos", "isbn", "978-", "979-", "library of congress",
-    "printed in", "impreso en",
+    "printed in", "impreso en", "internet archive",
 )
 
 
