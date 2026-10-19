@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
 import random
 import sqlite3
 import unicodedata
 from pathlib import Path
-from zoneinfo import ZoneInfo
-
-import swisseph as swe
 
 from calculos import numerologia as calc_num
 from calculos.astro import carta_natal
@@ -113,47 +109,10 @@ FOCOS_ASTRO = [
 
 FOCOS_SIN = ["compatibilidad amorosa", "sociedad laboral", "amistad", "vínculo familiar", "proyecto en común"]
 
-SIGNOS = ["Aries", "Tauro", "Géminis", "Cáncer", "Leo", "Virgo", "Libra", "Escorpio",
-          "Sagitario", "Capricornio", "Acuario", "Piscis"]
-
-PLANETAS = [
-    (swe.SUN, "Sol"), (swe.MOON, "Luna"), (swe.MERCURY, "Mercurio"),
-    (swe.VENUS, "Venus"), (swe.MARS, "Marte"), (swe.JUPITER, "Júpiter"),
-    (swe.SATURN, "Saturno"), (swe.URANUS, "Urano"), (swe.NEPTUNE, "Neptuno"),
-    (swe.PLUTO, "Plutón"),
-]
-
-ASPECTOS = [(0, "conjunción", 6.0), (60, "sextil", 5.0), (90, "cuadratura", 6.0),
-            (120, "trígono", 6.0), (180, "oposición", 7.0)]
-
-
 def load_kb(nombre):
     p = KB_DIR / nombre
     with p.open(encoding="utf-8") as fh:
         return json.load(fh)
-
-
-def fmt_grados(lon):
-    g = int(lon % 30)
-    m = int((lon % 1) * 60)
-    return f"{g}°{m:02d}'"
-
-
-def signo_de(lon):
-    return SIGNOS[int(lon // 30) % 12]
-
-
-def casa_de(lon, cuspides):
-    for i in range(12):
-        a = cuspides[i]
-        b = cuspides[(i + 1) % 12]
-        if a <= b:
-            if a <= lon < b:
-                return i + 1
-        else:
-            if lon >= a or lon < b:
-                return i + 1
-    return 1
 
 
 def calcular_carta(fecha, hora, lat, lon, tz):
