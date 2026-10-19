@@ -101,6 +101,22 @@ class TransitosTests(unittest.TestCase):
         for p in planetas:
             self.assertIn(p, ["Júpiter", "Saturno", "Urano", "Neptuno", "Plutón"])
 
+    def test_transito_a_nodos_norte_sur(self):
+        """Los nodos son puntos natales: Saturno 2021-12-09 conjunta el Nodo Norte."""
+        res = transitos(self.natal, "2021-12-09")
+        nodos = [a for a in res["aspectos"] if a["planeta_natal"] in ("Nodo Norte", "Nodo Sur")]
+        self.assertTrue(nodos, "debe haber aspectos a los nodos lunares")
+        sat_norte = [a for a in nodos if a["planeta_transito"] == "Saturno" and a["planeta_natal"] == "Nodo Norte"]
+        self.assertTrue(sat_norte)
+        self.assertEqual(sat_norte[0]["aspecto"], "conjunción")
+        self.assertLess(sat_norte[0]["orbe"], 0.05)
+        sat_sur = [a for a in nodos if a["planeta_transito"] == "Saturno" and a["planeta_natal"] == "Nodo Sur"]
+        self.assertTrue(sat_sur)
+        self.assertEqual(sat_sur[0]["aspecto"], "oposición")
+        for a in nodos:
+            self.assertGreaterEqual(a["casa_natal"], 1)
+            self.assertLessEqual(a["casa_natal"], 12)
+
     def test_incluir_rapidos_true(self):
         """Con incluir_rapidos=True incluye Sol y Marte."""
         res = transitos(self.natal, "2025-06-15", incluir_rapidos=True)

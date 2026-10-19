@@ -380,9 +380,11 @@ def transitos(
         res = swe.calc_ut(jd_ut, pid, swe.FLG_SWIEPH)
         transito_pos[nombre] = res[0][0] % 360
 
-    # Aspectos tránsito -> natal
+    # Aspectos tránsito -> natal. Los nodos lunares se tratan como puntos natales
+    # adicionales (aportan nombre, lon y casa), con los mismos orbes de tránsito.
+    puntos_natales = list(natal["planetas"]) + list(natal.get("nodos", []))
     aspectos = []
-    for p_natal in natal["planetas"]:
+    for p_natal in puntos_natales:
         lon_natal = p_natal["lon"]
         casa_natal = p_natal["casa"]
         for nombre_t, lon_t in transito_pos.items():
