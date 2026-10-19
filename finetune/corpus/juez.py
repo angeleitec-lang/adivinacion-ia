@@ -347,3 +347,54 @@ def juzgar_seccion(cliente, seccion, candidatos, reintentos=1):
             break
     return {"tipo": "error", "calidad": 0, "idioma": "otro",
             "entidades": [], "motivo": motivo, "llamadas": llamadas}
+
+
+# ---------------------------------------------------------------------------
+# Verificación de anclaje por faceta
+# ---------------------------------------------------------------------------
+
+# Palabras clave (en forma normalizada por cartas.norm: minúsculas y sin
+# tildes) que deben aparecer en el texto de la sección para aceptar la faceta.
+# `None` significa exenta: no exige palabra clave (lo son `significado_general`
+# y `simbolismo`, que todo texto de entidad documenta de facto).
+PALABRAS_CLAVE_FACETA = {
+    "significado_general": None,
+    "simbolismo": None,
+    "luz_sombra": ["luz", "sombra", "positiv", "negativ", "buen lado",
+                   "mal lado"],
+    "derecha_invertida": ["invertid", "al reves", "reves"],
+    "amor": ["amor", "pareja", "relacion", "sentimental", "corazon",
+             "matrimonio", "afectiv"],
+    "trabajo": ["trabajo", "empleo", "carrera", "profesion", "laboral",
+                "negocio", "oficio"],
+    "dinero": ["dinero", "finanzas", "financier", "economic", "riqueza",
+               "ingresos", "abundancia", "patrimonio"],
+    "salud": ["salud", "enfermedad", "cuerpo", "bienestar", "fisico",
+              "vitalidad"],
+    "espiritual": ["espiritual", "espiritu", "meditacion", "karma",
+                   "divino", "sagrado", "trascendencia"],
+    "correspondencias": ["correspondencia", "regencia", "regido",
+                         "elemento", "arbol de la vida", "hebreo",
+                         "astrolog", "planeta gobernante"],
+    "consejo_practico": ["consejo", "recomendacion", "sugiere", "practico",
+                         "que hacer", "conviene", "procura"],
+    "ejemplo_de_uso": ["ejemplo", "tirada", "ejercicio", "caso practico",
+                       "en la practica", "consulta real"],
+}
+
+
+def facetas_ancladas(facetas, texto):
+    """Subconjunto de `facetas` cuyo anclaje léxico supera el texto.
+
+    Las facetas sin entrada o con lista vacía se consideran exentas. El texto
+    se normaliza con `cartas.norm` (minúsculas, sin tildes), igual que las
+    palabras clave de la constante.
+    """
+    tn = _norm(texto)
+    aceptadas = []
+    for faceta in facetas:
+        claves = PALABRAS_CLAVE_FACETA.get(faceta)
+        if not claves or any(clave in tn for clave in claves):
+            if faceta not in aceptadas:
+                aceptadas.append(faceta)
+    return aceptadas

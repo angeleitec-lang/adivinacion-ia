@@ -102,6 +102,7 @@ if __name__ == "__main__":
 
 import json as _json
 
+import cobertura
 import llm_client
 
 
@@ -239,3 +240,50 @@ class JuzgarSeccion(unittest.TestCase):
         self.assertLessEqual(len(capturado["usuario"]), 9000)
         self.assertIn("tarot-mayor-01", capturado["usuario"])
         self.assertIn("El Loco", capturado["usuario"])
+
+
+class AnclajeFacetas(unittest.TestCase):
+    """T22.3: una faceta solo se acepta si el texto contiene alguna de sus
+    palabras clave (significado_general y simbolismo están exentos)."""
+
+    def test_amor_aceptada_con_pareja(self):
+        texto = "El dos de copas señala un encuentro de pareja feliz."
+        self.assertEqual(juez.facetas_ancladas(["amor"], texto), ["amor"])
+
+    def test_amor_descartada_sin_palabra_clave(self):
+        texto = "Esta lámina muestra una figura alegórica con un manto azul."
+        self.assertEqual(juez.facetas_ancladas(["amor"], texto), [])
+
+    def test_trabajo_dinero_salud(self):
+        texto = ("El cuatro de bastos promete éxito en el empleo y "
+                 "estabilidad financiera, aunque conviene cuidar el cuerpo.")
+        aceptadas = juez.facetas_ancladas(["trabajo", "dinero", "salud"],
+                                          texto)
+        self.assertEqual(aceptadas, ["trabajo", "dinero", "salud"])
+
+    def test_derecha_invertida_con_al_reves(self):
+        for frase in ("aceptada invertida", "saca la carta al revés"):
+            with self.subTest(frase=frase):
+                self.assertEqual(
+                    juez.facetas_ancladas(["derecha_invertida"], frase),
+                    ["derecha_invertida"])
+
+    def test_exentas_de_palabra_clave(self):
+        texto = "párrafo sin ninguna palabra útil"
+        self.assertEqual(
+            juez.facetas_ancladas(["significado_general", "simbolismo"],
+                                  texto),
+            ["significado_general", "simbolismo"])
+
+    def test_acentos_y_mayusculas(self):
+        texto = "HABLAMOS DE SU RELACIÓN y de la ESPIRITUALIDAD del naipe."
+        aceptadas = juez.facetas_ancladas(["amor", "espiritual"], texto)
+        self.assertEqual(aceptadas, ["amor", "espiritual"])
+
+    def test_constante_cubre_todas_las_facetas(self):
+        todas = set()
+        for facetas in cobertura.FACETAS_POR_FAMILIA.values():
+            todas.update(facetas)
+        self.assertTrue(todas <= set(juez.PALABRAS_CLAVE_FACETA))
+        for faceta in ("significado_general", "simbolismo"):
+            self.assertIsNone(juez.PALABRAS_CLAVE_FACETA[faceta])
