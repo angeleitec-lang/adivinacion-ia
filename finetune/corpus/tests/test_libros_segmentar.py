@@ -259,3 +259,100 @@ class FrenteMateria(unittest.TestCase):
         self.assertEqual(_titulo_intro("1. Introduction\n\n" + cuerpo(10)),
                          "Introducción")
         self.assertEqual(_titulo_intro("Prólogo\n\n" + cuerpo(10)), "Prólogo")
+
+
+class RuidoDeTitulo(unittest.TestCase):
+    def test_criterios_de_ruido_ocr(self):
+        from libros_segmentar import _titulo_es_ruido
+        ruidos = ("CNN", "IMI", "XDI", "VII", "III", "DDD", "RET",
+                  "270 THE, TAROT", "308 • THE TAROT", "HAROLD a L££ 1",
+                  "sab DDPDDDDDDPDDDDDDIDDD HHH", "¢ PHO", "VPZ 2, Ta")
+        for t in ruidos:
+            self.assertTrue(_titulo_es_ruido(t), t)
+
+    def test_titulos_legitimos_no_son_ruido(self):
+        from libros_segmentar import _titulo_es_ruido
+        legitimos = ("THE FOOL", "EL LOCO", "PREFACE", "Chapter 1",
+                    "ACE OF CUPS", "XIII", "The High Priestess",
+                    "Introducción", "LA MUERTE", "WHEEL OF FORTUNE",
+                    "MYSTICISM", "LA TORRE")
+        for t in legitimos:
+            self.assertFalse(_titulo_es_ruido(t), t)
+
+    def test_linea_ruidosa_no_genera_seccion(self):
+        for ruido in ("CNN", "270 THE, TAROT", "HAROLD a L££ 1", "VII"):
+            texto = ("Introducción breve del libro.\n\n" + ruido + "\n\n"
+                     + cuerpo(30))
+            secciones = segmentar(texto, "tarot")
+            titulos = [s["titulo"] for s in secciones]
+            self.assertNotIn(ruido, titulos)
+            self.assertEqual(len(secciones), 1)
+
+
+class CabecerasRepetidas(unittest.TestCase):
+    def test_titulo_repetido_con_cuerpos_minimos_se_demuele(self):
+        partes = ["LA MUERTE\n\n" + (cuerpo(2) if i < 2 else cuerpo(30))
+                  for i in range(3)]
+        texto = "Introducción inicial.\n\n" + "\n\n".join(partes)
+        secciones = segmentar(texto, "tarot")
+        titulos = [s["titulo"] for s in secciones]
+        self.assertNotIn("La Muerte", titulos)
+        self.assertEqual(len(secciones), 1)
+
+    def test_repetido_con_cuerpos_grandes_se_conserva(self):
+        partes = ["LA TORRE\n\n" + cuerpo(30) for _ in range(3)]
+        texto = "Prólogo.\n\n" + "\n\n".join(partes)
+        secciones = segmentar(texto, "tarot")
+        self.assertIn("La Torre", [s["titulo"] for s in secciones])
+        self.assertEqual(len(secciones), 4)
+
+    def test_demolido_se_funde_con_la_anterior(self):
+        partes = ["EL DIABLO\n\n" + cuerpo(2) for _ in range(3)]
+        texto = "Texto único del capítulo, sin cabecera.\n\n" + "\n\n".join(partes)
+        secciones = segmentar(texto, "tarot")
+        self.assertEqual(len(secciones), 1)
+        self.assertNotIn("El Diablo", [s["titulo"] for s in secciones])
+        self.assertIn("relleno", secciones[0]["texto"])
+
+
+class CreditosPrimeraSeccion(unittest.TestCase):
+    def test_una_sola_marca_legal_en_primera_seccion_corta_es_front_matter(self):
+        texto = ("BJ Printed in the United States of America\n\n" + cuerpo(5)
+                 + "\n\n# Capítulo 1\n\n" + cuerpo(10))
+        secciones = segmentar(texto, "tarot")
+        primera = secciones[0]
+        self.assertTrue(primera.get("front_matter"))
+        self.assertEqual(primera["titulo"], "Material preliminar")
+        self.assertLess(primera["chars"], 1500)
+        self.assertIn("Capítulo 1", [s["titulo"] for s in secciones])
+
+    def test_primera_seccion_larga_con_una_marca_no_es_front_matter(self):
+        texto = ("Printed in the United States of America. " + cuerpo(20))
+        secciones = segmentar(texto, "general")
+        self.assertGreaterEqual(secciones[0]["chars"], 1500)
+        self.assertFalse(secciones[0].get("front_matter", False))
+        self.assertTrue(secciones[0]["titulo"].startswith("Sección "))
+
+    def test_una_marca_fuera_de_la_primera_seccion_no_basta(self):
+        texto = ("Introducción\n\n" + cuerpo(10)
+                 + "\n\nCapítulo único\n\n" + cuerpo(10)
+                 + " ISBN 978-0-00-000000-0")
+        secciones = segmentar(texto, "tarot")
+        for seccion in secciones[1:]:
+            self.assertFalse(seccion.get("front_matter", False))
+
+    def test_derechos_reservados_como_unica_marca_en_primera_seccion(self):
+        texto = ("Edición del autor. Derechos reservados del traductor.\n\n"
+                 + cuerpo(6) + "\n\n# Uso del mazo\n\n" + cuerpo(10))
+        secciones = segmentar(texto, "tarot")
+        self.assertTrue(secciones[0].get("front_matter"))
+        self.assertEqual(secciones[0]["titulo"], "Material preliminar")
+
+    def test_aviso_de_digitalizacion_unica_marca_en_primera_seccion(self):
+        texto = ("HAROLD a L££ 1\n\nDigitized by the Internet Archive in "
+                 "2011 with funding from a university.\n\n# Capítulo 1\n\n"
+                 + cuerpo(10))
+        secciones = segmentar(texto, "tarot")
+        self.assertTrue(secciones[0].get("front_matter"))
+        self.assertEqual(secciones[0]["titulo"], "Material preliminar")
+        self.assertIn("Capítulo 1", [s["titulo"] for s in secciones])

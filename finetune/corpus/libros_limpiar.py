@@ -6,6 +6,7 @@ ruido de OCR y recorta portada e índice. Devuelve el texto limpio y un informe
 con las métricas del proceso. No traduce ni reescribe el contenido.
 """
 import re
+import statistics
 import unicodedata
 
 # Aviso de OCR que archive.org inserta por página. Acepta «Page N» opcional,
@@ -146,6 +147,46 @@ def _linea_ruidosa(linea):
     return no_alnum / len(visibles) > 0.40
 
 
+def _candidata_cabecera_corrida(texto):
+    """Línea corta apta para la detección de cabecera corrida."""
+    if not texto or len(texto) > 80 or len(texto.split()) > 6:
+        return False
+    if texto[0] in "-*" or re.match(r"^\d+\.", texto):
+        return False
+    return any(c.isalpha() for c in texto)
+
+
+def _clave_cabecera(texto):
+    """Clave normalizada: minúsculas, no alfanuméricos como espacio, sin
+    números sueltos al principio o al final (variantes de página)."""
+    clave = re.sub(r"[^a-z0-9áéíóúüñ]+", " ", texto.lower()).strip()
+    clave = re.sub(r"^(?:\d+\s+)+", "", clave)
+    return re.sub(r"(?:\s+\d+)+$", "", clave)
+
+
+def _claves_cabeceras_corridas(lineas, repetidas):
+    """Claves con ≥5 ocurrencias repartidas cada 20-200 líneas."""
+    posiciones = {}
+    for indice, linea in enumerate(lineas):
+        texto = linea.strip()
+        if (not texto or texto in repetidas
+                or NUMERO_PAGINA_RE.match(texto)
+                or not _candidata_cabecera_corrida(texto)):
+            continue
+        clave = _clave_cabecera(texto)
+        if len(clave) >= 3:
+            posiciones.setdefault(clave, []).append(indice)
+    corridas = set()
+    for clave, pos in posiciones.items():
+        if len(pos) < 5:
+            continue
+        gaps = [b - a for a, b in zip(pos, pos[1:])]
+        mediana = statistics.median(gaps)
+        if 20 <= mediana <= 200:
+            corridas.add(clave)
+    return corridas
+
+
 def _quitar_cabeceras(lineas):
     """Quita avisos, números de página y líneas cortas muy repetidas."""
     lineas = [AVISO_RE.sub("", linea) for linea in lineas]
@@ -157,6 +198,7 @@ def _quitar_cabeceras(lineas):
             continue
         cuenta[texto] = cuenta.get(texto, 0) + 1
     repetidas = {texto for texto, n in cuenta.items() if n >= 8}
+    corridas = _claves_cabeceras_corridas(lineas, repetidas)
     salida = []
     quitadas = 0
     for linea in lineas:
@@ -167,6 +209,9 @@ def _quitar_cabeceras(lineas):
             quitadas += 1
         elif _linea_ruidosa(texto):
             continue
+        elif (_candidata_cabecera_corrida(texto)
+                and _clave_cabecera(texto) in corridas):
+            quitadas += 1
         else:
             salida.append(linea.rstrip())
     return salida, quitadas

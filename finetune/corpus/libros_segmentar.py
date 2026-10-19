@@ -330,7 +330,7 @@ _APERTURAS_CABECERA = ("contents", "indice", "copyright", "pagina legal")
 _MARCAS_LEGALES = (
     "copyright", "©", "all rights reserved", "derechos reservados",
     "reservados todos", "isbn", "978-", "979-", "library of congress",
-    "printed in", "impreso en",
+    "printed in", "impreso en", "internet archive",
 )
 
 
@@ -356,8 +356,46 @@ def _es_frente_materia(texto):
     return sum(1 for m in _MARCAS_LEGALES if m in crudo) >= 2
 
 
+def _una_marca_legal(texto):
+    """True si el texto contiene al menos una marca legal de créditos."""
+    return any(m in _sin_tildes(texto or "").lower() for m in _MARCAS_LEGALES)
+
+
+_VOCALES = set("aeiouyáéíóúñ")
+
+
+def _titulo_es_ruido(titulo):
+    """True si el título es ruido OCR: pocas letras, exceso de símbolos o
+    algún token de 3+ caracteres sin ninguna vocal."""
+    if not titulo:
+        return False
+    texto = titulo.strip()
+    letras = [c for c in texto if c.isalpha()]
+    if len(letras) < 4:
+        return True
+    visibles = [c for c in texto if not c.isspace()]
+    no_alfa = sum(1 for c in visibles if not c.isalpha())
+    if visibles and no_alfa / len(visibles) > 0.30:
+        return True
+    for token in texto.split():
+        tok_letras = [c for c in _sin_tildes(token).lower() if c.isalpha()]
+        if len(token) >= 3 and tok_letras and not any(c in _VOCALES
+                                                    for c in tok_letras):
+            return True
+    return False
+
+
 def _titulo_de_linea(linea, familia):
     """Título si la línea es un encabezado; None en caso contrario."""
+    titulo = _titulo_bruto_de_linea(linea, familia)
+    if (titulo and len(titulo) <= 40
+            and not _titulo_protegido(titulo, familia)
+            and _titulo_es_ruido(titulo)):
+        return None
+    return titulo
+
+
+def _titulo_bruto_de_linea(linea, familia):
     texto = linea.strip()
     if not texto:
         return None
@@ -501,6 +539,40 @@ def carta_de_titulo(titulo, familia="tarot"):
     return None
 
 
+def _demoler_repetidos(secciones):
+    """Cabeceras repetidas ≥3 veces con ≥2 cuerpos mínimos no son secciones:
+    su texto se funde con la sección anterior."""
+    cuerpos = {}
+    for seccion in secciones:
+        if seccion["titulo"]:
+            cuerpos.setdefault(seccion["titulo"], []).append(seccion["chars"])
+    demolidos = {titulo for titulo, cs in cuerpos.items()
+                 if len(cs) >= 3 and sum(1 for c in cs if c < 2000) >= 2}
+    if not demolidos:
+        return secciones
+    fundidas = []
+    for seccion in secciones:
+        if seccion["titulo"] in demolidos and fundidas:
+            previa = fundidas[-1]
+            previa["texto"] = (previa["texto"] + "\n\n"
+                              + seccion["texto"]).strip()
+            previa["chars"] = len(previa["texto"])
+        else:
+            fundidas.append(dict(seccion))
+    rehechas = []
+    for seccion in fundidas:
+        for parte in _partir_largo(seccion["texto"]):
+            if parte.strip():
+                nueva = dict(seccion)
+                nueva["texto"] = parte
+                nueva["chars"] = len(parte)
+                rehechas.append(nueva)
+    for indice, seccion in enumerate(rehechas):
+        seccion["seccion"] = indice + 1
+        seccion["posicion"] = indice
+    return rehechas
+
+
 def segmentar(texto_limpio, familia, id_libro=""):
     """Devuelve las secciones de un libro limpio, en orden.
 
@@ -530,6 +602,10 @@ def segmentar(texto_limpio, familia, id_libro=""):
             elif _es_frente_materia(parte["texto"]):
                 titulo = "Material preliminar"
                 frente_materia = True
+            elif (posicion == 0 and len(parte["texto"]) < 1500
+                    and _una_marca_legal(parte["texto"])):
+                titulo = "Material preliminar"
+                frente_materia = True
             else:
                 titulo = _titulo_sintetico(parte["texto"], posicion + 1)
         seccion = {
@@ -543,4 +619,4 @@ def segmentar(texto_limpio, familia, id_libro=""):
         if frente_materia:
             seccion["front_matter"] = True
         secciones.append(seccion)
-    return secciones
+    return _demoler_repetidos(secciones)

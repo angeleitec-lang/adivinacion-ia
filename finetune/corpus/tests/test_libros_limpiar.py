@@ -66,6 +66,43 @@ class CabecerasYPies(unittest.TestCase):
         self.assertGreaterEqual(inf["lineas_cabecera_quitadas"], 2)
 
 
+def _doc_cabeceras(variantes, gap, veces):
+    lineas = []
+    for i in range(veces):
+        lineas.append(variantes[i % len(variantes)])
+        for j in range(gap):
+            lineas.append("Linea de contenido distinto numero %d %d del libro."
+                         % (i, j))
+    return "\n".join(lineas)
+
+
+class CabecerasCorridas(unittest.TestCase):
+    def test_quita_cabecera_corrida_normalizada(self):
+        variantes = ["THE TAROT", "THE  TAROT.", "4 THE TAROT",
+                    "THE TAROT 12", "THE   TAROT"]
+        limpio, inf = limpiar(_doc_cabeceras(variantes, 50, 5), "en")
+        for v in variantes:
+            self.assertNotIn(v, limpio)
+        self.assertEqual(inf["lineas_cabecera_quitadas"], 5)
+
+    def test_no_quita_poesia_ni_listas(self):
+        for inicio in ("- verso primero", "* item segundo", "1. punto tercero"):
+            limpio, _ = limpiar(_doc_cabeceras([inicio], 50, 6), "es")
+            self.assertIn(inicio, limpio)
+
+    def test_no_quita_si_gap_demasiado_denso(self):
+        limpio, _ = limpiar(_doc_cabeceras(["THE TAROT"], 5, 6), "en")
+        self.assertIn("THE TAROT", limpio)
+
+    def test_no_quita_si_gap_demasiado_grande(self):
+        limpio, _ = limpiar(_doc_cabeceras(["THE TAROT"], 250, 6), "en")
+        self.assertIn("THE TAROT", limpio)
+
+    def test_no_quita_con_pocas_repeticiones(self):
+        limpio, _ = limpiar(_doc_cabeceras(["THE TAROT"], 50, 4), "en")
+        self.assertIn("THE TAROT", limpio)
+
+
 class Desguionado(unittest.TestCase):
     def test_une_si_la_palabra_existe(self):
         texto = ("La extraordinaria-\nmente buena noticia. "
