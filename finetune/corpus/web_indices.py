@@ -45,16 +45,24 @@ def _mismo_dominio(url: str, dominio: str) -> bool:
 
 
 def _extraer_enlaces(html: str, base_url: str, dominio: Optional[str] = None) -> List[str]:
-    """Extrae todos los enlaces <a href> del HTML, opcionalmente filtrando por dominio."""
-    # Regex simple para extraer hrefs (suficiente para nuestros casos)
+    """Extrae todos los enlaces <a href> del HTML, opcionalmente filtrando por dominio.
+
+    Resolve URLs relativas con urljoin; descarta #ancla, mailto:, tel:, javascript:, data:.
+    Quita el fragmento #… de las URLs resultantes.
+    """
     patron = re.compile(r'<a\s+[^>]*href\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
     enlaces = []
     for match in patron.finditer(html):
         href = match.group(1)
-        if href.startswith(("http", "/")):
-            url_norm = _normalizar_url(base_url, href)
-            if dominio is None or _mismo_dominio(url_norm, dominio):
-                enlaces.append(url_norm)
+        url_norm = _normalizar_url(base_url, href)
+        # Filtrar esquemas no deseados
+        if url_norm.startswith(("mailto:", "tel:", "javascript:", "data:")):
+            continue
+        if "#" in url_norm.split("?")[0]:
+            # quita el fragmento #… conservando la query string si la hay
+            url_norm = url_norm.split("#")[0]
+        if dominio is None or _mismo_dominio(url_norm, dominio):
+            enlaces.append(url_norm)
     return enlaces
 
 
@@ -79,6 +87,32 @@ def _deduplicar_urls(urls: List[str]) -> List[str]:
     return unicas
 
 
+def _seguir_indice_unico(
+    indice_url: str,
+    cliente,
+    regex: str,
+    dominio: str,
+    limite: int,
+    timeout: float,
+) -> List[str]:
+    """Secuencia interna deseguir_indice para un solo URL de índice."""
+    resp = cliente.get(indice_url)
+    if resp["estado"] != "ok" or not resp.get("html"):
+        return []
+
+    # Extraer enlaces
+    enlaces = _extraer_enlaces(resp["html"], indice_url, dominio)
+
+    # Filtrar por regex y dominio
+    filtradas = _filtrar_por_regex(enlaces, regex, dominio)
+
+    # Deduplicar
+    unicas = _deduplicar_urls(filtradas)
+
+    # Aplicar límite
+    return unicas[:limite]
+
+
 def seguir_indice(
     sitio_cfg: Dict[str, Any],
     cliente,
@@ -96,26 +130,29 @@ def seguir_indice(
     Returns:
         Lista de URLs únicas, filtradas y desduplicadas (máx. `limite`)
     """
-    indice_url = sitio_cfg["indice"]
+    indice = sitio_cfg["indice"]
     regex = sitio_cfg["regex"]
     dominio = sitio_cfg["dominio"]
 
-    # Descargar página índice
-    resp = cliente.get(indice_url)
-    if resp["estado"] != "ok" or not resp.get("html"):
-        return []
-
-    # Extraer enlaces
-    enlaces = _extraer_enlaces(resp["html"], indice_url, dominio)
-
-    # Filtrar por regex y dominio
-    filtradas = _filtrar_por_regex(enlaces, regex, dominio)
-
-    # Deduplicar
-    unicas = _deduplicar_urls(filtradas)
-
-    # Aplicar límite
-    return unicas[:limite]
+    if isinstance(indice, list):
+        # Varios índices: descarga todas, junta los enlaces antes de filtrar
+        todas_enlaces: List[str] = []
+        for idx_url in indice:
+            resp = cliente.get(idx_url)
+            if resp["estado"] != "ok" or not resp.get("html"):
+                # Si falla este índice, se continúa con los demás
+                continue
+            enlaces = _extraer_enlaces(resp["html"], idx_url, dominio)
+            todas_enlaces.extend(enlaces)
+        # Filtrar por regex y dominio sobre la unión
+        filtradas = _filtrar_por_regex(todas_enlaces, regex, dominio)
+        # Deduplicar preservando orden
+        unicas = _deduplicar_urls(filtradas)
+        # Aplicar límite
+        return unicas[:limite]
+    else:
+        # Un solo índice (retrocompatible)
+        return _seguir_indice_unico(indice, cliente, regex, dominio, limite, timeout)
 
 
 def seguir_indice_multiples(
