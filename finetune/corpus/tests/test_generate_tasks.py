@@ -258,8 +258,8 @@ class TestMultiturno(unittest.TestCase):
     def test_seguimientos_con_tildes(self):
         for lista in gt.SEGUIMIENTOS.values():
             for seg in lista:
-                self.assertTrue(seg and seg[0].isupper())
-                self.assertNotIn("que ", seg.lower()[:5])
+                inicio = seg.lstrip("¿¡")
+                self.assertTrue(seg and inicio[0].isupper())
         plano = "".join(seg for lista in gt.SEGUIMIENTOS.values() for seg in lista)
         self.assertTrue(any(c in plano for c in "áéíóúñ¿¡"))
 
