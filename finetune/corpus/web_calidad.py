@@ -262,13 +262,82 @@ def bandera_titulo_pobre(titulo: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Duplicados
+# ---------------------------------------------------------------------------
+
+def _hashes_parrafos(texto: str) -> set:
+    return {_sha256_texto(parrafo) for parrafo in extraer_parrafos(texto)}
+
+
+def _anotar_duplicado(infos: Dict[int, Dict[str, Any]], i: int, ruta: str,
+                      motivo: str, jaccard: float) -> None:
+    info = infos.setdefault(i, {"rutas": [], "motivo": motivo, "jaccard": jaccard})
+    if ruta not in info["rutas"]:
+        info["rutas"].append(ruta)
+    if motivo == "sha256" or info["motivo"] != "sha256":
+        info["motivo"] = motivo
+    info["jaccard"] = max(info["jaccard"], jaccard)
+
+
+def detectar_duplicadas(paginas: Sequence[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
+    """Marca páginas con el mismo sha256 o Jaccard de párrafos >= 0,90.
+
+    Solo compara pares que comparten al menos un párrafo (índice invertido de
+    hashes), de modo que el coste no es cuadrático en el corpus completo.
+    """
+    infos: Dict[int, Dict[str, Any]] = {}
+
+    por_sha: Dict[str, List[int]] = defaultdict(list)
+    for i, pagina in enumerate(paginas):
+        por_sha[pagina["sha256"]].append(i)
+    for indices in por_sha.values():
+        if len(indices) < 2:
+            continue
+        for i in indices:
+            for j in indices:
+                if i != j:
+                    _anotar_duplicado(
+                        infos, i, paginas[j]["ruta"], "sha256", 1.0
+                    )
+
+    hashes = [_hashes_parrafos(pagina["cuerpo"]) for pagina in paginas]
+    indice: Dict[str, List[int]] = defaultdict(list)
+    for i, conjunto in enumerate(hashes):
+        for hash_parrafo in conjunto:
+            indice[hash_parrafo].append(i)
+
+    pares = set()
+    for indices in indice.values():
+        if len(indices) < 2:
+            continue
+        for a in range(len(indices)):
+            for b in range(a + 1, len(indices)):
+                pares.add((indices[a], indices[b]))
+
+    for i, j in sorted(pares):
+        conjunto_i, conjunto_j = hashes[i], hashes[j]
+        if not conjunto_i or not conjunto_j:
+            continue
+        union = conjunto_i | conjunto_j
+        jaccard = len(conjunto_i & conjunto_j) / len(union)
+        if jaccard < UMBRAL_JACCARD:
+            continue
+        _anotar_duplicado(infos, i, paginas[j]["ruta"], "parrafos", jaccard)
+        _anotar_duplicado(infos, j, paginas[i]["ruta"], "parrafos", jaccard)
+
+    return infos
+
+
+# ---------------------------------------------------------------------------
 # Análisis
 # ---------------------------------------------------------------------------
 
 def analizar_paginas(paginas: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Añade a cada página sus banderas y detalles, en orden determinista."""
+    ordenadas = sorted(paginas, key=lambda p: p["ruta"])
+    duplicadas = detectar_duplicadas(ordenadas)
     resultados: List[Dict[str, Any]] = []
-    for pagina in sorted(paginas, key=lambda p: p["ruta"]):
+    for indice, pagina in enumerate(ordenadas):
         cuerpo = pagina["cuerpo"]
         banderas: List[str] = []
         if bandera_corta(cuerpo):
@@ -279,6 +348,8 @@ def analizar_paginas(paginas: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
             banderas.append("no_espanol")
         if bandera_ruido_navegacion(cuerpo):
             banderas.append("ruido_navegacion")
+        if indice in duplicadas:
+            banderas.append("duplicada")
         if bandera_titulo_pobre(pagina["titulo"]):
             banderas.append("titulo_pobre")
         repetidos = parrafos_repetidos(cuerpo)
@@ -288,6 +359,13 @@ def analizar_paginas(paginas: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
         resultado = dict(pagina)
         resultado["banderas"] = banderas
         resultado["detalles"] = {}
+        if indice in duplicadas:
+            info = duplicadas[indice]
+            resultado["detalles"]["duplicada_de"] = {
+                "motivo": info["motivo"],
+                "rutas": sorted(info["rutas"]),
+                "jaccard": round(info["jaccard"], 3),
+            }
         if repetidos:
             resultado["detalles"]["repeticion_interna"] = [
                 {"parrafo": parrafo[:160], "veces": veces}

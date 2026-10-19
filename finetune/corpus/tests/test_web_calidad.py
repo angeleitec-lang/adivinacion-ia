@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests de web_calidad: auditoría determinista de páginas web descargadas."""
+import hashlib
 import os
 import sys
 import tempfile
@@ -11,6 +12,7 @@ import unittest
 
 from web_calidad import (
     bandera_corta,
+    detectar_duplicadas,
     bandera_mojibake,
     bandera_no_espanol,
     bandera_repeticion_interna,
@@ -41,10 +43,12 @@ licencia_hint: consultar
 
 
 def _escribir_pagina(base: Path, dominio: str, nombre: str, titulo: str,
-                     cuerpo: str, sha: str = "abc123") -> Path:
+                     cuerpo: str, sha: str = None) -> Path:
     carpeta = base / dominio
     carpeta.mkdir(parents=True, exist_ok=True)
     ruta = carpeta / nombre
+    if sha is None:
+        sha = hashlib.sha256(f"{dominio}/{nombre}".encode("utf-8")).hexdigest()
     ruta.write_text(FM.format(dominio=dominio, titulo=titulo, sha=sha, cuerpo=cuerpo), encoding="utf-8")
     return ruta
 
@@ -55,6 +59,7 @@ class LecturaPaginasTests(unittest.TestCase):
             ruta = _escribir_pagina(
                 Path(td), "ejemplo.com", "uno.md", "Carta astral",
                 "Contenido de la página con suficientes palabras.",
+                sha="abc123",
             )
             pagina = leer_pagina(ruta)
             self.assertEqual(pagina["titulo"], "Carta astral")
@@ -247,3 +252,72 @@ class AnalizarPaginasT312Tests(unittest.TestCase):
             self.assertGreaterEqual(
                 len(por_nombre["repite.md"]["detalles"]["repeticion_interna"]), 1
             )
+
+class DetectarDuplicadasTests(unittest.TestCase):
+    def test_mismo_sha256_marca_ambas_paginas(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            _escribir_pagina(base, "a.com", "uno.md", "Página uno",
+                             "Cuerpo distinto de la primera página.", sha="mismo")
+            _escribir_pagina(base, "a.com", "dos.md", "Página dos",
+                             "Cuerpo distinto de la segunda página.", sha="mismo")
+            paginas = leer_paginas(base)
+            infos = detectar_duplicadas(paginas)
+            self.assertEqual(set(infos), {0, 1})
+            por_ruta = {paginas[i]["ruta"]: infos[i] for i in infos}
+            info_uno = por_ruta[str(base / "a.com" / "uno.md")]
+            info_dos = por_ruta[str(base / "a.com" / "dos.md")]
+            self.assertEqual(info_uno["motivo"], "sha256")
+            self.assertIn(str(base / "a.com" / "dos.md"), info_uno["rutas"])
+            self.assertIn(str(base / "a.com" / "uno.md"), info_dos["rutas"])
+
+    def test_parrafos_casi_identicos(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            comunes = [
+                f"Párrafo compartido número {i} con longitud suficiente para contar."
+                for i in range(10)
+            ]
+            _escribir_pagina(base, "a.com", "uno.md", "Página uno",
+                             "\n".join(comunes))
+            _escribir_pagina(base, "a.com", "dos.md", "Página dos",
+                             "\n".join(comunes + [
+                                 "Párrafo exclusivo de la segunda página, también largo."
+                             ]))
+            paginas = leer_paginas(base)
+            infos = detectar_duplicadas(paginas)
+            self.assertEqual(set(infos), {0, 1})
+            por_ruta = {paginas[i]["ruta"]: infos[i] for i in infos}
+            info_uno = por_ruta[str(base / "a.com" / "uno.md")]
+            info_dos = por_ruta[str(base / "a.com" / "dos.md")]
+            self.assertEqual(info_uno["motivo"], "parrafos")
+            self.assertAlmostEqual(info_uno["jaccard"], 10 / 11, places=3)
+            self.assertIn(str(base / "a.com" / "dos.md"), info_uno["rutas"])
+            self.assertIn(str(base / "a.com" / "uno.md"), info_dos["rutas"])
+
+    def test_paginas_distintas_no_se_marcan(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            _escribir_pagina(base, "a.com", "uno.md", "Página uno",
+                             "Contenido completamente distinto sobre el tarot y sus arcanos.")
+            _escribir_pagina(base, "a.com", "dos.md", "Página dos",
+                             "Otra materia sin relación alguna con la numerología práctica.")
+            infos = detectar_duplicadas(leer_paginas(base))
+            self.assertEqual(infos, {})
+
+    def test_analizar_incluye_bandera_duplicada(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            _escribir_pagina(base, "a.com", "uno.md", "Página uno",
+                             "Cuerpo suficientemente largo para no marcarse como corto. " * 30,
+                             sha="repetido")
+            _escribir_pagina(base, "a.com", "dos.md", "Página dos",
+                             "Otro cuerpo suficientemente largo para no marcarse como corto. " * 30,
+                             sha="repetido")
+            paginas = analizar_paginas(leer_paginas(base))
+            por_nombre = {Path(p["ruta"]).name: p for p in paginas}
+            for nombre in ("uno.md", "dos.md"):
+                self.assertIn("duplicada", por_nombre[nombre]["banderas"])
+                detalle = por_nombre[nombre]["detalles"]["duplicada_de"]
+                self.assertEqual(detalle["motivo"], "sha256")
+                self.assertEqual(len(detalle["rutas"]), 1)
