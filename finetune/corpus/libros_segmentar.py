@@ -302,33 +302,35 @@ _INTRO_TITULOS = {
     "prologo": "Prólogo", "prologue": "Prólogo",
     "prefacio": "Prefacio", "preface": "Prefacio", "foreword": "Foreword",
 }
-_INTRO_RE = re.compile(r"^(%s)\b" % "|".join(_INTRO_TITULOS))
+_INTRO_RE = re.compile(
+    r"^(?:(?:capitulo|chapter)\s+)?(?:\d{1,3}\s*)?(%s)$"
+    % "|".join(_INTRO_TITULOS))
 
 
 def _titulo_intro(texto):
-    """Título de introducción si la primera línea lo dice; None en caso contrario."""
+    """Título si la primera línea es solo la cabecera (no una frase que empiece por ella)."""
     for linea in texto.splitlines():
         if linea.strip():
             match = _INTRO_RE.match(_clave(linea))
             return _INTRO_TITULOS[match.group(1)] if match else None
-    return False
+    return None
 
 
-# Aperturas típicas de portada, página legal o índice (sobre texto sin tildes).
-_FRENTE_APERTURA_RE = re.compile(
-    r"^(this book was produced|produced in epub format|internet archive|"
-    r"contents|table of contents|indice|pagina legal|copyright|"
-    r"all rights reserved|derechos reservados)\b")
+# Aperturas inequívocas de portada/página legal: valen con cualquier longitud.
+_APERTURAS_INEQUIVOCAS = (
+    "this book was produced", "produced in epub format", "internet archive",
+    "all rights reserved", "derechos reservados", "table of contents",
+)
+# Aperturas que solo valen como cabecera corta (≤6 palabras y sin punto final).
+_APERTURAS_CABECERA = ("contents", "indice", "copyright", "pagina legal")
 
-# Marcas de créditos/portada en español e inglés (texto sin tildes, en minúsculas).
-_MARCAS_CREDITO = (
+# Marcas legales inequívocas de créditos/portada (texto sin tildes, en minúsculas).
+# Las ambiguas (published by, first edition, portada…) ya no cuentan: una frase
+# genuina puede mencionarlas sin ser material preliminar.
+_MARCAS_LEGALES = (
     "copyright", "©", "all rights reserved", "derechos reservados",
     "reservados todos", "isbn", "978-", "979-", "library of congress",
-    "primera edicion", "first edition", "reimpresion", "printed in",
-    "impreso en", "published by", "publicado por", "distributed by",
-    "distribuido por", "translated by", "traducido por", "ilustrado por",
-    "cubierta", "portada", "produced in epub format",
-    "optical character recognition",
+    "printed in", "impreso en",
 )
 
 
@@ -337,13 +339,21 @@ def _es_frente_materia(texto):
     primera = ""
     for linea in (texto or "").splitlines():
         if linea.strip():
-            primera = _sin_tildes(linea).lower()
+            primera = _sin_tildes(linea).lower().strip()
             break
-    if _FRENTE_APERTURA_RE.match(primera):
+    if any(primera.startswith(a) for a in _APERTURAS_INEQUIVOCAS):
         return True
+    palabras = primera.split()
+    if palabras and len(palabras) <= 6 and not primera.endswith("."):
+        if palabras[0] in _APERTURAS_CABECERA:
+            return True
+    if palabras and palabras[0] in ("contents", "indice"):
+        resto = " ".join(palabras[1:])
+        if (re.search(r"\bindex\b", resto)
+                or len(re.findall(r"\b\d{1,3}\b", primera)) >= 3):
+            return True
     crudo = _sin_tildes(texto or "").lower()[:2000]
-    distintas = {m for m in _MARCAS_CREDITO if m in crudo}
-    return len(distintas) >= 2
+    return sum(1 for m in _MARCAS_LEGALES if m in crudo) >= 2
 
 
 def _titulo_de_linea(linea, familia):
