@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from merge_final import extraer_tema, is_junk_pair, fusionar
+from merge_final import extraer_tema, is_junk_pair, fusionar, lang_counts
 from validate_synthetic import sha
 
 
@@ -14,6 +14,14 @@ def fila(human: str, gpt: str) -> dict:
         {"from": "human", "value": human},
         {"from": "gpt", "value": gpt},
     ]}
+
+
+def fila_multi(pares: list) -> dict:
+    msgs = []
+    for h, g in pares:
+        msgs.append({"from": "human", "value": h})
+        msgs.append({"from": "gpt", "value": g})
+    return {"conversations": msgs, "turnos": len(pares)}
 
 
 RESPUESTA_VALIDA = ("El tarot es una baraja de 78 cartas; el arcano mayor "
@@ -194,6 +202,79 @@ class TestFusionar(unittest.TestCase):
         self.assertEqual(res["report"]["synth_dups_vs_real"], 1)
         self.assertEqual(res["report"]["descartes"]["duplicado_exacto"], 1)
         self.assertEqual(len(res["train"]), 1)
+
+
+class TestMultiTurnoFusion(unittest.TestCase):
+    def setUp(self):
+        self.cfg = {"seed": 42, "train_ratio": 0.8, "val_ratio": 0.1, "include_en": False}
+
+    def test_junk_en_turno_dos_descarta(self):
+        f = fila_multi([
+            ("Explícame El Loco de forma clara y completa.", RESPUESTA_VALIDA),
+            ("Explica en detalle: Sección 3.", RESPUESTA_VALIDA),
+        ])
+        self.assertTrue(is_junk_pair(f))
+
+    def test_multi_turno_bueno_no_es_junk(self):
+        f = fila_multi([
+            ("Explícame El Loco de forma clara y completa.", RESPUESTA_VALIDA),
+            ("¿Y qué me dice el tarot sobre el Ermitaño?", RESPUESTA_VALIDA),
+        ])
+        self.assertFalse(is_junk_pair(f))
+
+    def test_idioma_detecta_turno_dos_ingles(self):
+        v = fila_multi([
+            ("Explícame el tarot de forma clara.", RESPUESTA_VALIDA),
+            ("¿Y el Ermitaño?",
+             "The Hermit is a card of the tarot that, like palmistry reads the hand, "
+             "represents introspection and inner search in the Marseille tradition."),
+        ])
+        res = fusionar([], [v], [], [], self.cfg)
+        self.assertEqual(res["report"]["descartes"]["idioma"], 1)
+        self.assertEqual(len(res["val"]) + len(res["test"]), 0)
+
+    def test_lang_counts_considera_todas_las_respuestas(self):
+        f = fila_multi([
+            ("Explícame el tarot.", RESPUESTA_VALIDA),
+            ("Seguimiento", RESPUESTA_VALIDA + " y una segunda lectura del arcano."),
+        ])
+        c = lang_counts([f])
+        self.assertEqual(c.get("es"), 2)
+
+    def test_misma_gpt1_distinta_gpt2_no_duplicada(self):
+        t = fila_multi([
+            ("Explícame El Loco de forma clara y completa.", RESPUESTA_VALIDA),
+            ("Seguimiento uno", RESPUESTA_VALIDA + " El Loco invita a empezar de cero."),
+        ])
+        v = fila_multi([
+            ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA),
+            ("Seguimiento dos", RESPUESTA_VALIDA + " El Colgado pide pausa y perspectiva."),
+        ])
+        res = fusionar([t], [v], [], [], self.cfg)
+        self.assertEqual(res["report"]["descartes"]["duplicado_exacto"], 0)
+        self.assertEqual(len(res["val"]) + len(res["test"]), 1)
+
+    def test_multi_turno_identica_si_es_duplicada(self):
+        par = [("Explícame El Loco de forma clara y completa.", RESPUESTA_VALIDA),
+               ("Seguimiento", RESPUESTA_VALIDA + " cierre idéntico del arcano.")]
+        t = fila_multi(par)
+        v = fila_multi(list(par))
+        res = fusionar([t], [v], [], [], self.cfg)
+        self.assertEqual(res["report"]["descartes"]["duplicado_exacto"], 1)
+
+    def test_dedupe_prefijo_multi_turno(self):
+        base = "z" * 300
+        t = fila_multi([
+            ("Explícame El Loco de forma clara y completa.", RESPUESTA_VALIDA + " " + base),
+            ("Seguimiento", RESPUESTA_VALIDA),
+        ])
+        v = fila_multi([
+            ("Explícame El Colgado de forma clara y completa.", RESPUESTA_VALIDA + " " + base),
+            ("Seguimiento", RESPUESTA_VALIDA + " final distinto tras el prefijo comun."),
+        ])
+        res = fusionar([t], [v], [], [], self.cfg)
+        self.assertEqual(res["report"]["descartes"]["duplicado_prefijo"], 1)
+        self.assertEqual(len(res["val"]) + len(res["test"]), 0)
 
 
 if __name__ == "__main__":

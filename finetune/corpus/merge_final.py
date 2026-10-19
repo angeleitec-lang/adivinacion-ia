@@ -15,7 +15,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from translate_dataset import detect_language
-from validate_synthetic import answer_of, human_of, sha
+from validate_synthetic import answer_of, human_of, sha, turnos_de
 from build_dataset import BAD_TOPIC_RE, domain_hits
 
 
@@ -44,14 +44,20 @@ def extraer_tema(human: str) -> str:
     return t.strip().rstrip(".?").strip()
 
 
-def is_junk_pair(row: dict, min_terms: int = 2) -> bool:
-    """Descarta prompts genéricos de secciones inyectadas o sin anclaje."""
-    human = ""
-    for t in row.get("conversations", []):
-        if t.get("from") == "human":
-            human = t.get("value", "")
-            break
-    answer = answer_of(row)
+def _pares_o_fallback(row: dict) -> list:
+    """Todos los pares (human, gpt) de la fila; fallback al primer par si no hay turnos."""
+    pares = turnos_de(row)
+    if not pares:
+        return [(human_of(row), answer_of(row))]
+    return pares
+
+
+def concat_respuestas(row: dict) -> str:
+    """Concatenacion de todas las respuestas gpt, en orden."""
+    return "\n".join(g for _, g in _pares_o_fallback(row))
+
+
+def _par_es_junk(human: str, answer: str, min_terms: int) -> bool:
     if re.search(r"secci[oó]n\s*\d+|§\s*\d+", human, re.IGNORECASE):
         return True
     tema = extraer_tema(human)
@@ -63,6 +69,11 @@ def is_junk_pair(row: dict, min_terms: int = 2) -> bool:
     if min_terms > 0 and len(domain_hits(human) | domain_hits(answer)) < min_terms:
         return True
     return False
+
+
+def is_junk_pair(row: dict, min_terms: int = 2) -> bool:
+    """Descarta prompts genericos: si CUALQUIER par de la fila es basura."""
+    return any(_par_es_junk(h, a, min_terms) for h, a in _pares_o_fallback(row))
 
 
 def load_jsonl(path: Path) -> list[dict]:
@@ -105,9 +116,11 @@ def split_block(rows: list[dict], block: str, seed: int, r_train: float, r_val: 
 
 
 def lang_counts(rows: list[dict]) -> dict[str, int]:
+    """Cuenta TODAS las respuestas gpt de cada fila, no solo la primera."""
     c = Counter()
     for r in rows:
-        c[detect_language(answer_of(r))] += 1
+        for _, g in _pares_o_fallback(r):
+            c[detect_language(g)] += 1
     return dict(c)
 
 
@@ -134,7 +147,8 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
             if is_junk_pair(r):
                 descartes["junk"] += 1
                 continue
-            if not include_en and detect_language(answer_of(r)) != "es":
+            if not include_en and any(
+                    detect_language(g) != "es" for _, g in _pares_o_fallback(r)):
                 descartes["idioma"] += 1
                 continue
             dst.append(r)
@@ -142,14 +156,14 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
     seen_real: set[str] = set()
     train_real, val_cands = [], []
     for r in rt:
-        h = sha(answer_of(r))
+        h = sha(concat_respuestas(r))
         if h in seen_real:
             descartes["duplicado_exacto"] += 1
             continue
         seen_real.add(h)
         train_real.append(r)
     for r in rv:
-        h = sha(answer_of(r))
+        h = sha(concat_respuestas(r))
         if h in seen_real:
             descartes["duplicado_exacto"] += 1
             continue
@@ -160,7 +174,7 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
     dup_vs_real = 0
     seen_synth: set[str] = set()
     for r, m in zip(synth, meta):
-        h = sha(answer_of(r))
+        h = sha(concat_respuestas(r))
         if h in seen_real:
             dup_vs_real += 1
             descartes["duplicado_exacto"] += 1
@@ -183,13 +197,13 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
         h = sha(human_of(r))
         (val_real if int(h, 16) % 2 == 0 else test_real).append(r)
 
-    prefijos = {_norm(answer_of(r))[:200] for r in train_real}
-    prefijos.update(_norm(answer_of(r))[:200] for r, _ in st)
+    prefijos = {_norm(concat_respuestas(r))[:200] for r in train_real}
+    prefijos.update(_norm(concat_respuestas(r))[:200] for r, _ in st)
 
     def sin_prefijo(rows: list[dict]) -> list[dict]:
         out = []
         for r in rows:
-            if _norm(answer_of(r))[:200] in prefijos:
+            if _norm(concat_respuestas(r))[:200] in prefijos:
                 descartes["duplicado_prefijo"] += 1
                 continue
             out.append(r)
@@ -198,7 +212,7 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
     def sin_prefijo_tup(items: list[tuple]) -> list[tuple]:
         out = []
         for row, block in items:
-            if _norm(answer_of(row))[:200] in prefijos:
+            if _norm(concat_respuestas(row))[:200] in prefijos:
                 descartes["duplicado_prefijo"] += 1
                 continue
             out.append((row, block))
