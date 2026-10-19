@@ -16,6 +16,7 @@ Diseñado para no depender de la matriz de cobertura de fuentes (T14).
 from __future__ import annotations
 
 import json
+import re
 
 import cartas
 
@@ -116,6 +117,149 @@ def contar_cartas(pares, contadores):
                         c["invertidas"] += 1
                 if clave in en_preg:
                     c["pares_pregunta"] += 1
+
+
+# ---------------------------------------------------------------------------
+# Astrología: signos, planetas y casas (T15.3)
+# ---------------------------------------------------------------------------
+
+# (id, etiqueta, formas normalizadas, ambiguo)
+_SIGNOS = [
+    ("aries", "Aries", ["aries"], False),
+    ("tauro", "Tauro", ["tauro"], False),
+    ("geminis", "Géminis", ["geminis"], False),
+    ("cancer", "Cáncer", ["cancer"], False),
+    ("leo", "Leo", ["leo"], True),
+    ("virgo", "Virgo", ["virgo"], False),
+    ("libra", "Libra", ["libra"], False),
+    ("escorpio", "Escorpio", ["escorpio", "escorpion"], False),
+    ("sagitario", "Sagitario", ["sagitario"], False),
+    ("capricornio", "Capricornio", ["capricornio"], False),
+    ("acuario", "Acuario", ["acuario"], False),
+    ("piscis", "Piscis", ["piscis"], False),
+]
+
+# Leo es también nombre propio; solo cuenta como signo si hay contexto
+# astrológico explícito en las 8 palabras de alrededor (signo, ascendente,
+# «sol en», otro planeta…). La cifra de esos casos se guarda aparte en
+# «con_contexto». Cáncer como enfermedad no se filtra: apenas aparece en
+# respuestas de este dominio y el requisito del informe era Leo.
+_CONTEXTO_ASTRO_RE = re.compile(
+    r"\bsigno\b|\bascendente\b|\bsol en\b|\bluna en\b|\bzodiaco\b|"
+    r"\bhoroscopo\b|\bnatal\b|\bmercurio en\b|\bvenus en\b|\bmarte en\b|"
+    r"\bjupiter en\b|\bsaturno en\b|\burano en\b|\bneptuno en\b|\bpluton en\b")
+
+_PLANETAS = ["sol", "luna", "mercurio", "venus", "marte", "jupiter",
+             "saturno", "urano", "neptuno", "pluton"]
+
+_ORDINALES_CASA = {
+    "primera": 1, "segunda": 2, "tercera": 3, "cuarta": 4, "quinta": 5,
+    "sexta": 6, "septima": 7, "octava": 8, "novena": 9, "decima": 10,
+    "undecima": 11, "duodecima": 12,
+}
+_PALABRAS_CASA = {
+    "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6,
+    "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12,
+}
+_ROMANOS_CASA = {
+    "i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7,
+    "viii": 8, "ix": 9, "x": 10, "xi": 11, "xii": 12,
+}
+
+
+def _regex_formas(formas):
+    """Alternación de formas fijas, de más larga a más corta, con bordes."""
+    ordenadas = sorted(set(formas), key=len, reverse=True)
+    return re.compile(r"(?<![0-9a-z])(?:"
+                      + "|".join(re.escape(f) for f in ordenadas)
+                      + r")(?![0-9a-z])")
+
+
+_FORMAS_SIGNO = {}
+for _sid, _etiqueta, _formas, _ambiguo in _SIGNOS:
+    for _f in _formas:
+        _FORMAS_SIGNO[_f] = (_sid, _etiqueta, _ambiguo)
+_RE_SIGNOS = _regex_formas(_FORMAS_SIGNO)
+_RE_PLANETAS = _regex_formas(_PLANETAS)
+_ORD_ALT = "|".join(_ORDINALES_CASA)
+_PAL_ALT = "|".join(_PALABRAS_CASA)
+_ROM_ALT = "|".join(sorted(_ROMANOS_CASA, key=len, reverse=True))
+_CASAS_RES = [
+    (re.compile(r"\bcasa\s+(1[0-2]|[1-9])(?![0-9])"),
+     lambda m: int(m.group(1))),
+    (re.compile(r"\bcasa\s+(" + _ROM_ALT + r")(?![a-z])"),
+     lambda m: _ROMANOS_CASA[m.group(1)]),
+    (re.compile(r"\bcasa\s+(" + _PAL_ALT + r")(?![a-z])"),
+     lambda m: _PALABRAS_CASA[m.group(1)]),
+    (re.compile(r"\bcasa\s+(" + _ORD_ALT + r")(?![a-z])"),
+     lambda m: _ORDINALES_CASA[m.group(1)]),
+    (re.compile(r"(?<![a-z])(" + _ORD_ALT + r")\s+casa\b"),
+     lambda m: _ORDINALES_CASA[m.group(1)]),
+]
+
+
+def _hay_contexto_astro(texto_norm, ini, fin):
+    """Busca contexto astrológico explícito a menos de 8 palabras."""
+    palabras = texto_norm.split()
+    p_ini = len(texto_norm[:ini].split())
+    p_fin = len(texto_norm[:fin].split())
+    ventana = palabras[max(0, p_ini - 8): p_fin + 8]
+    return bool(_CONTEXTO_ASTRO_RE.search(" " + " ".join(ventana) + " "))
+
+
+def _menciones_astro(texto):
+    """Devuelve {clave: {"nombre", "con_contexto"}} para signos, planetas y casas."""
+    tn = cartas.norm(texto)
+    hallazgos = {}
+    if tn:
+        for m in _RE_SIGNOS.finditer(tn):
+            sid, etiqueta, ambiguo = _FORMAS_SIGNO[m.group(0)]
+            con_contexto = False
+            if ambiguo:
+                if not _hay_contexto_astro(tn, m.start(), m.end()):
+                    continue
+                con_contexto = True
+            anterior = hallazgos.get("signo:" + sid)
+            if anterior is None or con_contexto:
+                hallazgos["signo:" + sid] = {"nombre": etiqueta,
+                                             "con_contexto": con_contexto}
+        for m in _RE_PLANETAS.finditer(tn):
+            p = m.group(0)
+            hallazgos.setdefault("planeta:" + p,
+                                 {"nombre": p.capitalize(),
+                                  "con_contexto": False})
+        for regex, resolver in _CASAS_RES:
+            for m in regex.finditer(tn):
+                n = resolver(m)
+                hallazgos.setdefault("casa:%02d" % n,
+                                     {"nombre": "Casa %d" % n,
+                                      "con_contexto": False})
+    return hallazgos
+
+
+def contar_astrologia(pares, contadores):
+    """Cuenta signos (con la precaución de Leo), planetas y casas.
+
+    Las claves son «signo:<id>», «planeta:<id>» y «casa:<nn>». En los signos
+    aceptados solo por contexto astrológico explícito se incrementa además el
+    campo «con_contexto» del par de la respuesta.
+    """
+    for pregunta, respuesta in pares:
+        en_resp = _menciones_astro(respuesta)
+        en_preg = _menciones_astro(pregunta)
+        for clave in sorted(set(en_resp) | set(en_preg)):
+            dato = en_resp[clave] if clave in en_resp else en_preg[clave]
+            familia = clave.split(":", 1)[0]
+            c = _contador(contadores, clave, dato["nombre"], familia)
+            if clave in en_resp:
+                c["pares_respuesta"] += 1
+                if clave not in en_preg:
+                    c["solo_en_respuesta"] += 1
+                if en_resp[clave]["con_contexto"]:
+                    c["con_contexto_astrologico"] = \
+                        c.get("con_contexto_astrologico", 0) + 1
+            if clave in en_preg:
+                c["pares_pregunta"] += 1
 
 
 if __name__ == "__main__":

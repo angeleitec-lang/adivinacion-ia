@@ -146,5 +146,74 @@ class ContadorCartas(unittest.TestCase):
         self.assertEqual(c["solo_en_respuesta"], 0)
 
 
+class ContadorAstrologia(unittest.TestCase):
+    def _contar(self, pares):
+        contadores = {}
+        cobertura_dataset.contar_astrologia(pares, contadores)
+        return contadores
+
+    def test_signos_directos(self):
+        cont = self._contar([("", "Aries y Piscis se llevan bien; Tauro tampoco")])
+        self.assertEqual(cont["signo:aries"]["pares_respuesta"], 1)
+        self.assertEqual(cont["signo:piscis"]["pares_respuesta"], 1)
+        self.assertEqual(cont["signo:tauro"]["pares_respuesta"], 1)
+        self.assertEqual(cont["signo:aries"]["familia"], "signo")
+
+    def test_leo_nombre_propio_no_cuenta(self):
+        cont = self._contar([("", "Leo Messi marcó dos goles")])
+        self.assertNotIn("signo:leo", cont)
+
+    def test_leo_con_contexto_astrologico(self):
+        cont = self._contar([
+            ("", "Tu signo es Leo"),
+            ("", "Sol en Leo te favorece"),
+            ("", "tienes el ascendente en Leo"),
+        ])
+        self.assertEqual(cont["signo:leo"]["pares_respuesta"], 3)
+        self.assertEqual(cont["signo:leo"]["con_contexto_astrologico"], 3)
+
+    def test_cancer_se_acepta_sin_contexto(self):
+        # La exigencia del track es solo para Leo; cáncer (enfermedad) se
+        # acepta como límite conocido y se documenta en el informe.
+        cont = self._contar([("", "los síntomas del cáncer se estudian pronto")])
+        self.assertEqual(cont["signo:cancer"]["pares_respuesta"], 1)
+
+    def test_cancer_signo_con_contexto(self):
+        cont = self._contar([("", "tu signo solar es Cáncer")])
+        self.assertEqual(cont["signo:cancer"]["pares_respuesta"], 1)
+
+    def test_escorpio_con_o_sin_n(self):
+        cont = self._contar([
+            ("", "Escorpio intensidad"),
+            ("", "Escorpión cambia"),
+        ])
+        self.assertEqual(cont["signo:escorpio"]["pares_respuesta"], 2)
+        self.assertEqual(cont["signo:escorpio"]["etiqueta"], "Escorpio")
+
+    def test_planetas_con_tildes(self):
+        cont = self._contar([("", "Mercurio retrógrado, Júpiter y Venus brillan")])
+        self.assertEqual(cont["planeta:mercurio"]["pares_respuesta"], 1)
+        self.assertEqual(cont["planeta:jupiter"]["pares_respuesta"], 1)
+        self.assertEqual(cont["planeta:venus"]["pares_respuesta"], 1)
+        self.assertEqual(cont["planeta:mercurio"]["familia"], "planeta")
+
+    def test_casas_varias_formas(self):
+        cont = self._contar([
+            ("", "la casa 7 rige la pareja"),
+            ("", "casa VII de tu mapa"),
+            ("", "la séptima casa marca los vínculos"),
+        ])
+        self.assertEqual(cont["casa:07"]["pares_respuesta"], 3)
+        self.assertEqual(cont["casa:07"]["etiqueta"], "Casa 7")
+
+    def test_casa_once_formas_en_el_mismo_par(self):
+        cont = self._contar([("", "la casa XI, la undécima casa y casa 11")])
+        self.assertEqual(cont["casa:11"]["pares_respuesta"], 1)
+
+    def test_casa_como_vivienda_no_cuenta(self):
+        cont = self._contar([("", "fui a la casa de la playa y vi la casa nueva")])
+        self.assertFalse(any(k.startswith("casa:") for k in cont))
+
+
 if __name__ == "__main__":
     unittest.main()
