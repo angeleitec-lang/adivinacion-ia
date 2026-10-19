@@ -69,13 +69,17 @@ def descargar_subtitulos(
 
     # Opciones yt-dlp: solo subtítulos, sin descargar vídeo
     # Prioridad: manual `es` > automático original `es-orig`
+    # skip_download evita bajar el vídeo, pero los subtítulos solo se escriben
+    # si extract_info se llama con download=True (con False no se genera nada).
+    # El outtmpl no lleva %(language)s: yt-dlp inserta el idioma del subtítulo
+    # antes de la extensión y produce <id>.es.vtt / <id>.es-orig.vtt.
     ydl_opts = {
         "skip_download": True,
         "writesubtitles": True,
         "writeautomaticsub": True,
         "subtitleslangs": ["es", "es-orig"],
         "subtitlesformat": "vtt",
-        "outtmpl": str(vtt_dir / f"{video_id}.%(language)s.%(ext)s"),
+        "outtmpl": str(vtt_dir / "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
         "ignoreerrors": False,  # queremos capturar errores
@@ -88,11 +92,16 @@ def descargar_subtitulos(
     for intento in range(reintentos + 1):
         try:
             with YDL(ydl_opts) as ydl:
-                info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            # yt-dlp guarda los archivos automáticamente según outtmpl
-            # Verificar qué se descargó
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=True)
+            # Verificar qué se descargó, distinguiendo manual de automático:
+            # el `.es` solo vale si `es` está en info["subtitles"] (manual);
+            # un `.es.vtt` sin ese requisito es traducción automática y se borra.
+            manuales = set((info or {}).get("subtitles") or {})
             manual_path = vtt_dir / f"{video_id}.es.vtt"
             auto_path = vtt_dir / f"{video_id}.es-orig.vtt"
+
+            if manual_path.exists() and "es" not in manuales:
+                manual_path.unlink()
 
             if manual_path.exists():
                 return {
