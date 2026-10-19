@@ -241,5 +241,40 @@ class PipelineCompleto(unittest.TestCase):
         self.assertTrue((self.work / "dataset.jsonl").exists())
 
 
+class TodasLasLecturasDescartadas(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.work = Path(self._tmp.name) / "work"
+        self.catalogo = self.work / "catalogo.jsonl"
+        _escribir_catalogo(self.catalogo)
+        self.addCleanup(self._tmp.cleanup)
+
+    def _simulado_invalido(self, sistema, usuario):
+        if "Clasifica según el esquema" in usuario:
+            return json.dumps({
+                "tipo": "lectura_individual", "familia": "tarot-lectura",
+                "tirada": "3_cartas", "n_cartas": 3, "calidad": 4, "motivo": "ok",
+            }, ensure_ascii=False)
+        if "Extrae la lectura según el esquema" in usuario:
+            return json.dumps({
+                "tipo": "lectura", "tirada": "3_cartas",
+                "pregunta_o_tema": "amor",
+                "cartas": [{"nombre": "Carta Inexistente", "orientacion": "derecha",
+                           "posicion": "pasado"}],
+                "interpretaciones": [], "sintesis": "", "consejo": "",
+            }, ensure_ascii=False)
+        return "respuesta irrelevante"
+
+    def test_normalizar_no_revienta_sin_lecturas_validas(self):
+        res = yt_pipeline.procesar_pipeline(
+            str(self.work), catalogo=str(self.catalogo), pausa=0.0,
+            client=llm_client.LLMClient(simulado=self._simulado_invalido),
+            clase_ydl=_clase_ydl(RESPUESTAS_OK))
+        self.assertFalse((self.work / "lecturas_validadas.jsonl").exists())
+        self.assertGreaterEqual(len(_leer_jsonl(self.work / "lecturas_descartadas.jsonl")), 1)
+        self.assertEqual(res["normalizar"]["ok"], 0)
+        self.assertFalse((self.work / "dataset.jsonl").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

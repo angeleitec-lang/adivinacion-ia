@@ -265,9 +265,12 @@ def procesar_pipeline(
     if hasta == "extraer":
         return resultado
 
-    # 6. normalizar
-    resultado["normalizar"] = yt_normalize.procesar_normalizacion(
-        lecturas_path, work, client, limite=limite)
+    # 6. normalizar (si no quedó ninguna lectura válida, no hay fichero que leer)
+    if not lecturas_path.exists():
+        resultado["normalizar"] = {"ok": 0, "descartados": 0, "saltados": 0}
+    else:
+        resultado["normalizar"] = yt_normalize.procesar_normalizacion(
+            lecturas_path, work, client, limite=limite)
     return resultado
 
 
