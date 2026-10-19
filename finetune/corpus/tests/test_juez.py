@@ -290,6 +290,132 @@ class AnclajeFacetas(unittest.TestCase):
             self.assertIsNone(juez.PALABRAS_CLAVE_FACETA[faceta])
 
 
+class AnclajeIngles(unittest.TestCase):
+    """T22b.1: el anclaje léxico de facetas también funciona en inglés,
+    porque la mayor parte del corpus está en ese idioma."""
+
+    _TEXTO_FOOL = (
+        "The Fool represents new beginnings. In love, the Fool suggests a "
+        "leap of faith with a partner; at work, a new venture. Reversed it "
+        "warns of recklessness."
+    )
+
+    def test_texto_de_la_coordinadora(self):
+        aceptadas = juez.facetas_ancladas(
+            ["amor", "trabajo", "salud", "derecha_invertida"],
+            self._TEXTO_FOOL)
+        self.assertEqual(aceptadas, ["amor", "trabajo", "derecha_invertida"])
+
+    def test_amor_ingles(self):
+        for palabra in ("love", "partner", "relationship", "romance"):
+            with self.subTest(palabra=palabra):
+                texto = "The card speaks of %s and the heart." % palabra
+                self.assertEqual(juez.facetas_ancladas(["amor"], texto),
+                                ["amor"])
+
+    def test_trabajo_ingles(self):
+        for palabra in ("work", "career", "job", "business", "venture"):
+            with self.subTest(palabra=palabra):
+                texto = "A new %s opens on the horizon." % palabra
+                self.assertEqual(juez.facetas_ancladas(["trabajo"], texto),
+                                ["trabajo"])
+
+    def test_derecha_invertida_ingles(self):
+        for frase in ("reversed", "upside down", "inverted"):
+            with self.subTest(frase=frase):
+                texto = "When the card falls %s, take care." % frase
+                self.assertEqual(
+                    juez.facetas_ancladas(["derecha_invertida"], texto),
+                    ["derecha_invertida"])
+
+    def test_dinero_ingles(self):
+        for palabra in ("money", "finances", "wealth", "income"):
+            with self.subTest(palabra=palabra):
+                texto = "This position governs %s and property." % palabra
+                self.assertEqual(juez.facetas_ancladas(["dinero"], texto),
+                                ["dinero"])
+
+    def test_salud_ingles(self):
+        for palabra in ("health", "body", "illness", "wellbeing"):
+            with self.subTest(palabra=palabra):
+                texto = "It influences the %s and vitality." % palabra
+                self.assertEqual(juez.facetas_ancladas(["salud"], texto),
+                                ["salud"])
+
+    def test_espiritual_ingles(self):
+        for palabra in ("spiritual", "soul", "divine"):
+            with self.subTest(palabra=palabra):
+                texto = "A path of %s growth and grace." % palabra
+                self.assertEqual(juez.facetas_ancladas(["espiritual"], texto),
+                                ["espiritual"])
+
+    def test_luz_sombra_ingles(self):
+        for frase in ("shadow", "light side", "positive", "negative"):
+            with self.subTest(frase=frase):
+                texto = "Consider the %s of this archetype." % frase
+                self.assertEqual(
+                    juez.facetas_ancladas(["luz_sombra"], texto),
+                    ["luz_sombra"])
+
+    def test_correspondencias_ingles(self):
+        for frase in ("correspondence", "ruled by", "element", "kabbalah",
+                     "tree of life"):
+            with self.subTest(frase=frase):
+                texto = "Its %s ties it to the sephiroth." % frase
+                self.assertEqual(
+                    juez.facetas_ancladas(["correspondencias"], texto),
+                    ["correspondencias"])
+
+    def test_consejo_practico_ingles(self):
+        for palabra in ("advice", "recommend", "should", "practical"):
+            with self.subTest(palabra=palabra):
+                texto = "As %s guidance for the querent." % palabra
+                self.assertEqual(
+                    juez.facetas_ancladas(["consejo_practico"], texto),
+                    ["consejo_practico"])
+
+    def test_ejemplo_de_uso_ingles(self):
+        for frase in ("example", "sample reading", "spread"):
+            with self.subTest(frase=frase):
+                texto = "Here is an %s of the method." % frase
+                self.assertEqual(
+                    juez.facetas_ancladas(["ejemplo_de_uso"], texto),
+                    ["ejemplo_de_uso"])
+
+    def test_ingles_sin_claves_no_ancla(self):
+        texto = ("The Fool walks an open road at dawn, carrying a small "
+                 "bundle and gazing at the sky.")
+        facetas = ["amor", "trabajo", "dinero", "salud", "espiritual",
+                   "luz_sombra", "correspondencias", "consejo_practico",
+                   "ejemplo_de_uso", "derecha_invertida"]
+        self.assertEqual(juez.facetas_ancladas(facetas, texto), [])
+
+    def test_idioma_es_no_acepta_claves_inglesas(self):
+        self.assertEqual(
+            juez.facetas_ancladas(["amor"], "In love with a partner",
+                                   idioma="es"),
+            [])
+
+    def test_idioma_en_si_acepta_claves_inglesas(self):
+        self.assertEqual(
+            juez.facetas_ancladas(["amor", "trabajo"], "Love at work",
+                                  idioma="en"),
+            ["amor", "trabajo"])
+
+    def test_idioma_dudoso_usa_ambas_listas(self):
+        aceptadas = juez.facetas_ancladas(
+            ["amor", "trabajo"], "El amor y el trabajo", idioma="otro")
+        self.assertEqual(aceptadas, ["amor", "trabajo"])
+
+    def test_constante_inglesa_cubre_todas_las_facetas(self):
+        todas = set()
+        for facetas in cobertura.FACETAS_POR_FAMILIA.values():
+            todas.update(facetas)
+        self.assertTrue(todas <= set(juez.PALABRAS_CLAVE_FACETA_EN))
+        for faceta in ("significado_general", "simbolismo"):
+            self.assertIsNone(juez.PALABRAS_CLAVE_FACETA_EN[faceta])
+
+
 import tempfile
 
 
