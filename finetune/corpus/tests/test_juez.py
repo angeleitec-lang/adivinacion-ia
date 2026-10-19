@@ -427,3 +427,95 @@ class EscrituraReanudable(unittest.TestCase):
             self.assertEqual(len(registros), 2)
             self.assertEqual({r["juicio"]["tipo"] for r in registros},
                              {"conocimiento"})
+
+
+class LeerSecciones(unittest.TestCase):
+    """T22.5: autodetección de secciones de libro (JSONL) y web (Markdown)."""
+
+    def test_jsonl_y_web_en_directorio(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            libro = {"seccion": 1, "titulo": "The Fool",
+                     "texto": "texto del libro sobre la pareja", "chars": 5,
+                     "id_libro": "libro-a", "posicion": 0}
+            fm = dict(libro, seccion=2, texto="preámbulo",
+                      front_matter=True)
+            with open(os.path.join(tmp, "secciones.jsonl"), "w",
+                      encoding="utf-8") as fh:
+                fh.write(json.dumps(libro, ensure_ascii=False) + "\n")
+                fh.write(json.dumps(fm, ensure_ascii=False) + "\n")
+            with open(os.path.join(tmp, "pagina.md"), "w",
+                      encoding="utf-8") as fh:
+                fh.write("---\nurl: https://example.com/leo\n"
+                         "dominio: example.com\ntitulo: Leo\n"
+                         "idioma: es\nfamilia: astrologia\n"
+                         "entidad_id: leo|signo\n---\n\n"
+                         "Leo es un signo de fuego regido por el Sol.\n")
+            secciones = juez.leer_secciones(tmp)
+            self.assertEqual(len(secciones), 2)
+            por_id = {s.get("id_libro") or s.get("url"): s
+                      for s in secciones}
+            self.assertIn("libro-a", por_id)
+            web = por_id["https://example.com/leo"]
+            self.assertEqual(web["dominio"], "example.com")
+            self.assertEqual(web["entidad_id"], "leo|signo")
+            self.assertIn("signo de fuego", web["texto"])
+
+
+class IntegracionCobertura(unittest.TestCase):
+    """T22.5: las evidencias del juez alimentan calcular_cobertura."""
+
+    def test_dos_fuentes_sumen_dos_en_la_celda(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            def simulado(sistema, usuario):
+                return ("```json\n%s\n```" % json.dumps({
+                    "tipo": "conocimiento", "calidad": 4, "idioma": "es",
+                    "entidades": [{"entidad_id": "tarot-mayor-01",
+                                   "facetas": ["significado_general"]}]}))
+            cliente = llm_client.LLMClient(simulado=simulado)
+            secciones = [
+                _seccion("The Fool", "primer libro", id_libro="libro-a"),
+                _seccion("The Fool", "segundo libro", id_libro="libro-b"),
+            ]
+            juez.procesar_secciones(secciones, cliente, tmp, workers=1)
+            evs, _ = cobertura.leer_evidencias(
+                [os.path.join(tmp, "evidencias.jsonl")])
+            res = cobertura.calcular_cobertura(evs)
+            celda = [c for c in res["celdas"]
+                     if c["entidad_id"] == "tarot-mayor-01"
+                     and c["faceta"] == "significado_general"]
+            self.assertEqual(celda[0]["n_fuentes"], 2)
+
+
+class CLIJuez(unittest.TestCase):
+    """T22.5: CLI con --simulado escribe salidas e informe."""
+
+    def _preparar(self, tmp):
+        for id_libro in ("libro-a", "libro-b"):
+            libro = {"seccion": 1, "titulo": "The Fool",
+                     "texto": "the fool on love and a new beginning "
+                              "in a couple relationship, id " + id_libro,
+                     "chars": 10, "id_libro": id_libro, "posicion": 0}
+            with open(os.path.join(tmp, id_libro + ".jsonl"), "w",
+                      encoding="utf-8") as fh:
+                fh.write(json.dumps(libro, ensure_ascii=False) + "\n")
+
+    def test_cli_simulado_e_informe(self):
+        with tempfile.TemporaryDirectory() as src, \
+                tempfile.TemporaryDirectory() as out:
+            self._preparar(src)
+            rc = juez.main(["--secciones", src, "--out-dir", out,
+                            "--simulado"])
+            self.assertEqual(rc, 0)
+            self.assertTrue(os.path.exists(
+                os.path.join(out, "juez_informe.md")))
+            with open(os.path.join(out, "juez_informe.md"),
+                      encoding="utf-8") as fh:
+                informe = fh.read()
+            self.assertIn("Secciones juzgadas", informe)
+            self.assertIn("Llamadas al LLM", informe)
+            self.assertIn("Tarot", informe)
+            # Relanzar no repite llamadas: el informe lo refleja.
+            juez.main(["--secciones", src, "--out-dir", out, "--simulado"])
+            with open(os.path.join(out, "juicios.jsonl"),
+                      encoding="utf-8") as fh:
+                self.assertEqual(len([l for l in fh if l.strip()]), 2)

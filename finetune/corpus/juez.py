@@ -32,6 +32,7 @@ import re
 import cartas
 import cobertura
 import cobertura_dataset
+import llm_client
 
 # ---------------------------------------------------------------------------
 # Normalización y mapas de nombres ingleses de arcanos mayores
@@ -400,8 +401,10 @@ def facetas_ancladas(facetas, texto):
     return aceptadas
 
 
+import argparse
 import glob
 import os
+import sys
 
 # ---------------------------------------------------------------------------
 # Fuentes, evidencias y procesamiento reanudable
@@ -632,3 +635,224 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
         fh_juicios.close()
         fh_ev.close()
     return stats
+
+
+# ---------------------------------------------------------------------------
+# Lectura de secciones (autodetección libro/web), informe y CLI
+# ---------------------------------------------------------------------------
+
+_NOMBRE_FAMILIA = {
+    "tarot": "Tarot",
+    "baraja_espanola": "Baraja española",
+    "astrologia": "Astrología",
+    "numerologia": "Numerología",
+}
+
+_FAMILIA_DE = None
+
+
+def _familia_de(entidad_id):
+    """Familia de una entidad por id (catálogo de `cobertura.entidades`)."""
+    global _FAMILIA_DE
+    if _FAMILIA_DE is None:
+        _FAMILIA_DE = {e["entidad_id"]: e["familia"]
+                       for e in cobertura.entidades()}
+    return _FAMILIA_DE.get(entidad_id, "desconocida")
+
+
+def _front_matter(texto):
+    """Separa el front-matter YAML simple (`clase: valor`) del cuerpo."""
+    if not texto.startswith("---"):
+        return {}, texto
+    fin = texto.find("\n---", 3)
+    if fin == -1:
+        return {}, texto
+    bloque = texto[3:fin].strip()
+    cuerpo = texto[fin + 4:].lstrip("\n")
+    datos = {}
+    for linea in bloque.splitlines():
+        if ":" not in linea:
+            continue
+        clave, valor = linea.split(":", 1)
+        valor = valor.strip().strip('"').strip("'")
+        datos[clave.strip()] = None if valor in ("", "None") else valor
+    return datos, cuerpo
+
+
+def _secciones_de_fichero(ruta):
+    """Lee un fichero de entrada y devuelve sus secciones normalizadas."""
+    with open(ruta, encoding="utf-8", errors="replace") as fh:
+        contenido = fh.read()
+    if ruta.endswith(".jsonl"):
+        secciones = []
+        for linea in contenido.splitlines():
+            linea = linea.strip()
+            if not linea:
+                continue
+            try:
+                dato = json.loads(linea)
+            except json.JSONDecodeError:
+                continue
+            if (isinstance(dato, dict) and dato.get("texto")
+                    and not dato.get("front_matter")):
+                secciones.append(dato)
+        return secciones
+    if ruta.endswith((".md", ".markdown")):
+        datos, cuerpo = _front_matter(contenido)
+        seccion = dict(datos)
+        seccion["texto"] = cuerpo
+        seccion["chars"] = len(cuerpo)
+        if not seccion.get("url"):
+            seccion["url"] = os.path.abspath(ruta)
+        if not seccion.get("dominio"):
+            seccion["dominio"] = os.path.basename(
+                os.path.dirname(os.path.abspath(ruta)))
+        return [seccion]
+    return []
+
+
+def leer_secciones(ruta):
+    """Todas las secciones de un fichero o directorio (recursivo, ordenado).
+
+    JSONL: secciones de libro (se omiten las `front_matter: true`).
+    Markdown con front-matter YAML: páginas web. Otros ficheros se ignoran.
+    """
+    rutas = []
+    if os.path.isdir(ruta):
+        for raiz, _, ficheros in os.walk(ruta):
+            for nombre in sorted(ficheros):
+                if nombre.endswith((".jsonl", ".md", ".markdown")):
+                    rutas.append(os.path.join(raiz, nombre))
+    else:
+        rutas.append(ruta)
+    secciones = []
+    for r in sorted(rutas):
+        secciones.extend(_secciones_de_fichero(r))
+    return secciones
+
+
+def _porcentaje(n, total):
+    return (100.0 * n / total) if total else 0.0
+
+
+def construir_informe(estadisticas, juicios, evidencias):
+    """Texto Markdown del informe del juez (en español)."""
+    juzgadas = len(juicios)
+    tipos = {}
+    llamadas = sum(r.get("juicio", {}).get("llamadas", 0) for r in juicios)
+    for r in juicios:
+        tipo = r.get("juicio", {}).get("tipo", "sin_juicio")
+        tipos[tipo] = tipos.get(tipo, 0) + 1
+    por_familia = {}
+    calidades = []
+    for ev in evidencias:
+        familia = _NOMBRE_FAMILIA.get(_familia_de(ev.get("entidad_id")),
+                                      "Otras")
+        por_familia[familia] = por_familia.get(familia, 0) + 1
+        if isinstance(ev.get("calidad"), (int, float)) and ev["calidad"]:
+            calidades.append(ev["calidad"])
+    calidad_media = (sum(calidades) / len(calidades)) if calidades else 0.0
+    lineas = [
+        "# Informe del juez de evidencias",
+        "",
+        "- Secciones juzgadas (histórico): %d" % juzgadas,
+        "- Sin candidatos (descartadas sin llamada en esta pasada): %d"
+        % estadisticas.get("sin_candidatos", 0),
+        "- Juicios con error: %d" % estadisticas.get("error", 0),
+        "- Llamadas al LLM: %d (media %.2f por sección juzgada)"
+        % (llamadas, _porcentaje(llamadas, juzgadas) / 100.0
+           if juzgadas else 0.0),
+        "",
+        "## Distribución de tipo",
+        "",
+    ]
+    for tipo in sorted(tipos, key=lambda t: -tipos[t]):
+        lineas.append("- %s: %d (%.1f %%)"
+                      % (tipo, tipos[tipo],
+                         round(_porcentaje(tipos[tipo], juzgadas), 1)))
+    lineas += [
+        "",
+        "## Evidencias",
+        "",
+        "- Total de evidencias: %d" % len(evidencias),
+        "- Calidad media de las evidencias: %.2f" % calidad_media,
+        "",
+        "| Familia | Evidencias |",
+        "|---|---|",
+    ]
+    for familia in sorted(por_familia, key=lambda f: -por_familia[f]):
+        lineas.append("| %s | %d |" % (familia, por_familia[familia]))
+    return "\n".join(lineas) + "\n"
+
+
+def escribir_informe(out_dir, estadisticas, ruta_informe=None):
+    """Genera `juez_informe.md` a partir de los ficheros ya escritos."""
+    if ruta_informe is None:
+        ruta_informe = os.path.join(out_dir, "juez_informe.md")
+    juicios = _leer_jsonl(os.path.join(out_dir, "juicios.jsonl"))
+    evidencias = _leer_jsonl(os.path.join(out_dir, "evidencias.jsonl"))
+    with open(ruta_informe, "w", encoding="utf-8") as fh:
+        fh.write(construir_informe(estadisticas, juicios, evidencias))
+    return ruta_informe
+
+
+def _simular(sistema, usuario):
+    """Cliente determinista para `--simulado`: primer candidato, sin facetas
+    que exijan anclaje."""
+    entidad = None
+    for linea in usuario.splitlines():
+        if linea.startswith("- ") and "(" in linea:
+            entidad = linea[2:linea.index("(")].strip()
+            break
+    respuesta = {"tipo": "conocimiento", "calidad": 4, "idioma": "es",
+                 "entidades": ([{"entidad_id": entidad,
+                                 "facetas": ["significado_general"]}]
+                                if entidad else [])}
+    return "```json\n%s\n```" % json.dumps(respuesta, ensure_ascii=False)
+
+
+def main(argv=None):
+    """CLI del juez: `python corpus/juez.py --secciones DIR --out-dir DIR`."""
+    parser = argparse.ArgumentParser(
+        description="Jueza secciones de libros y páginas web y produce "
+                    "evidencias para la matriz de cobertura.")
+    parser.add_argument("--secciones", required=True,
+                        help="directorio o fichero de secciones "
+                             "(JSONL de libros o Markdown web)")
+    parser.add_argument("--out-dir", required=True,
+                        help="directorio de salida (evidencias.jsonl, "
+                             "juicios.jsonl, juez_informe.md)")
+    parser.add_argument("--limite", type=int, default=None,
+                        help="máximo de secciones procesadas en esta pasada")
+    parser.add_argument("--simulado", action="store_true",
+                        help="usa un cliente determinista (pruebas, sin red)")
+    parser.add_argument("--workers", type=int, default=4,
+                        help="hilos de llamada al LLM (por defecto: 4)")
+    parser.add_argument("--knowledge-dir", default=None,
+                        help="directorio de inventarios de libros "
+                             "(por defecto: finetune/knowledge)")
+    args = parser.parse_args(argv)
+
+    cliente = llm_client.LLMClient() if not args.simulado else \
+        llm_client.LLMClient(simulado=_simular)
+    rutas_meta = None
+    if args.knowledge_dir:
+        rutas_meta = []
+        for patron in _RUTAS_META_POR_DEFECTO:
+            rutas_meta.extend(sorted(glob.glob(
+                os.path.join(args.knowledge_dir, patron))))
+    meta = cargar_meta_libros(rutas_meta)
+    secciones = leer_secciones(args.secciones)
+    stats = procesar_secciones(secciones, cliente, args.out_dir, meta=meta,
+                               workers=args.workers, limite=args.limite)
+    ruta_informe = escribir_informe(args.out_dir, stats)
+    print("Secciones: %d juzgadas, %d reaprovechadas, %d sin candidatos; "
+          "%d evidencias nuevas, %d llamadas; informe en %s"
+          % (stats["juzgadas"], stats["reaprovechadas"],
+             stats["sin_candidatos"], stats["evidencias"],
+             stats["llamadas"], ruta_informe))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
