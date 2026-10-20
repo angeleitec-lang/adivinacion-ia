@@ -79,6 +79,10 @@ def biorritmos(
         dict con ciclos (valor, porcentaje, fase) para la fecha,
         y opcionalmente "ventana" con lista de días.
     """
+    if isinstance(dias, bool) or not isinstance(dias, int):
+        raise TypeError(f"Los días de la ventana deben ser un número entero: {dias!r}")
+    if dias < 0:
+        raise ValueError("Los días de la ventana no pueden ser negativos")
     fn = _parse_fecha(fecha_nacimiento)
     f = _parse_fecha(fecha)
 
