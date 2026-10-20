@@ -1,0 +1,188 @@
+{
+  "descripcion": "Sitios en español con páginas originales por combinación astrológica (planeta en signo, planeta en casa, aspectos entre planetas y ascendente por signo), para cubrir la matriz de astrología. Sondeo 2026-10-20: 15 sitios nuevos, ninguno duplicado de sitios_indice_es.json ni de sitios_indice_es_tarot.json. Cada regex fue validada contra el sitemap o índice real del sitio (se anota el número de URLs capturadas).",
+  "sitios": [
+    {
+      "nombre": "enastrologico.com",
+      "tipo": "blog",
+      "indice": [
+        "https://enastrologico.com/astroblog-sitemap.xml"
+      ],
+      "regex": "^https://enastrologico\\.com/astroblog/(?:(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)|(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-casa-\\d{1,2}|(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-(?:conjuncion|sextil|cuadratura|trigono|oposicion)-(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)|diferencia-entre-(?:el-)?sol-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)-y-ascendente-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis))/?$",
+      "dominio": "enastrologico.com",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "WordPress (Yoast). Cientos de artículos de astrología; cubre planeta en signo, planeta en casa, aspectos y comparativas Sol/Ascendente. Robots: sin Disallow. Muestra «luna-en-casa-4»: 2.929 caracteres de prosa original en español. Regex captura 192 URLs del astroblog-sitemap (72 planeta-signo y 120 planeta-casa; los aspectos del blog llevan sufijos y no entran en el patrón)."
+    },
+    {
+      "nombre": "astrochart.co",
+      "tipo": "sitio",
+      "indice": [
+        "https://astrochart.co/sitemap.xml"
+      ],
+      "regex": "^https://astrochart\\.co/es/(?:(?:(?:sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)-in-(?:aries|taurus|gemini|cancer|leo|virgo|libra|scorpio|sagittarius|capricorn|aquarius|pisces)|(?:sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)-in-\\d{1,2}(?:st|nd|rd|th)-house))$",
+      "dominio": "astrochart.co",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "Sitio de carta natal con sección /es/ traducida al español y slugs en inglés. Cubre las 120 combinaciones planeta-signo y las 120 planeta-casa. Robots: solo bloquea /api/, /dashboard/, /test-precision y /admin/. Muestras: «mars-in-aries» 9.533 caracteres y «sun-in-4th-house» 11.210. Regex captura 240 URLs del sitemap (120 planeta-signo y 120 planeta-casa)."
+    },
+    {
+      "nombre": "fernandoangelcoronado.es",
+      "tipo": "blog",
+      "indice": [
+        "https://fernandoangelcoronado.es/post-sitemap.xml",
+        "https://fernandoangelcoronado.es/post-sitemap2.xml"
+      ],
+      "regex": "^https://fernandoangelcoronado\\.es/(?:(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-casa-\\d{1,2}|(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)|ascendente-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)|nodo-(?:norte|sur)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis))/?$",
+      "dominio": "fernandoangelcoronado.es",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "WordPress (Yoast), marca también conocida como Astrocronicas. Cubre planeta en casa, planeta en signo, ascendente y nodos. Robots: sin Disallow. Muestra «luna-en-casa-4»: 8.750 caracteres. Regex captura 116 URLs de los dos post-sitemaps (12 planeta-signo, 80 planeta-casa, 12 ascendente y 12 nodos)."
+    },
+    {
+      "nombre": "aprendeastrologia.com",
+      "tipo": "blog",
+      "indice": [
+        "https://aprendeastrologia.com/post-sitemap.xml"
+      ],
+      "regex": "^https://aprendeastrologia\\.com/blog/(?:(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)|(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-(?:conjuncion|sextil|cuadratura|trigono|oposicion)-(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)|(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:conjuncion|sextil|cuadratura|trigono|oposicion)-a-(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton))/?$",
+      "dominio": "aprendeastrologia.com",
+      "familia": "astrologia",
+      "prioridad": "media",
+      "nota": "WordPress (Yoast), escuela argentina con autoría visible. Cubre planeta en signo y aspectos. Robots: solo bloquea búsquedas /?s= y /search/. Muestra «sol-conjuncion-luna»: 5.546 caracteres. Regex captura 37 URLs del post-sitemap (25 planeta-signo y 5 aspectos)."
+    },
+    {
+      "nombre": "astroworld.es",
+      "tipo": "blog",
+      "indice": [
+        "https://astroworld.es/sitemap_index.xml"
+      ],
+      "regex": "^https://astroworld\\.es/(?:(?:(?:el-|la-)?(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis))|ascendente-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis))/?$",
+      "dominio": "astroworld.es",
+      "familia": "astrologia",
+      "prioridad": "media",
+      "nota": "WordPress (Yoast). Artículos de 2014 con prosa extensa. Cubre planeta en signo y ascendente; hay algún aspecto suelto que el regex deja fuera por llevar sufijo. Robots: sin Disallow. Muestras: «el-sol-en-acuario» 3.410 caracteres y «ascendente-en-aries» 18.078. Regex captura 24 URLs del sitemap (12 planeta-signo y 12 ascendente)."
+    },
+    {
+      "nombre": "astralisis.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://astralisis.com/sitemap.xml"
+      ],
+      "regex": "^https://astralisis\\.com/articulos/(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)$",
+      "dominio": "astralisis.com",
+      "familia": "astrologia",
+      "prioridad": "media",
+      "nota": "Sitio clásico de astrología con sección /articulos/. Cubre planeta en signo. Robots: bloquea rutas administrativas y de cupones, no los artículos. Muestra «sol-en-aries»: 8.853 caracteres. Regex captura 64 URLs del sitemap."
+    },
+    {
+      "nombre": "ruthmontenegro.com",
+      "tipo": "blog",
+      "indice": [
+        "https://ruthmontenegro.com/post-sitemap.xml",
+        "https://ruthmontenegro.com/post-sitemap2.xml"
+      ],
+      "regex": "^https://ruthmontenegro\\.com/astrologia/sol-en-los-signos/el-sol-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)/$",
+      "dominio": "ruthmontenegro.com",
+      "familia": "astrologia",
+      "prioridad": "media",
+      "nota": "WordPress (Yoast). Sección «Sol en los signos» con artículos largos y firmados. Solo cubre Sol en signo. Robots: bloquea wp-admin y parámetros de plantilla, no la sección. Muestra «el-sol-en-aries»: 11.819 caracteres. Regex captura 12 URLs."
+    },
+    {
+      "nombre": "astrologica.es",
+      "tipo": "blog",
+      "indice": [
+        "https://astrologica.es/post-sitemap.xml"
+      ],
+      "regex": "^https://astrologica\\.es/escrito/(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)/$",
+      "dominio": "astrologica.es",
+      "familia": "astrologia",
+      "prioridad": "baja",
+      "nota": "WordPress (Yoast). Solo 4 páginas de planeta en signo, pero con texto original y experiencia propia. Robots: sin Disallow. Muestra «luna-en-capricornio»: 4.106 caracteres. Regex captura 4 URLs del post-sitemap."
+    },
+    {
+      "nombre": "soyespiritual.top",
+      "tipo": "blog",
+      "indice": [
+        "https://soyespiritual.top/post-sitemap.xml",
+        "https://soyespiritual.top/post-sitemap2.xml"
+      ],
+      "regex": "^https://soyespiritual\\.top/(?:(?:(?:el-|la-)?(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-la-casa-\\d{1,2})|ascendente-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis))/?$",
+      "dominio": "soyespiritual.top",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "WordPress (Yoast). Estilo enciclopédico antiguo, con páginas muy largas. Cubre planeta en casa y ascendente. Robots: sin Disallow. Muestra «saturno-en-la-casa-1»: 21.663 caracteres. Regex captura 48 URLs de los dos post-sitemaps (37 planeta-casa y 11 ascendente)."
+    },
+    {
+      "nombre": "leandroliptak.com",
+      "tipo": "blog",
+      "indice": [
+        "https://leandroliptak.com/post-sitemap.xml"
+      ],
+      "regex": "^https://leandroliptak\\.com/(?:(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)(?:-[a-z0-9-]+)?|que-significa-(?:tener-)?el-(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)(?:-[a-z0-9-]+)?|que-significa-el-ascendente-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis))/?$",
+      "dominio": "leandroliptak.com",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "WordPress (Yoast), astrólogo argentino con artículos firmados. Cubre planeta en signo, ascendente y algunas variantes «qué significa». Robots: solo bloquea logs y parámetros de WooCommerce. Muestra «jupiter-en-aries-que-significa-en-mi-carta-natal»: 3.961 caracteres. Regex captura 82 URLs del post-sitemap (70 planeta-signo y 12 ascendente)."
+    },
+    {
+      "nombre": "tailoredmoon.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://tailoredmoon.com/sitemap.xml"
+      ],
+      "regex": "^https://tailoredmoon\\.com/es/aprender/transitos/(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)$",
+      "dominio": "tailoredmoon.com",
+      "familia": "astrologia",
+      "prioridad": "media",
+      "nota": "Sitio de astrología con sección /es/aprender/transitos/. Cubre planeta en signo (120 combinaciones) con texto propio, aunque más breve. Robots: bloquea /admin/, /dev/, /horoscope/ y /journal/, no la sección de aprendizaje. Muestra «sol-en-aries»: 1.438 caracteres. Regex captura 120 URLs del sitemap."
+    },
+    {
+      "nombre": "simbologia.net",
+      "tipo": "blog",
+      "indice": [
+        "https://simbologia.net/sitemap_index.xml"
+      ],
+      "regex": "^https://simbologia\\.net/(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-la-casa-\\d{1,2}(?:-[a-z0-9-]+)?/$",
+      "dominio": "simbologia.net",
+      "familia": "astrologia",
+      "prioridad": "media",
+      "nota": "WordPress (Yoast), temática esotérica amplia. Cubre planeta en casa con artículos interpretativos. Robots: solo bloquea /wp-admin/. Muestra «pluton-en-la-casa-12»: 7.201 caracteres. Regex captura 12 URLs del sitemap, todas de planeta-casa."
+    },
+    {
+      "nombre": "ritmolunar.com",
+      "tipo": "blog",
+      "indice": [
+        "https://ritmolunar.com/sitemap_index.xml"
+      ],
+      "regex": "^https://ritmolunar\\.com/astrologia/(?:(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)|(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-casa-\\d{1,2}|(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-(?:conjuncion|sextil|cuadratura|trigono|oposicion)-(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)|ascendente-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis))/?$",
+      "dominio": "ritmolunar.com",
+      "familia": "astrologia",
+      "prioridad": "alta",
+      "nota": "WordPress (Yoast). Sección /astrologia/ con las 120 combinaciones planeta-signo, 120 planeta-casa, 12 ascendentes y 19 aspectos. Texto original en español, de longitud media (1.200-1.700 caracteres en las muestras «sol-en-aries» y «luna-en-casa-4»; algunas páginas de casa quedan por debajo del mínimo del pipeline). Robots: sin Disallow. Regex captura 271 URLs de los post-sitemaps."
+    },
+    {
+      "nombre": "www.astrocosmo.cl",
+      "tipo": "blog",
+      "indice": [
+        "https://www.astrocosmo.cl/sitemap_index.xml"
+      ],
+      "regex": "^https://www\\.astrocosmo\\.cl/(?:(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)(?:-[a-z0-9-]+)?|(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-(?:conjuncion|sextil|cuadratura|trigono|oposicion)-(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)(?:-[a-z0-9-]+)?|ascendente-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)(?:-[a-z0-9-]+)?)/$",
+      "dominio": "www.astrocosmo.cl",
+      "familia": "astrologia",
+      "prioridad": "media",
+      "nota": "WordPress (Yoast), blog astrológico chileno con artículos firmados y extensos. Cubre planeta en signo (incluye tránsitos redactados), aspectos y ascendente. Robots: sin Disallow. Muestra «sol-en-geminis»: 8.051 caracteres. Regex captura 117 URLs de los post-sitemaps (82 planeta-signo, 3 planeta-casa, 8 aspectos y 5 ascendente)."
+    },
+    {
+      "nombre": "caminosdeconocimiento.com",
+      "tipo": "blog",
+      "indice": [
+        "https://www.caminosdeconocimiento.com/sitemap.xml"
+      ],
+      "regex": "^https://www\\.caminosdeconocimiento\\.com/post/(?:(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-en-(?:aries|tauro|geminis|cancer|leo|virgo|libra|escorpio|sagitario|capricornio|acuario|piscis)(?:-[a-z0-9-]+)?|(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)-(?:conjuncion|sextil|cuadratura|trigono|oposicion)-(?:sol|luna|mercurio|venus|marte|jupiter|saturno|urano|neptuno|pluton)(?:-[a-z0-9-]+)?)$",
+      "dominio": "caminosdeconocimiento.com",
+      "familia": "astrologia",
+      "prioridad": "baja",
+      "nota": "Sitio Wix con blog astrológico y artículos de tránsitos fechados. Cubre planeta en signo y algunos aspectos. Robots: permite todo salvo parámetros de lightbox; el «Disallow: /» del fichero es solo para PetalBot. Muestras: «sol-en-leo-2026-temporada-leonina» 4.656 caracteres y «mercurio-en-virgo-2026» 9.050. Regex captura 18 URLs del sitemap (15 planeta-signo y 3 aspectos)."
+    }
+  ]
+}
