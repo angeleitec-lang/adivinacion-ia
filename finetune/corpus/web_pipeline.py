@@ -93,6 +93,7 @@ def procesar_sitio(
     limite: int,
     procesadas: Set[str],
     dry_run: bool = False,
+    min_chars: int = 1000,
 ) -> List[Dict[str, Any]]:
     """Descubre y (salvo dry-run) descarga/extrae las páginas de un sitio."""
     es_foro = sitio_cfg.get("tipo") == "foro"
@@ -139,7 +140,10 @@ def procesar_sitio(
                              "bytes": resp.get("bytes", 0), "archivo": None})
             continue
         try:
-            extraccion = extraer(resp.get("html") or "", url, familia=sitio_cfg.get("familia"))
+            extraccion = extraer(
+                resp.get("html") or "", url,
+                familia=sitio_cfg.get("familia"), min_chars=min_chars,
+            )
         except Exception:  # noqa: BLE001
             registros.append({**base, "estado": "error", "chars": 0,
                              "bytes": resp.get("bytes", 0), "archivo": None})
@@ -160,6 +164,7 @@ def ejecutar(
     solo: Optional[List[str]] = None,
     limite_por_sitio: int = 50,
     dry_run: bool = False,
+    min_chars: int = 1000,
     fabrica_clientes: Optional[Callable[[float], Any]] = None,
 ) -> Dict[str, Any]:
     """Ejecuta el pipeline completo y devuelve un resumen."""
@@ -188,7 +193,8 @@ def ejecutar(
         try:
             cliente = fabrica_clientes(intervalo_para_sitio(sitio))
             registros = procesar_sitio(
-                sitio, cliente, work_dir, limite_por_sitio, procesadas, dry_run
+                sitio, cliente, work_dir, limite_por_sitio, procesadas, dry_run,
+                min_chars=min_chars,
             )
         except Exception:  # noqa: BLE001 - un sitio caído no aborta los demás
             resumen["sitios_con_error"].append(nombre)
@@ -217,6 +223,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--solo", default=None, help="Lista de nombres de sitio separados por comas")
     parser.add_argument("--limite-por-sitio", type=int, default=50, help="Máximo de páginas por sitio")
     parser.add_argument("--dry-run", action="store_true", help="Solo descubre, no descarga")
+    parser.add_argument(
+        "--min-chars", type=int, default=1000,
+        help="Mínimo de caracteres extraídos para aceptar una página",
+    )
     args = parser.parse_args(argv)
 
     solo = [s.strip() for s in args.solo.split(",")] if args.solo else None
@@ -226,6 +236,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         solo=solo,
         limite_por_sitio=args.limite_por_sitio,
         dry_run=args.dry_run,
+        min_chars=args.min_chars,
     )
     print(f"Descubiertas: {resumen['total_descubiertas']} | OK: {resumen['total_ok']}")
     if resumen["sitios_con_error"]:
