@@ -13,11 +13,9 @@ import muestras
 import recuperacion_dirigida
 from calculos import biorritmos, numerologia
 
-try:
-    import swisseph  # noqa: F401
-    SWISSEPH_AVAILABLE = True
-except ImportError:
-    SWISSEPH_AVAILABLE = False
+from calculos import astro
+
+SWISSEPH_AVAILABLE = astro.swe is not None
 
 
 class _ResolvedorVacio:
@@ -173,16 +171,16 @@ class TestNumerologiaAdversa(unittest.TestCase):
     def test_reducir_rechaza_no_enteros(self):
         for valor in ("12", 10.5, True):
             with self.assertRaises(TypeError):
-                numerologia.reducir(valor)
+                numerologia.reducir(valor)  # type: ignore[arg-type]
 
     def test_expresion_rechaza_nombre_no_texto(self):
         with self.assertRaises(TypeError):
-            numerologia.expresion(123)
+            numerologia.expresion(123)  # type: ignore[arg-type]
 
     def test_anio_personal_valida_anio(self):
         for valor in (None, 0, -5, 10000, "2026", True):
             with self.assertRaises((TypeError, ValueError)):
-                numerologia.anio_personal("2000-01-01", valor)
+                numerologia.anio_personal("2000-01-01", valor)  # type: ignore[arg-type]
 
 
 class TestBiorritmosAdversa(unittest.TestCase):
@@ -190,7 +188,7 @@ class TestBiorritmosAdversa(unittest.TestCase):
     def test_dias_no_entero_rechazado(self):
         for valor in (None, 1.5, "3", True):
             with self.assertRaises(TypeError):
-                biorritmos.biorritmos("1990-01-01", "1990-01-02", valor)
+                biorritmos.biorritmos("1990-01-01", "1990-01-02", valor)  # type: ignore[arg-type]
 
     def test_dias_negativos_rechazados(self):
         with self.assertRaises(ValueError):
