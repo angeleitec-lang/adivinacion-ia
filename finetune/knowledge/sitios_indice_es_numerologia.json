@@ -1,0 +1,149 @@
+{
+  "descripcion": "Sitios en español con páginas por número de numerología (1-9 y maestros 11, 22, 33), cubriendo las posiciones de la matriz (camino de vida, destino, alma, personalidad, año personal, mes personal). Sondeo 2026-10-20: 12 sitios nuevos, ninguno duplicado de sitios_indice_es.json / _lecturas / _tarot. Cada regex fue validada contra el sitemap real del sitio (se anota el número de URLs por número capturadas). La unión de los 12 sitios cubre los 12 números.",
+  "sitios": [
+    {
+      "nombre": "www.yourastrallife.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://www.yourastrallife.com/sitemap.xml"
+      ],
+      "regex": "^https://www\\.yourastrallife\\.com/es/numerologia/guia/[a-z-]+?(?:11|22|33|[1-9])$",
+      "dominio": "www.yourastrallife.com",
+      "familia": "numerologia",
+      "prioridad": "alta",
+      "nota": "Multi-posición: 216 páginas numeradas en /es/numerologia/guia/<tipo>-<N> (camino-de-vida, numero-del-alma, numero-de-personalidad, numero-de-expresion, ano-personal, mes-personal, numero-de-madurez, ciclo-de-vida, numero-del-dia-de-nacimiento…). Cubre 12/12 números en varias posiciones de la matriz. La regex restringe el final a números válidos (1-9, 11, 22, 33)."
+    },
+    {
+      "nombre": "www.cartaceleste.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://www.cartaceleste.com/sitemap-0.xml"
+      ],
+      "regex": "^https://www\\.cartaceleste\\.com/numerologia/camino-de-vida/(?:11|22|33|[1-9])/?$",
+      "dominio": "www.cartaceleste.com",
+      "familia": "numerologia",
+      "prioridad": "alta",
+      "nota": "12 páginas de camino de vida en /numerologia/camino-de-vida/<N>/ (1-9, 11, 22, 33). Cubre 12/12 números."
+    },
+    {
+      "nombre": "mybornday.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://mybornday.com/sitemaps/main-es.xml"
+      ],
+      "regex": "^https://mybornday\\.com/es/numerologia/camino-(?:11|22|33|[1-9])/?$",
+      "dominio": "mybornday.com",
+      "familia": "numerologia",
+      "prioridad": "alta",
+      "nota": "12 páginas de camino de vida en /es/numerologia/camino-<N>/ (1-9, 11, 22, 33). Cubre 12/12 números."
+    },
+    {
+      "nombre": "datemyst.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://datemyst.com/sitemap.xml"
+      ],
+      "regex": "^https://datemyst\\.com/es/conocimiento/numerologia/numerologia-(?:11|22|33|[1-9])-",
+      "dominio": "datemyst.com",
+      "familia": "numerologia",
+      "prioridad": "alta",
+      "nota": "12 páginas /es/conocimiento/numerologia/numerologia-<N>-significado… (maestros como numero-maestro-11/22/33). Cubre 12/12 números. El sitio tiene además numerologia-10 (fuera de matriz) que la regex excluye."
+    },
+    {
+      "nombre": "www.velotit.com",
+      "tipo": "blog",
+      "indice": [
+        "https://www.velotit.com/sitemap.xml"
+      ],
+      "regex": "^https://www\\.velotit\\.com/es/blog/numero-(?:maestro-)?(?:11|22|33|[1-9])-significado",
+      "dominio": "www.velotit.com",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "Blog. 13 páginas /es/blog/numero-<N>-significado-numerologia y /es/blog/numero-maestro-<N>-significado… Cubre 12/12 números (maestros 11/22/33 incluidos). El sitio tiene numero-44 (fuera de matriz) excluido por la regex. También artículos sueltos de año/mes personal."
+    },
+    {
+      "nombre": "www.mon-oracle.org",
+      "tipo": "sitio",
+      "indice": [
+        "https://www.mon-oracle.org/sitemap.xml"
+      ],
+      "regex": "^https://www\\.mon-oracle\\.org/es/numerologia/camino-de-vida-(?:11|22|33|[1-9])/?$",
+      "dominio": "www.mon-oracle.org",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "9 páginas de camino de vida /es/numerologia/camino-de-vida-<N> (1-9). Los maestros van en una página conjunta /es/numerologia/numeros-maestros-11-22-33 (no por número). Cubre 9/12 números."
+    },
+    {
+      "nombre": "freenumerology.net",
+      "tipo": "sitio",
+      "indice": [
+        "https://freenumerology.net/sitemap.xml"
+      ],
+      "regex": "^https://freenumerology\\.net/es/guides/(?:life-path|personal-year)-(?:11|22|33|[1-9])$",
+      "dominio": "freenumerology.net",
+      "familia": "numerologia",
+      "prioridad": "alta",
+      "nota": "21 páginas en /es/guides/: life-path-<N> (camino de vida, 12 números) + personal-year-<N> (año personal, 9). Cubre 12/12 números en dos posiciones de la matriz."
+    },
+    {
+      "nombre": "www.skywhisper.app",
+      "tipo": "sitio",
+      "indice": [
+        "https://www.skywhisper.app/sitemap-numerology.xml"
+      ],
+      "regex": "^https://www\\.skywhisper\\.app/es/numerology/life-path/(?:11|22|33|[1-9])/?$",
+      "dominio": "www.skywhisper.app",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "9 páginas /es/numerology/life-path/<N> (1-9, sin maestros). Cubre 9/12 números."
+    },
+    {
+      "nombre": "numerologia-cotidiana.com",
+      "tipo": "blog",
+      "indice": [
+        "https://numerologia-cotidiana.com/sitemap.xml"
+      ],
+      "regex": "^https://numerologia-cotidiana\\.com/significado-(?:11|22|33|[1-9])-numeropersonal/$",
+      "dominio": "numerologia-cotidiana.com",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "Blog con varias series por número: numero-personal (11 páginas, 1-9+11+22), numero-personalidad (11), numero-karma, vida-pasada, reto, pareja. La regex apunta a la serie numero-personal; cubre 11/12 números (falta 33 en esa serie; otras series dan personalidad)."
+    },
+    {
+      "nombre": "numerologos.com",
+      "tipo": "blog",
+      "indice": [
+        "https://numerologos.com/sitemap.xml"
+      ],
+      "regex": "^https://numerologos\\.com/interpretaciones-y-significados/numero-de-vida-[1-9](?:[-/])",
+      "dominio": "numerologos.com",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "WordPress. 9 páginas /interpretaciones-y-significados/numero-de-vida-<N>… (1-9). Los maestros van en una página conjunta /numeros-maestros/. Cubre 9/12 números."
+    },
+    {
+      "nombre": "www.aurimundi.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://www.aurimundi.com/sitemap-index.xml"
+      ],
+      "regex": "^https://www\\.aurimundi\\.com/numerologia/(?:camino-de-vida|numero-maestro)-(?:11|22|33|[1-9])/?$",
+      "dominio": "www.aurimundi.com",
+      "familia": "numerologia",
+      "prioridad": "alta",
+      "nota": "12 páginas en /numerologia/: camino-de-vida-<N> (1-9) + numero-maestro-<N> (11, 22, 33). Cubre 12/12 números. Además numero-del-alma, numero-de-la-expresion y numerologia-del-nombre en otras rutas."
+    },
+    {
+      "nombre": "www.numerovya.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://www.numerovya.com/sitemap-es.xml"
+      ],
+      "regex": "^https://www\\.numerovya\\.com/es/camino-de-vida-(?:11|22|33|[1-9])-numerologia$",
+      "dominio": "www.numerovya.com",
+      "familia": "numerologia",
+      "prioridad": "media",
+      "nota": "11 páginas /es/camino-de-vida-<N>-numerologia (1-9, 11, 22; falta 33, que va en /es/los-numeros-maestros-en-numerologia). Cubre 11/12 números. Además año/mes/día personal en otras rutas."
+    }
+  ]
+}
