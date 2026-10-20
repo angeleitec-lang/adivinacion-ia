@@ -91,7 +91,7 @@ _VERBO_RE = re.compile(
 
 def _quitar_comillas(valor: str) -> str:
     if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in "\"'":
-        return valor[1:-1]
+        valor = valor[1:-1].replace('\\"', '"')
     return valor
 
 
@@ -128,6 +128,8 @@ def leer_pagina(ruta: Path) -> Dict[str, Any]:
     """Lee una página Markdown y separa front-matter y cuerpo."""
     ruta = Path(ruta)
     contenido = ruta.read_text(encoding="utf-8", errors="replace")
+    if contenido.startswith("\ufeff"):
+        contenido = contenido[1:]
     coincidencia = _FRONT_MATTER_RE.match(contenido)
     if coincidencia:
         front_matter = _parsear_front_matter(coincidencia.group(1))
