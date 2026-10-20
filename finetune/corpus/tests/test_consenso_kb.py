@@ -129,6 +129,25 @@ class TestContradiccionKB(unittest.TestCase):
             "cancer|signo", CORR)
         self.assertFalse(vale)
 
+    def test_tautologia_sujeto_distinto_no_cuenta(self):
+        vale, _ = ck.contradiccion_kb(
+            "El 2 de Bastos corresponde al tercer decanato de Aries "
+            "y rige del 10 al 19 de abril.",
+            "aries|signo", CORR)
+        self.assertFalse(vale)
+
+    def test_tautologia_sujeto_simbolo_no_cuenta(self):
+        vale, _ = ck.contradiccion_kb(
+            "El leon se asocia al querube del Fuego y al signo Leo.",
+            "leo|signo", CORR)
+        self.assertFalse(vale)
+
+    def test_tautologia_carta_sujeto_distinto_no_cuenta(self):
+        vale, _ = ck.contradiccion_kb(
+            "El Emperador se relaciona con el dos de bastos y su fuego.",
+            "naipe-bastos-02", CORR)
+        self.assertFalse(vale)
+
     def test_sin_elemento_no_aplica(self):
         vale, _ = ck.contradiccion_kb(
             "El numero 11 se relaciona con el 11.", "11|alma", CORR)
