@@ -312,5 +312,135 @@ class PipelineCLI(unittest.TestCase):
         self.assertEqual(stats["afirmaciones"], 0)
 
 
+class EvaluarUtilidad(unittest.TestCase):
+    """T34.1: filtro determinista de utilidad de una afirmación."""
+
+    def _ok(self, a, eid="naipe-oros-03", faceta="significado_general"):
+        vale, motivo = af.evaluar_utilidad(a, eid, faceta)
+        self.assertTrue(vale, msg="descartada por %s: %s" % (motivo, a))
+        self.assertIsNone(motivo)
+
+    def _mal(self, a, esperado, eid="naipe-oros-03",
+             faceta="significado_general"):
+        vale, motivo = af.evaluar_utilidad(a, eid, faceta)
+        self.assertFalse(vale)
+        self.assertEqual(motivo, esperado)
+
+    def test_afirmacion_con_sustancia_pasa(self):
+        self._ok("El dos de copas habla de reciprocidad y de un vínculo "
+                "donde ambas partes dan y reciben a partes iguales.")
+
+    def test_vacia(self):
+        self._mal("   ", "vacia")
+
+    def test_identificador_guion(self):
+        self._mal("El naipe bastos-05 se vincula con los signos zodiacales "
+                "Aries, Leo y Sagitario.", "identificador")
+
+    def test_identificador_numero_suelto(self):
+        self._mal("El naipe oros 05 augura prosperidad en los negocios.",
+                 "identificador")
+
+    def test_identificador_sin_naipe(self):
+        self._mal("La energía de copas-02 favorece los reencuentros.",
+                 "identificador")
+
+    def test_deictica_consultante(self):
+        self._mal("El consultante quiere comenzar una relación estable.",
+                 "deictica", eid="tarot-copas-02")
+
+    def test_deictica_estas_cartas(self):
+        self._mal("Juntas, estas cartas describen un encuentro que cura.",
+                 "deictica", eid="tarot-copas-02")
+
+    def test_deictica_tirada(self):
+        self._mal("En una tirada, esta combinación habla de revelación.",
+                 "deictica", eid="tarot-mayor-16")
+
+    def test_deictica_acompanen(self):
+        self._mal("La interpretación para solteros depende de las cartas "
+                "que acompañen al cinco de espadas.", "deictica",
+                eid="naipe-espadas-05")
+
+    def test_corta_sin_sustancia(self):
+        self._mal("Tiene polaridad masculina.", "corta")
+
+    def test_repite_nombre_elemento(self):
+        self._mal("El 3 de Oros está ligado al elemento tierra.",
+                 "repite_nombre")
+
+    def test_repite_nombre_signo(self):
+        self._mal("Aries es un signo de fuego.", "repite_nombre",
+                 eid="aries|signo")
+
+    def test_signo_con_sustancia_pasa(self):
+        self._ok("Los nativos de Aries destacan por su ambición y su "
+                "liderazgo natural en equipo.", eid="aries|signo")
+
+    def test_elemento_con_sustancia_pasa(self):
+        self._ok("El fuego de bastos da fuerza para actuar y comenzar "
+                "nuevos proyectos con decisión.", eid="naipe-bastos-02")
+
+
+class FiltroUtilidadCLI(unittest.TestCase):
+    """T34.2: modo --filtrar-utilidad del CLI."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.entrada = os.path.join(self.tmp.name, "afirmaciones.jsonl")
+        self.out = os.path.join(self.tmp.name, "out")
+        regs = [
+            {"entidad_id": "naipe-oros-03", "faceta": "significado_general",
+             "fuente_id": "u1", "dominio": "d", "periodo": "p",
+             "calidad": 4,
+             "afirmacion": "El tres de oros enseña a administrar con "
+                          "paciencia los frutos del trabajo diario."},
+            {"entidad_id": "naipe-oros-03", "faceta": "correspondencias",
+             "fuente_id": "u2", "dominio": "d", "periodo": "p",
+             "calidad": 4,
+             "afirmacion": "El 3 de Oros está ligado al elemento tierra."},
+            {"entidad_id": "tarot-copas-02", "faceta": "amor",
+             "fuente_id": "u3", "dominio": "d", "periodo": "p",
+             "calidad": 4,
+             "afirmacion": "El consultante quiere comenzar una relación."},
+        ]
+        with open(self.entrada, "w", encoding="utf-8") as fh:
+            for r in regs:
+                fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _lineas(self, nombre):
+        ruta = os.path.join(self.out, nombre)
+        if not os.path.exists(ruta):
+            return []
+        with open(ruta, encoding="utf-8") as fh:
+            return [json.loads(l) for l in fh.read().splitlines()
+                    if l.strip()]
+
+    def test_separa_utiles_y_descartadas(self):
+        stats = af.main(["--filtrar-utilidad", "--in", self.entrada,
+                        "--out-dir", self.out])
+        self.assertEqual(stats["total"], 3)
+        self.assertEqual(stats["utiles"], 1)
+        utiles = self._lineas("afirmaciones_utiles.jsonl")
+        descartadas = self._lineas("descartadas_utilidad.jsonl")
+        self.assertEqual(len(utiles), 1)
+        self.assertIn("administrar", utiles[0]["afirmacion"])
+        self.assertEqual(len(descartadas), 2)
+        motivos = sorted(d["motivo"] for d in descartadas)
+        self.assertEqual(motivos, ["deictica", "repite_nombre"])
+
+    def test_original_no_se_toca(self):
+        with open(self.entrada, encoding="utf-8") as fh:
+            antes = fh.read()
+        af.main(["--filtrar-utilidad", "--in", self.entrada,
+                "--out-dir", self.out])
+        with open(self.entrada, encoding="utf-8") as fh:
+            despues = fh.read()
+        self.assertEqual(antes, despues)
+
+
 if __name__ == "__main__":
     unittest.main()
