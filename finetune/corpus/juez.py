@@ -28,7 +28,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
+from urllib.parse import urlparse
 
 import cartas
 import cobertura
@@ -244,7 +246,7 @@ def _extraer_json(texto):
                 except json.JSONDecodeError:
                     pass
     inicio = texto.find("{")
-    if inicio != -1:
+    while inicio != -1:
         nivel = 0
         for i in range(inicio, len(texto)):
             if texto[i] == "{":
@@ -256,6 +258,7 @@ def _extraer_json(texto):
                         return json.loads(texto[inicio:i + 1])
                     except json.JSONDecodeError:
                         break
+        inicio = texto.find("{", inicio + 1)
     raise ValueError("No se encontró JSON válido en la respuesta")
 
 
@@ -275,11 +278,17 @@ def parsear_respuesta(texto, candidatos):
     if tipo not in TIPOS_VALIDOS:
         raise ValueError("Campo «tipo» ausente o inválido: %r" % (tipo,))
     calidad = datos.get("calidad")
-    if isinstance(calidad, bool) or not isinstance(calidad, (int, float)) \
-            or not 1 <= int(calidad) <= 5:
+    try:
+        if isinstance(calidad, bool):
+            raise TypeError
+        numero = float(calidad)
+    except (TypeError, ValueError):
         raise ValueError("Campo «calidad» fuera de 1-5: %r" % (calidad,))
-    calidad = int(calidad)
+    if not math.isfinite(numero) or not 1 <= numero <= 5:
+        raise ValueError("Campo «calidad» fuera de 1-5: %r" % (calidad,))
+    calidad = int(numero)
     idioma = datos.get("idioma")
+    idioma = idioma.strip().lower() if isinstance(idioma, str) else ""
     if idioma not in IDIOMAS_VALIDOS:
         idioma = "otro"
     crudo = datos.get("entidades")
@@ -527,7 +536,8 @@ def fuente_de_seccion(seccion, meta=None):
         return {
             "tipo": "web",
             "fuente_id": seccion["url"],
-            "dominio": seccion.get("dominio") or "",
+            "dominio": (seccion.get("dominio")
+                        or urlparse(seccion["url"]).netloc),
             "periodo": "moderna",
             "idioma": _idioma_corto(seccion.get("idioma")),
         }
@@ -598,9 +608,11 @@ def _leer_jsonl(ruta):
             if not linea:
                 continue
             try:
-                registros.append(json.loads(linea))
+                registro = json.loads(linea)
             except json.JSONDecodeError:
                 continue
+            if isinstance(registro, dict):
+                registros.append(registro)
     return registros
 
 
