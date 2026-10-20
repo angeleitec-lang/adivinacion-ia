@@ -350,5 +350,84 @@ class TestReferenciaSinDoblePunto(unittest.TestCase):
         self.assertGreaterEqual(total, 200)
 
 
+class TestProyeccion(unittest.TestCase):
+    """Tránsitos del día y revolución solar en lecturas con foco 'próximo año' (T35)."""
+
+    MADRID = ("1988-07-01", "12:00", 40.4168, -3.7038, "Europe/Madrid")
+
+    def setUp(self):
+        self.trans, self.rs = gt.datos_proyeccion(*self.MADRID)
+
+    def test_transitos_valores_de_referencia(self):
+        self.assertEqual(self.trans["fecha_transito"], gt.FECHA_CONSULTA)
+        aspectos = self.trans["aspectos"]
+        self.assertEqual(len(aspectos), 5)
+        top = aspectos[0]
+        self.assertEqual(top["planeta_transito"], "Saturno")
+        self.assertEqual(top["aspecto"], "cuadratura")
+        self.assertEqual(top["planeta_natal"], "Sol")
+        self.assertEqual(top["casa_natal"], 10)
+        self.assertAlmostEqual(top["orbe"], 0.6781, delta=0.01)
+        orbs = [a["orbe"] for a in aspectos]
+        self.assertEqual(orbs, sorted(orbs))
+
+    def test_revolucion_solar_valores_de_referencia(self):
+        self.assertEqual(self.rs["instante_ut"], "2026-07-01 14:25:00")
+        self.assertEqual(self.rs["instante_local"], "2026-07-01 16:25:00")
+        self.assertLess(self.rs["diferencia_arco"], 1.0 / 60.0)
+        sol_rs = next(p for p in self.rs["carta"]["planetas"] if p["nombre"] == "Sol")
+        self.assertEqual((sol_rs["signo"], sol_rs["grado"], sol_rs["minuto"]), ("Cáncer", 9, 47))
+        asc = self.rs["ascendente"]
+        self.assertEqual((asc["signo"], asc["grado"], asc["minuto"]), ("Escorpio", 3, 27))
+
+    def test_fmt_transitos_texto_exacto(self):
+        texto = gt.fmt_transitos(self.trans)
+        lineas = texto.split("\n")
+        self.assertEqual(lineas[0], "Tránsitos del día 2026-10-15:")
+        self.assertEqual(
+            lineas[1],
+            "- Saturno en tránsito hace cuadratura a su Sol natal (casa 10, orbe 0.7°)",
+        )
+        self.assertEqual(len(lineas), 1 + len(self.trans["aspectos"]))
+
+    def test_fmt_revolucion_solar_texto_exacto(self):
+        self.assertEqual(
+            gt.fmt_revolucion_solar(self.rs),
+            "Revolución solar del año 2026: instante 2026-07-01 14:25:00 UT "
+            "(local 2026-07-01 16:25:00); Sol RS en Cáncer 9°47'; "
+            "Ascendente RS Escorpio 3°27'.",
+        )
+
+    def test_astro_natal_con_proyeccion_incluye_transitos_y_rs(self):
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(1), kb_tarot, kb_astro, kb_num)
+        jobs = [j for j in b.astro_natal(60)
+                if json.loads(j[3])["foco"] == gt.FOCO_PROYECCION]
+        self.assertTrue(jobs, "ningún job con foco de proyección")
+        for job in jobs:
+            prompt = job[2]
+            payload = json.loads(job[3])
+            self.assertIn("Lectura de carta natal con proyección.", prompt)
+            self.assertIn("Tránsitos del día 2026-10-15", prompt)
+            self.assertIn("Revolución solar del año 2026", prompt)
+            self.assertIn("próximo año", prompt)
+            self.assertIn("transitos", payload)
+            self.assertIn("revolucion_solar", payload)
+
+    def test_astro_natal_sin_proyeccion_no_incluye_transitos(self):
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(1), kb_tarot, kb_astro, kb_num)
+        jobs = [j for j in b.astro_natal(60)
+                if json.loads(j[3])["foco"] != gt.FOCO_PROYECCION]
+        self.assertTrue(jobs)
+        for job in jobs:
+            prompt = job[2]
+            payload = json.loads(job[3])
+            self.assertNotIn("Tránsitos del día", prompt)
+            self.assertNotIn("Revolución solar", prompt)
+            self.assertNotIn("transitos", payload)
+            self.assertNotIn("revolucion_solar", payload)
+
+
 if __name__ == "__main__":
     unittest.main()

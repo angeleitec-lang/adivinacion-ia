@@ -10,7 +10,7 @@ import unicodedata
 from pathlib import Path
 
 from calculos import numerologia as calc_num
-from calculos.astro import carta_natal
+from calculos.astro import carta_natal, revolucion_solar, transitos
 
 ROOT = Path(__file__).resolve().parent.parent
 KB_DIR = ROOT / "corpus" / "kb"
@@ -108,6 +108,13 @@ FOCOS_ASTRO = [
 ]
 
 FOCOS_SIN = ["compatibilidad amorosa", "sociedad laboral", "amistad", "vínculo familiar", "proyecto en común"]
+
+# Referencias temporales de las lecturas de proyección (T35): los tránsitos se
+# calculan para esta fecha y la revolución solar para este año, de forma
+# determinista (igual que el año personal 2026 de numerología).
+FECHA_CONSULTA = "2026-10-15"
+ANIO_PROYECCION = 2026
+FOCO_PROYECCION = "próximo año"
 
 # Seguimientos del consultante para la fase 2 del multi-turno real (T16). Elegidos
 # por contexto; algunos arrancan refiriéndose a lo dicho en la lectura anterior.
@@ -236,6 +243,37 @@ def fmt_carta(c, ciudad, pais):
         )
         lineas.append(f"Aspectos: {asp}.")
     return "\n".join(lineas)
+
+
+def fmt_transitos(trans, max_aspectos=12):
+    """Tránsitos de calculos.astro en líneas legibles para el prompt."""
+    lineas = [f"Tránsitos del día {trans['fecha_transito']}:"]
+    for a in trans["aspectos"][:max_aspectos]:
+        lineas.append(
+            f"- {a['planeta_transito']} en tránsito hace {a['aspecto']} a su "
+            f"{a['planeta_natal']} natal (casa {a['casa_natal']}, orbe {round(a['orbe'], 1)}°)"
+        )
+    return "\n".join(lineas)
+
+
+def fmt_revolucion_solar(rs):
+    """Revolución solar de calculos.astro en una línea legible para el prompt."""
+    sol_rs = next(p for p in rs["carta"]["planetas"] if p["nombre"] == "Sol")
+    asc = rs["ascendente"]
+    return (
+        f"Revolución solar del año {rs['instante_ut'][:4]}: instante {rs['instante_ut']} UT "
+        f"(local {rs['instante_local']}); Sol RS en {sol_rs['signo']} "
+        f"{sol_rs['grado']}°{sol_rs['minuto']:02d}'; Ascendente RS {asc['signo']} "
+        f"{asc['grado']}°{asc['minuto']:02d}'."
+    )
+
+
+def datos_proyeccion(fecha, hora, lat, lon, tz):
+    """Tránsitos del día y revolución solar del año de proyección (calculos.astro)."""
+    natal = carta_natal(fecha, hora, lat, lon, tz)
+    trans = transitos(natal, FECHA_CONSULTA, hora="12:00", tz=tz)
+    rs = revolucion_solar(fecha, hora, lat, lon, tz, ANIO_PROYECCION)
+    return trans, rs
 
 
 def reducir(n):
@@ -579,13 +617,24 @@ class Builder:
             fecha, hora, ciudad, pais, lat, lon, tz = self.nacimiento()
             c = calcular_carta(fecha, hora, lat, lon, tz)
             foco = self.rng.choice(FOCOS_ASTRO)
+            payload = {"carta": c, "foco": foco, "ciudad": ciudad}
+            if foco == FOCO_PROYECCION:
+                trans, rs = datos_proyeccion(fecha, hora, lat, lon, tz)
+                cuerpo = (
+                    f"Lectura de carta natal con proyección.\n\n"
+                    f"{fmt_carta(c, ciudad, pais)}\n\n"
+                    f"{fmt_transitos(trans)}\n{fmt_revolucion_solar(rs)}\n\n"
+                )
+                payload["transitos"] = trans
+                payload["revolucion_solar"] = rs
+            else:
+                cuerpo = f"Lectura de carta natal.\n\n{fmt_carta(c, ciudad, pais)}\n\n"
             prompt = unir_con_referencia(
-                f"Lectura de carta natal.\n\n{fmt_carta(c, ciudad, pais)}\n\n"
-                f'Pregunta del consultante: "¿Qué dice mi carta sobre mi {foco}?"',
+                cuerpo + f'Pregunta del consultante: "¿Qué dice mi carta sobre mi {foco}?"',
                 referencia_astro(c, self.astro),
                 "Interpreta la carta natal centrándote en ese ámbito.",
             )
-            out.append(self.job("astro_natal", prompt, {"carta": c, "foco": foco, "ciudad": ciudad}, 1400))
+            out.append(self.job("astro_natal", prompt, payload, 1400))
         return out
 
     def sinastria(self, n=600):
