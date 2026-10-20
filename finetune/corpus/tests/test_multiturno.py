@@ -267,5 +267,84 @@ class TestPromptLectura(unittest.TestCase):
         )
 
 
+class TestVedadosFase1(unittest.TestCase):
+    """AJUSTE coordinadora: promesas, diagnosticos, juego, carta ajena y
+    orientacion contraria en un turno de seguimiento deben rechazarse usando
+    fase1_prompts.verificar_lectura. Base autocontenida (no depende de /tmp)."""
+
+    CARTAS = [{"nombre": "Cinco de Copas", "invertida": False}]
+
+    def _base(self):
+        g1 = ("El Cinco de Copas sale al derecho y habla de una perdida reciente "
+              "en el amor; duele, pero quedan recursos afectivos que aun sostienen "
+              "tu momento presente con calma.")
+        g2 = ("Entiendo ese dolor por la perdida que trae el Cinco de Copas; "
+              "conviene no decidir desde la tristeza y mirar lo que aun permanece "
+              "en pie a tu alrededor.")
+        g3 = ("Esa misma carta te pide atravesar la pena con calma, sin negarla, "
+              "y reconocer el afecto que todavia te acompana en el dia a dia.")
+        g4 = ("Por eso te sugiero dar tiempo a la emocion, nombrar lo que duele "
+              "y abrirte poco a poco a lo que el Cinco de Copas aun deja en pie.")
+        return _fila_manual([dict(c) for c in self.CARTAS], [g1, g2, g3, g4])
+
+    def _mod_ultimo(self, mod):
+        fila = self._base()
+        idx = len(fila["conversations"]) - 1
+        self.assertEqual(fila["conversations"][idx]["from"], "gpt")
+        fila["conversations"][idx]["value"] = mod(fila["conversations"][idx]["value"])
+        return fila
+
+    def test_base_es_valida(self):
+        ok, why = mt.verificar_conversacion(self._base(), _args())
+        self.assertTrue(ok, why)
+
+    def test_promesa_vedada(self):
+        fila = self._mod_ultimo(
+            lambda t: t + " Te garantizo que esa persona volvera en un mes.")
+        ok, why = mt.verificar_conversacion(fila, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "promesa")
+
+    def test_diagnostico_vedado(self):
+        fila = self._mod_ultimo(
+            lambda t: t + " Tienes depresion; deja la medicacion.")
+        ok, why = mt.verificar_conversacion(fila, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "diagnostico")
+
+    def test_juego_vedado(self):
+        fila = self._mod_ultimo(
+            lambda t: t + " Juega el 23 en la loteria.")
+        ok, why = mt.verificar_conversacion(fila, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "juego")
+
+    def test_carta_ajena_vedada(self):
+        fila = self._mod_ultimo(
+            lambda t: t.replace("Cinco de Copas", "Tres de Espadas"))
+        ok, why = mt.verificar_conversacion(fila, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "carta_ajena")
+
+    def test_orientacion_contraria_vedada(self):
+        # Turno de seguimiento que afirma inversion sin nombrar la carta
+        # (escenario real del AJUSTE): lo pilla fase1, no _orientacion_turno.
+        fila = self._mod_ultimo(
+            lambda t: ("Entiendo lo que sientes; como esta invertida, cambia todo "
+                      "y conviene mirar esa pena que aun duele con calma."))
+        ok, why = mt.verificar_conversacion(fila, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "orientacion")
+
+    def test_orientacion_contraria_con_carta_nombrada(self):
+        # Variante: carta derecho nombrada junto a "invertida" -> ya la pilla
+        # el check propio de multiturno como carta_cambiada.
+        fila = self._mod_ultimo(
+            lambda t: t + " El Cinco de Copas esta invertida y lo cambia todo.")
+        ok, why = mt.verificar_conversacion(fila, _args())
+        self.assertFalse(ok)
+        self.assertEqual(why, "carta_cambiada")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -61,6 +61,7 @@ from generate_tasks import (
 )
 import validate_synthetic as vs
 from translate_dataset import detect_language
+import fase1_prompts as fp
 
 # Marcas que afirman que una carta esta al derecho (para detectar el giro
 # contrario en una carta que se sorteo invertida).
@@ -263,13 +264,78 @@ def _orientacion_turno(respuesta: str, carta: dict) -> bool:
     return True
 
 
+_UNIVERSO_TAROT: list | None = None
+
+
+def _universo_tarot() -> list:
+    """Nombres de todas las cartas del tarot (mayores + menores), cacheado."""
+    global _UNIVERSO_TAROT
+    if _UNIVERSO_TAROT is None:
+        kb = load_kb("tarot.json")
+        _UNIVERSO_TAROT = [c["nombre"] for c in kb["mayores"] + kb["menores"]]
+    return _UNIVERSO_TAROT
+
+
+def _tarea_para_verif(meta: dict) -> dict:
+    """Reconstruye la ``tarea`` que espera ``fase1_prompts.verificar_lectura`` a
+    partir de los ``metadatos`` de la fila (cartas, orientaciones, calculos)."""
+    return {
+        "familia": "tarot_multiturno",
+        "contexto": meta.get("contexto", ""),
+        "pregunta": "",
+        "cartas": [dict(c) for c in meta.get("cartas", [])],
+        "universo_cartas": meta.get("universo_cartas") or _universo_tarot(),
+        "calculos": meta.get("calculos") or {},
+    }
+
+
+_INV_ORIENT_RE = re.compile(
+    r"(?:est[áa]|sale|queda|aparece|resulta|va|viene)\s+(?:muy\s+|algo\s+)?invertid"
+    r"|invertid[ao]\s+(?:la\s+)?carta"
+    r"|carta[^.\n]{0,25}invertid"
+    r"|\bal\s+rev[eé]s\b",
+    re.IGNORECASE,
+)
+
+
+def _afirmacion_inversion(texto: str) -> bool:
+    """True si el texto AFIRMA que una carta esta invertida (copia/verbo de estado
+    o proximidad a «carta»), no el uso comun de «invertido» (p. ej. «tiempo
+    invertido»). Compuerta para el chequeo de orientacion de ``fase1_prompts``,
+    demasiado laxo para texto conversacional."""
+    return bool(_INV_ORIENT_RE.search(texto or ""))
+
+
+def _clasificar_vedado(motivos: list) -> str:
+    """Categoriza los motivos de ``verificar_lectura`` en un codigo corto."""
+    for mt in motivos:
+        low = mt.lower()
+        if "carta ajena" in low:
+            return "carta_ajena"
+        if "juego" in low or "apuesta" in low:
+            return "juego"
+        if any(k in low for k in ("medicaci", "depres", "curar", "sanar", "morir")):
+            return "diagnostico"
+        if "orientaci" in low:
+            return "orientacion"
+        if "contradic" in low:
+            return "contradiccion"
+        if "promesa" in low or "garant" in low:
+            return "promesa"
+    return "vedado"
+
+
 def verificar_conversacion(fila: dict, args, bloque: str | None = None):
     """Verificador de coherencia multi-turno. Devuelve ``(ok, motivo)``.
 
     Comprueba: numero de turnos, longitud, boilerplate, idioma, repeticion y
-    ``ia_meta`` por turno; en el turno 1, anclaje a los datos y orientacion; y en
+    ``ia_meta`` por turno; en el turno 1, anclaje a los datos y orientacion; en
     cruzado, que las cartas no cambian de orientacion, que cada turno recuerda lo
-    dicho antes (hilo) y que ningun turno copia a otro.
+    dicho antes (hilo) y que ningun turno copia a otro; y por cada turno de la
+    lectora, los vedados de contenido de ``fase1_prompts.verificar_lectura``
+    (promesas, juego/apuestas, diagnosticos, carta ajena, orientacion contraria y
+    contradicciones con lo calculado). En los turnos de seguimiento no se exige
+    repetir todas las cartas, pero si se rechazan los demas vedados.
     """
     pares = vs.turnos_de(fila)
     if len(pares) < 2:
@@ -320,6 +386,30 @@ def verificar_conversacion(fila: dict, args, bloque: str | None = None):
         for j in range(i):
             if vs._copia_turno1(pares[j][1], pares[i][1]):
                 return False, "copia"
+
+    # Vedados de contenido (T44 fase1_prompts) por cada turno de la lectora.
+    if cartas:
+        tarea_verif = _tarea_para_verif(meta)
+        # En turnos de seguimiento no se exige repetir todas las cartas ni volver
+        # a indicar la inversion; si se rechazan carta ajena, orientacion contraria
+        # (la pilla tambien _orientacion_turno), promesas, juego y contradicciones.
+        _seguimiento_omitir = (
+            "Falta la carta de la tirada",
+            "No indica la orientaci",
+        )
+        for i, (_humano, gpt) in enumerate(pares):
+            ok_v, motivos = fp.verificar_lectura(tarea_verif, gpt)
+            if ok_v:
+                continue
+            limpios = []
+            for mt in motivos:
+                if i >= 1 and mt.startswith(_seguimiento_omitir):
+                    continue
+                if mt.startswith("Menciona una orientaci") and not _afirmacion_inversion(gpt):
+                    continue
+                limpios.append(mt)
+            if limpios:
+                return False, _clasificar_vedado(limpios)
 
     return True, "ok"
 
