@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+from urllib.parse import urlparse
 
 import cartas
 
@@ -179,6 +180,21 @@ def _carencias(n_fuentes, n_clasicas, n_modernas, n_es,
     return faltan
 
 
+def _clave_dominio(ev):
+    """Dominio normalizado de una evidencia web (o cadena vacía si no hay)."""
+    dominio = ev.get("dominio") or ""
+    if not dominio:
+        candidata = ev.get("url") or ev.get("fuente_id") or ""
+        if "://" in candidata:
+            dominio = urlparse(candidata).netloc
+    dominio = dominio.strip().lower()
+    if dominio.startswith("www."):
+        dominio = dominio[4:]
+    if ":" in dominio:
+        dominio = dominio.split(":", 1)[0]
+    return dominio
+
+
 def _fuentes_independientes(evidencias):
     """Deduplica por fuente_id y, entre las web, por dominio.
 
@@ -193,7 +209,7 @@ def _fuentes_independientes(evidencias):
             continue
         vistas_fuente.add(fuente)
         if ev.get("tipo") == "web":
-            dominio = ev.get("dominio")
+            dominio = _clave_dominio(ev)
             if dominio and dominio in dominios_web:
                 continue
             if dominio:
