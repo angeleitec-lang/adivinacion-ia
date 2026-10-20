@@ -430,7 +430,11 @@ def construir_consensos(cliente, celdas, cache=None):
 
 
 def normalizar_afirmaciones(regs, corr):
-    """Aade ``contradice_kb`` a las afirmaciones que no lo traigan."""
+    """Recalcula ``contradice_kb`` con las comprobaciones deterministas vigentes.
+
+    Se recalcula siempre (aunque el registro ya traiga el campo) para que la
+    alerta final use la lógica actual y no banderas de versiones anteriores.
+    """
     out = []
     for r in regs:
         eid = r.get("entidad_id")
@@ -438,12 +442,13 @@ def normalizar_afirmaciones(regs, corr):
         texto = r.get("afirmacion")
         if not eid or not faceta or not texto:
             continue
-        if "contradice_kb" not in r:
-            r = dict(r)
-            contradice, motivo = contradiccion_kb(texto, eid, corr)
-            r["contradice_kb"] = contradice
-            if contradice:
-                r["motivo_contradice"] = motivo
+        r = dict(r)
+        contradice, motivo = contradiccion_kb(texto, eid, corr)
+        r["contradice_kb"] = contradice
+        if contradice:
+            r["motivo_contradice"] = motivo
+        else:
+            r.pop("motivo_contradice", None)
         out.append(r)
     return out
 
