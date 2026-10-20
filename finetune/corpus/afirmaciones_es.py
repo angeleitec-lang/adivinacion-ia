@@ -24,6 +24,7 @@ import argparse
 import glob
 import json
 import os
+import re
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
@@ -379,7 +380,15 @@ def main(argv=None, cliente=None):
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--simulado", action="store_true",
                        help="Usa un cliente simulado (sin nodos GPU).")
+    parser.add_argument("--filtrar-utilidad", action="store_true",
+                       help="Filtra por utilidad un afirmaciones.jsonl "
+                            "existente (T34) sin tocarlo.")
+    parser.add_argument("--in", dest="in_", default=DEFAULT_AFIRMACIONES,
+                       help="Fichero de entrada para --filtrar-utilidad.")
     args = parser.parse_args(argv)
+
+    if args.filtrar_utilidad:
+        return filtrar_utilidad(args.in_, args.out_dir)
 
     evidencias = []
     with open(args.evidencias, encoding="utf-8") as fh:
@@ -454,6 +463,116 @@ def main(argv=None, cliente=None):
                 stats["afirmaciones"] += len(res["afirmaciones"])
 
     escribir_informe(ruta_in, stats)
+    return stats
+
+
+# ---------------------------------------------------------------------------
+# T34: filtro de utilidad de afirmaciones
+# ---------------------------------------------------------------------------
+
+DEFAULT_AFIRMACIONES = "/Users/angelgonzalez/fase0/afirmaciones/afirmaciones.jsonl"
+
+MIN_PALABRAS_UTIL = 5
+
+# Identificadores internos: «bastos-05», «naipe …», «oros 05».
+_RE_IDENTIFICADOR = re.compile(
+    r"[a-z]+-\d{2}"
+    r"|\bnaipe\b"
+    r"|\b(?:oros|copas|espadas|bastos)\s+\d{1,2}\b",
+)
+
+# Referencias deícticas al contexto de la consulta o de la tirada.
+_RE_DEICTICO = re.compile(
+    r"consultante"
+    r"|\best[oa]s?\s+(?:cartas?|naipes?|barajas?)\b"
+    r"|\bjunt[oa]s?\b"
+    r"|\btirada\b"
+    r"|\bacompa"
+    r"|\bdepende\b"
+    r"|\binterpretaci[oó]n\s+para\b",
+    re.IGNORECASE,
+)
+
+# Palabras de relleno: correspondencias y fórmulas que no aportan
+# interpretación por sí solas (en español normalizado, sin tildes).
+_BOILERPLATE_UTIL = frozenset("""
+elemento tierra fuego agua aire polaridad masculino masculina femenino
+femenina liga ligado ligada ligados ligadas asociado asociada asociados
+asociadas asocia relaciona relacionado relacionada relacionados
+relacionadas vincula vinculado vinculada vinculados vinculadas seres
+elementales elemental signo signos zodiacal zodiacales carta cartas naipe
+naipes oros copas espadas bastos representa
+""".split())
+
+
+def _tokens_entidad(entidad_id):
+    """Tokens del identificador de entidad (sin prefijos estructurales)."""
+    partes = re.split(r"[-|]", entidad_id or "")
+    return {cartas.norm(p) for p in partes
+            if p and not p.isdigit() and p not in ("tarot", "naipe")}
+
+
+def _tokens_sustancia(afirmacion, entidad_id):
+    """Tokens de contenido: ni vacíos funcionales, ni relleno, ni nombre."""
+    entidad = _tokens_entidad(entidad_id)
+    sustancia = []
+    for w in cartas.norm(afirmacion).split():
+        if len(w) < 4 or w in _STOPWORDS or w in _BOILERPLATE_UTIL:
+            continue
+        if w.isdigit() or w in entidad:
+            continue
+        sustancia.append(w)
+    return sustancia
+
+
+def evaluar_utilidad(afirmacion, entidad_id, faceta):
+    """(True, None) si la afirmación aporta contenido interpretativo.
+
+    Motivos de descarte: `vacia`, `identificador`, `deictica`, `corta`,
+    `repite_nombre` (solo nombre de la carta/entidad y correspondencias).
+    """
+    if not afirmacion or not afirmacion.strip():
+        return False, "vacia"
+    if _RE_IDENTIFICADOR.search(afirmacion):
+        return False, "identificador"
+    if _RE_DEICTICO.search(afirmacion):
+        return False, "deictica"
+    if len(afirmacion.split()) < MIN_PALABRAS_UTIL:
+        return False, "corta"
+    if not _tokens_sustancia(afirmacion, entidad_id):
+        return False, "repite_nombre"
+    return True, None
+
+
+def filtrar_utilidad(ruta_entrada, out_dir):
+    """Separa un `afirmaciones.jsonl` en útiles y descartadas (con motivo).
+
+    No modifica el fichero de entrada.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    ruta_u = os.path.join(out_dir, "afirmaciones_utiles.jsonl")
+    ruta_d = os.path.join(out_dir, "descartadas_utilidad.jsonl")
+    stats = {"total": 0, "utiles": 0, "descartadas": Counter()}
+    with open(ruta_entrada, encoding="utf-8") as fin, \
+            open(ruta_u, "w", encoding="utf-8") as fu, \
+            open(ruta_d, "w", encoding="utf-8") as fd:
+        for linea in fin:
+            linea = linea.strip()
+            if not linea:
+                continue
+            rec = json.loads(linea)
+            ok, motivo = evaluar_utilidad(rec.get("afirmacion"),
+                                         rec.get("entidad_id"),
+                                         rec.get("faceta"))
+            stats["total"] += 1
+            if ok:
+                stats["utiles"] += 1
+                fu.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            else:
+                stats["descartadas"][motivo] += 1
+                d = dict(rec)
+                d["motivo"] = motivo
+                fd.write(json.dumps(d, ensure_ascii=False) + "\n")
     return stats
 
 
