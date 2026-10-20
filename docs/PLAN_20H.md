@@ -27,3 +27,6 @@ DeepSeek (pestaña 6) solo 10:00–24:00; Qwen (pestaña 7) solo si las demás e
 
 ## Decisiones pendientes del usuario
 Revisión del 3 % (usar `revisor.html` de T54 y `prerevision.md`); tratamiento de libros no españoles (55,7 % de la muestra de libros); redefinir el hito de cobertura; compra de libros; respuesta de Hugging Face.
+
+## Decisión del usuario (2026-10-20 22:45): terminar primero la recopilación de datos
+Prioridad en los nodos: acabar las pasadas de afirmaciones (web y libros), las evidencias de los sitios y clásicos nuevos (T47, T53, T57) y el consenso/KB v2; la generación completa de fase 1 espera. Medido: nodo1 admite concurrencia (4 peticiones a la vez no son más lentas que 1); nodo2 va más justo. La pasada web se relanzó con `--workers 8 --orden calidad --min-calidad 4 --timeout 180` (log `afirmaciones_full/run_v2.log`, reanudable). Las pistas nuevas que pidan LLM solo se asignan si son de recopilación; el resto, código sin LLM o esperar. El piloto de fase 1 (T49) midió ~64 s por lectura: 10.000 lecturas serían ~59 h con 3 workers.
