@@ -296,6 +296,55 @@ def _cargar_procesados(ruta):
 # Informe
 # ---------------------------------------------------------------------------
 
+def recuento_total(ruta_lecturas, ruta_procesados):
+    """Recuento agregado de todo el dataset, leido de los ficheros completos."""
+    tot = {
+        "aceptadas": 0,
+        "rechazadas": 0,
+        "por_sistema": Counter(),
+        "por_sistema_calidad4": Counter(),
+        "por_calidad": Counter(),
+    }
+    if os.path.exists(ruta_procesados):
+        with open(ruta_procesados, encoding="utf-8") as fh:
+            for linea in fh:
+                try:
+                    d = json.loads(linea)
+                except (ValueError, TypeError):
+                    continue
+                if d.get("estado") == "rechazada":
+                    tot["rechazadas"] += 1
+    if os.path.exists(ruta_lecturas):
+        with open(ruta_lecturas, encoding="utf-8") as fh:
+            for linea in fh:
+                try:
+                    r = json.loads(linea)
+                except (ValueError, TypeError):
+                    continue
+                tot["aceptadas"] += 1
+                sistema = r.get("sistema", "otro")
+                tot["por_sistema"][sistema] += 1
+                calidad = r.get("calidad", 0)
+                tot["por_calidad"][calidad] += 1
+                if isinstance(calidad, int) and calidad >= 4:
+                    tot["por_sistema_calidad4"][sistema] += 1
+    return tot
+
+
+def ejemplos_desde_archivo(ruta_lecturas, n=10):
+    """Los n ejemplos de mejor calidad del dataset completo."""
+    filas = []
+    if os.path.exists(ruta_lecturas):
+        with open(ruta_lecturas, encoding="utf-8") as fh:
+            for linea in fh:
+                try:
+                    filas.append(json.loads(linea))
+                except (ValueError, TypeError):
+                    pass
+    filas.sort(key=lambda r: -(r.get("calidad") or 0))
+    return filas[:n]
+
+
 def escribir_informe(ruta, stats, ejemplos=None):
     """Informe Markdown del recuento de lecturas."""
     ejemplos = ejemplos or []
@@ -430,7 +479,6 @@ def main(argv=None, cliente=None):
             else LLMClient()
 
     lock = threading.Lock()
-    ejemplos = []
 
     def trabajar(item):
         seccion, h, det = item
@@ -452,8 +500,6 @@ def main(argv=None, cliente=None):
                 stats["por_calidad"][clasif["calidad"]] += 1
                 if clasif["calidad"] >= 4:
                     stats["por_sistema_calidad4"][clasif["sistema"]] += 1
-                if len(ejemplos) < 10:
-                    ejemplos.append(registro_lectura(seccion, clasif, meta))
             else:
                 stats["rechazadas"] += 1
             with open(ruta_lect, "a", encoding="utf-8") as fl:
@@ -478,7 +524,9 @@ def main(argv=None, cliente=None):
         for item in candidatas:
             trabajar(item)
 
-    escribir_informe(ruta_in, stats, ejemplos)
+    tot = recuento_total(ruta_lect, ruta_pr)
+    stats.update(tot)
+    escribir_informe(ruta_in, stats, ejemplos_desde_archivo(ruta_lect))
     return stats
 
 
