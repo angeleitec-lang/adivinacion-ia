@@ -192,8 +192,12 @@ def descargar_candidata(fila, crud_dir):
     """Descarga una ficha sin pisar lo existente. Devuelve el registro del manifest."""
     if not url_permitida(fila["url_texto"]):
         raise ValueError("URL fuera de la lista blanca: %s" % fila["url_texto"])
+    ident = str(fila.get("id") or "")
+    if (not ident or ident in (".", "..") or os.path.basename(ident) != ident
+            or "\\" in ident or "\x00" in ident):
+        raise ValueError("id de ficha no válido: %r" % ident)
     os.makedirs(crud_dir, exist_ok=True)
-    ruta = os.path.join(crud_dir, fila["id"] + ".txt")
+    ruta = os.path.join(crud_dir, ident + ".txt")
     if os.path.exists(ruta):
         with open(ruta, "rb") as fh:
             datos = fh.read()
@@ -246,15 +250,18 @@ def descargar_todas(candidatas, work_dir, pausa=1.5):
     manifiesto = os.path.join(work_dir, MANIFIESTO)
     errores = os.path.join(work_dir, "errores.jsonl")
     nuevos = reutilizados = 0
+    fallidos = invalidos = 0
     bytes_total = 0
     limitada = False
     for i, fila in enumerate(candidatas):
         try:
             res = descargar_candidata(fila, crud_dir)
         except ValueError as exc:
+            motivo = ("url_no_permitida" if str(exc).startswith("URL fuera")
+                      else "ficha_invalida")
             _anotar(errores, {"id": fila.get("id", "?"), "etapa": "descarga_pd",
-                              "motivo": "url_no_permitida", "detalle": str(exc)})
-            print("%s: URL rechazada" % fila.get("id", "?"), file=sys.stderr)
+                              "motivo": motivo, "detalle": str(exc)})
+            print("%s: %s" % (fila.get("id", "?"), motivo), file=sys.stderr)
             continue
         except ParadaLimitada:
             print("Parada por 429 repetido en %s" % fila["id"], file=sys.stderr)
@@ -266,16 +273,29 @@ def descargar_todas(candidatas, work_dir, pausa=1.5):
             bytes_total += res["bytes"]
         elif res["estado"] == "ya_existe":
             reutilizados += 1
+        elif res["estado"] == "ya_existe_invalido":
+            invalidos += 1
+            _anotar(errores, {"id": fila["id"], "etapa": "descarga_pd",
+                              "motivo": res["estado"]})
         else:
+            fallidos += 1
             _anotar(errores, {"id": fila["id"], "etapa": "descarga_pd",
                               "motivo": res["estado"]})
         print("%s: %s (%d bytes)" % (fila["id"], res["estado"], res["bytes"]))
         if i < len(candidatas) - 1 and pausa > 0:
             time.sleep(pausa)
-    estado = "limitada" if limitada else ("ok" if nuevos else "ya_existe")
+    if limitada:
+        estado = "limitada"
+    elif fallidos or invalidos:
+        estado = "con_errores" if (nuevos or reutilizados) else "fallida"
+    elif nuevos:
+        estado = "ok"
+    else:
+        estado = "ya_existe"
     _anotar(os.path.join(work_dir, "fetch.jsonl"),
             {"etapa": "descarga_clasicos_pd", "estado": estado, "nuevos": nuevos,
-             "reutilizados": reutilizados, "bytes": bytes_total})
+             "reutilizados": reutilizados, "fallidos": fallidos,
+             "invalidos": invalidos, "bytes": bytes_total})
     return 3 if limitada else 0
 
 

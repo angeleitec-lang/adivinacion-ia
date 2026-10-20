@@ -93,7 +93,10 @@ def prompt_lectura(tarea: dict) -> str:
 
 
 def _lectura_desde_meta(meta: dict) -> str:
-    return prompt_lectura({"cartas": meta.get("cartas", []), "contexto": meta.get("contexto", "")})
+    cartas = meta.get("cartas")
+    if not isinstance(cartas, list):
+        cartas = []
+    return prompt_lectura({"cartas": cartas, "contexto": meta.get("contexto", "")})
 
 
 def construir_tarea(
@@ -218,6 +221,11 @@ def generar_respuestas(
 
 def construir_fila(guion: list, respuestas: list, tarea: dict) -> dict:
     """Ensambla la fila JSONL (ShareGPT + turnos + metadatos)."""
+    if len(guion) != len(respuestas):
+        raise ValueError(
+            "Guion y respuestas desalineados: %d turnos frente a %d respuestas"
+            % (len(guion), len(respuestas))
+        )
     conv = [{"from": "system", "value": tarea["sistema"]}]
     for turno, r in zip(guion, respuestas):
         conv.append({"from": "human", "value": str(turno["texto"])})
@@ -342,7 +350,9 @@ def verificar_conversacion(fila: dict, args, bloque: str | None = None):
         return False, "sin_turnos"
     meta = fila.get("metadatos", {})
     bloque = bloque or meta.get("bloque", "multiturno")
-    cartas = meta.get("cartas", [])
+    cartas = meta.get("cartas")
+    if not isinstance(cartas, list):
+        cartas = []
     lectura = _lectura_desde_meta(meta)
 
     for humano, gpt in pares:
@@ -359,6 +369,8 @@ def verificar_conversacion(fila: dict, args, bloque: str | None = None):
             return False, f"idioma_{lang}"
         if vs.repetition_ratio(gpt) > args.max_repetition:
             return False, "repeticion"
+        if vs._copia_turno1(humano, gpt):
+            return False, "copia_pregunta"
         if bloque != "etica" and vs.ia_meta(gpt):
             return False, "ia_meta"
 
