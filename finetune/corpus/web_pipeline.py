@@ -12,6 +12,7 @@ de hilos, y solo se visitan hilos públicos (nunca perfiles ni búsquedas).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -81,6 +82,8 @@ def _cargar_procesadas(manifest_path: Path) -> Set[str]:
                 reg = json.loads(linea)
             except json.JSONDecodeError:
                 continue
+            if not isinstance(reg, dict):
+                continue
             if reg.get("estado") in ("ok", "cortas"):
                 procesadas.add(reg.get("url"))
     return procesadas
@@ -120,6 +123,7 @@ def procesar_sitio(
         ]
 
     registros: List[Dict[str, Any]] = []
+    usados: Set[str] = set()
     for url in urls:
         if url in procesadas:
             continue
@@ -152,7 +156,12 @@ def procesar_sitio(
             registros.append({**base, "estado": "cortas", "chars": 0,
                              "bytes": resp.get("bytes", 0), "archivo": None})
             continue
-        archivo = guardar_markdown(extraccion, Path(work_dir), slug_desde_url(url))
+        slug = slug_desde_url(url)
+        destino = Path(work_dir) / urlparse(url).netloc / f"{slug}.md"
+        if slug in usados or destino.exists():
+            slug = f"{slug}_{hashlib.sha1(url.encode('utf-8')).hexdigest()[:4]}"
+        usados.add(slug)
+        archivo = guardar_markdown(extraccion, Path(work_dir), slug)
         registros.append({**base, "estado": "ok", "chars": extraccion.get("chars", 0),
                          "bytes": resp.get("bytes", 0), "archivo": str(archivo)})
     return registros

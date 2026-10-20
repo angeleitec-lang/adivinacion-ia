@@ -11,6 +11,7 @@ import json
 import random
 import re
 import sys
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -85,9 +86,11 @@ def load_jsonl(path: Path) -> list[dict]:
             line = line.strip()
             if line:
                 try:
-                    rows.append(json.loads(line))
+                    row = json.loads(line)
                 except json.JSONDecodeError:
-                    pass
+                    continue
+                if isinstance(row, dict):
+                    rows.append(row)
     return rows
 
 
@@ -139,7 +142,13 @@ def lang_counts(rows: list[dict]) -> dict[str, int]:
 
 
 def _norm(text: str) -> str:
-    return re.sub(r"\s+", " ", text or "").strip().lower()
+    return unicodedata.normalize(
+        "NFC", re.sub(r"\s+", " ", text or "").strip().lower())
+
+
+def _clave_respuestas(row: dict) -> str:
+    """sha de las respuestas con Unicode normalizado (NFC)."""
+    return sha(unicodedata.normalize("NFC", concat_respuestas(row)))
 
 
 def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
@@ -170,14 +179,14 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
     seen_real: set[str] = set()
     train_real, val_cands = [], []
     for r in rt:
-        h = sha(concat_respuestas(r))
+        h = _clave_respuestas(r)
         if h in seen_real:
             descartes["duplicado_exacto"] += 1
             continue
         seen_real.add(h)
         train_real.append(r)
     for r in rv:
-        h = sha(concat_respuestas(r))
+        h = _clave_respuestas(r)
         if h in seen_real:
             descartes["duplicado_exacto"] += 1
             continue
@@ -188,7 +197,7 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
     dup_vs_real = 0
     seen_synth: set[str] = set()
     for r, m in zip(synth, meta):
-        h = sha(concat_respuestas(r))
+        h = _clave_respuestas(r)
         if h in seen_real:
             dup_vs_real += 1
             descartes["duplicado_exacto"] += 1

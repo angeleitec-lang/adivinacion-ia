@@ -50,8 +50,8 @@ def _yaml_dumper(data: Dict[str, Any]) -> str:
         elif isinstance(v, (int, float)):
             lines.append(f"{k}: {v}")
         elif isinstance(v, str):
-            # Escapar comillas y caracteres especiales
-            escaped = v.replace('"', '\\"').replace("'", "\\'")
+            # Escapar solo comillas dobles: se envuelve el valor entre ellas
+            escaped = v.replace('"', '\\"')
             if "\n" in v or ":" in v or '"' in v or "'" in v:
                 lines.append(f'{k}: "{escaped}"')
             else:
@@ -68,6 +68,9 @@ def _yaml_dumper(data: Dict[str, Any]) -> str:
 # Coincidencia con límite de palabra: «compra» no casa dentro de «comprador»
 _PATRONES_RUIDO = [re.compile(r"\b" + re.escape(frase) + r"\b", re.IGNORECASE)
                    for frase in FRASES_RUIDO]
+
+# Línea que solo contiene un enlace Markdown, con o sin viñeta
+_ENLACE_SUELTO_RE = re.compile(r"(?:[-*+]\s+)?\[[^\]]*\]\([^)]*\)")
 
 # Una línea que contenga ruido solo se borra si es corta (navegación/comercial)
 MAX_PALABRAS_RUIDO = 12
@@ -100,6 +103,10 @@ def _limpiar_ruido(texto: str) -> str:
         stripped = linea.strip()
         # Saltar líneas muy cortas que parecen ruido
         if len(stripped) <= 2:
+            continue
+        # Un enlace suelto es navegación: `include_links=False` ya debía
+        # haberlo quitado, así que si sobrevive al extractor no es contenido
+        if _ENLACE_SUELTO_RE.fullmatch(stripped):
             continue
         lower = stripped.lower()
         if not _contiene_ruido(lower):
@@ -227,7 +234,7 @@ def extraer(
         include_formatting=True,
     )
 
-    if not md or len(md.strip()) < min_chars:
+    if not md or not md.strip():
         return None
 
     # Reparar mojibake (UTF-8 leído como cp1252) antes de limpiar ruido
@@ -235,6 +242,11 @@ def extraer(
 
     # Limpiar ruido
     md = _limpiar_ruido(md)
+
+    # El umbral se mide sobre el texto YA limpio: una página que solo tenía
+    # menús/enlaces no debe guardarse como evidencia válida.
+    if len(md.strip()) < min_chars:
+        return None
 
     # Detectar idioma (simple, basado en trafilatura o heurística)
     idioma = "es"  # default para nuestro corpus
