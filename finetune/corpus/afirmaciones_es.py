@@ -25,8 +25,11 @@ import glob
 import json
 import os
 import re
+import sys
+import threading
+import time
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import cartas
 import juez
@@ -228,6 +231,34 @@ def validar_respuesta_afirmaciones(data):
             raise ValueError("Afirmación no textual o vacía")
 
 
+def _chat_json_reintento(cliente, sistema, usuario, validar, reintentos=1):
+    """Chat + parseo + validacion con un maximo de `reintentos` reintentos.
+
+    Cada intento hace UNA peticion de red (sin los reintentos internos de
+    `chat`, para que una peticion atascada no multiplique el tiempo: el
+    `timeout` del cliente acota cada intento). En el reintento se anade el
+    error al prompt, como hace `chat_json`. Lanza la ultima excepcion si se
+    agotan los intentos.
+    """
+    ultima_exc = None
+    for intento in range(reintentos + 1):
+        try:
+            texto = cliente.chat(sistema, usuario, max_reintentos=0)
+            data = cliente._extraer_json(texto)
+            validar(data)
+            return data
+        except Exception as e:
+            ultima_exc = e
+            if intento < reintentos:
+                usuario = (
+                    "%s\n\n[INTENTO %d FALLO: %s]\n"
+                    "Responde SOLO con el JSON corregido."
+                    % (usuario, intento + 1, e)
+                )
+    raise ValueError("JSON invalido tras %d intentos: %s"
+                     % (reintentos + 1, ultima_exc))
+
+
 def extraer_afirmaciones(cliente, entidad_id, faceta, texto):
     """Extrae y valida afirmaciones de una sección con el modelo dado.
 
@@ -237,8 +268,8 @@ def extraer_afirmaciones(cliente, entidad_id, faceta, texto):
     resultado = {"estado": "ok", "afirmaciones": [], "descartadas": []}
     sistema, usuario = construir_prompt(entidad_id, faceta, texto)
     try:
-        data = cliente.chat_json(sistema, usuario,
-                               validar_respuesta_afirmaciones)
+        data = _chat_json_reintento(cliente, sistema, usuario,
+                                   validar_respuesta_afirmaciones)
     except Exception:
         resultado["estado"] = "error"
         return resultado
@@ -367,6 +398,62 @@ def escribir_informe(ruta, stats):
         fh.write("\n".join(lineas))
 
 
+def filtrar_min_calidad(evidencias, min_calidad):
+    """Deja fuera las evidencias con calidad por debajo de `min_calidad`.
+
+    Con `min_calidad` <= 0 no filtra nada. Una evidencia sin calidad cuenta
+    como 0.
+    """
+    if not min_calidad or min_calidad <= 0:
+        return list(evidencias)
+    return [e for e in evidencias if (e.get("calidad") or 0) >= min_calidad]
+
+
+def ordenar_evidencias(evidencias, orden=None, familias=None, catalogo=None):
+    """Ordena las evidencias para procesar primero lo mas valioso.
+
+    - `orden="calidad"`: calidad descendente (5 antes que 4 y 3).
+    - `familias=[...]`: las familias listadas van primero, en el orden dado;
+      las demas despues.
+    - Combinados: primero la prioridad de familia, luego la calidad.
+    Sin ninguno de los dos, conserva el orden de entrada. El orden es estable.
+    """
+    if catalogo is None:
+        catalogo = _catalogo_familias()
+    if not orden and not familias:
+        return list(evidencias)
+    fam_list = list(familias) if familias else None
+
+    def clave(i):
+        ev = evidencias[i]
+        partes = []
+        if fam_list is not None:
+            f = familia_de_entidad(ev.get("entidad_id"), catalogo)
+            partes.append(fam_list.index(f) if f in fam_list else len(fam_list))
+        if orden == "calidad":
+            partes.append(-(ev.get("calidad") or 0))
+        partes.append(i)
+        return tuple(partes)
+
+    return [evidencias[i] for i in sorted(range(len(evidencias)), key=clave)]
+
+
+def _log_progreso(stream, hechas, total, stats, inicio):
+    """Linea de progreso a `stream`: ritmo, aceptadas, descartes y ETA."""
+    transcurrido = time.time() - inicio
+    ritmo = hechas / (transcurrido / 60.0) if transcurrido > 0 else 0.0
+    restantes = max(total - hechas, 0)
+    eta = restantes / ritmo if ritmo > 0 else 0.0
+    descartas = sum(stats["descartadas"].values())
+    detalle = ", ".join("%s:%d" % (m, n)
+                       for m, n in sorted(stats["descartadas"].items()))
+    linea = ("[afirmaciones] %d/%d evidencias | aceptadas=%d descartadas=%d"
+             " (%s) | %.1f ev/min | ETA %.1f min"
+             % (hechas, total, stats["afirmaciones"], descartas,
+                detalle or "-", ritmo, eta))
+    print(linea, file=stream, flush=True)
+
+
 def main(argv=None, cliente=None):
     """Punto de entrada del extractor de afirmaciones (T29.3)."""
     parser = argparse.ArgumentParser(
@@ -385,6 +472,15 @@ def main(argv=None, cliente=None):
                             "existente (T34) sin tocarlo.")
     parser.add_argument("--in", dest="in_", default=DEFAULT_AFIRMACIONES,
                        help="Fichero de entrada para --filtrar-utilidad.")
+    parser.add_argument("--orden", choices=["calidad"], default=None,
+                       help="Ordena por calidad descendente (5 antes que 4 y 3).")
+    parser.add_argument("--familias", default=None,
+                       help="Lista separada por comas de familias a procesar "
+                            "primero (p. ej. tarot,baraja_espanola).")
+    parser.add_argument("--min-calidad", type=int, default=0,
+                       help="Deja fuera las evidencias con calidad menor.")
+    parser.add_argument("--timeout", type=float, default=60.0,
+                       help="Timeout por peticion al nodo, en segundos.")
     args = parser.parse_args(argv)
 
     if args.filtrar_utilidad:
@@ -396,6 +492,13 @@ def main(argv=None, cliente=None):
             linea = linea.strip()
             if linea:
                 evidencias.append(json.loads(linea))
+
+    familias = None
+    if args.familias:
+        familias = [f.strip() for f in args.familias.split(",") if f.strip()]
+    evidencias = filtrar_min_calidad(evidencias, args.min_calidad)
+    evidencias = ordenar_evidencias(evidencias, orden=args.orden,
+                                   familias=familias)
     if args.limite:
         evidencias = evidencias[:args.limite]
 
@@ -408,8 +511,8 @@ def main(argv=None, cliente=None):
     indice = IndiceWeb(args.web_dir)
     catalogo = _catalogo_familias()
     if cliente is None:
-        cliente = LLMClient(simulado=_simulado_vacio) if args.simulado \
-            else LLMClient()
+        cliente = LLMClient(simulado=_simulado_vacio, timeout=args.timeout) \
+            if args.simulado else LLMClient(timeout=args.timeout)
 
     stats = {
         "procesadas": 0,
@@ -419,6 +522,10 @@ def main(argv=None, cliente=None):
         "descartadas": Counter(),
         "por_familia": Counter(),
     }
+    lock = threading.Lock()
+    inicio = time.time()
+    total = len(evidencias)
+    hechas = 0
 
     def trabajar(ev):
         clave = (ev.get("hash_seccion"), ev.get("entidad_id"),
@@ -427,21 +534,18 @@ def main(argv=None, cliente=None):
             return None
         return ev, procesar_evidencia(ev, indice, cliente)
 
-    if args.workers > 1:
-        with ThreadPoolExecutor(max_workers=args.workers) as ex:
-            resultados = list(ex.map(trabajar, evidencias))
-    else:
-        resultados = [trabajar(ev) for ev in evidencias]
+    def registrar(fp, fa, ev, res):
+        """Escribe el resultado en cuanto llega y actualiza el contador.
 
-    with open(ruta_pr, "a", encoding="utf-8") as fp, \
-            open(ruta_af, "a", encoding="utf-8") as fa:
-        for r in resultados:
-            if r is None:
-                continue
-            ev, res = r
+        Serializado con `lock` y con flush por linea: si el proceso se corta,
+        lo ya escrito queda en disco y la reanudacion no lo repite.
+        """
+        nonlocal hechas
+        with lock:
             for a in res["afirmaciones"]:
                 fa.write(json.dumps(registro_afirmacion(ev, a),
                                    ensure_ascii=False) + "\n")
+                fa.flush()
                 stats["por_familia"][
                     familia_de_entidad(ev.get("entidad_id"), catalogo)] += 1
             for _, motivo in res["descartadas"]:
@@ -455,12 +559,38 @@ def main(argv=None, cliente=None):
             }, ensure_ascii=False) + "\n")
             fp.flush()
             stats["procesadas"] += 1
+            hechas += 1
             if res["estado"] == "sin_texto":
                 stats["sin_texto"] += 1
             elif res["estado"] == "error":
                 stats["errores"] += 1
             else:
                 stats["afirmaciones"] += len(res["afirmaciones"])
+            if hechas % 25 == 0:
+                _log_progreso(sys.stderr, hechas, total, stats, inicio)
+
+    with open(ruta_pr, "a", encoding="utf-8") as fp, \
+            open(ruta_af, "a", encoding="utf-8") as fa:
+        if args.workers > 1:
+            ex = ThreadPoolExecutor(max_workers=args.workers)
+            try:
+                futuros = [ex.submit(trabajar, ev) for ev in evidencias]
+                for fut in as_completed(futuros):
+                    r = fut.result()
+                    if r is None:
+                        continue
+                    registrar(fp, fa, r[0], r[1])
+            except BaseException:
+                ex.shutdown(wait=False, cancel_futures=True)
+                raise
+            else:
+                ex.shutdown(wait=True)
+        else:
+            for ev in evidencias:
+                r = trabajar(ev)
+                if r is None:
+                    continue
+                registrar(fp, fa, r[0], r[1])
 
     escribir_informe(ruta_in, stats)
     return stats

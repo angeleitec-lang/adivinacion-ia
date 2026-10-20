@@ -1,14 +1,18 @@
 """Tests del extractor de afirmaciones en español (T29)."""
+import io
 import json
 import os
 import sys
 import tempfile
+import time
 import unittest
+from collections import Counter
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import afirmaciones_es as af
 import juez
+from llm_client import LLMClient
 
 
 CUERPO = ("El dos de copas representa la unión y el afecto mutuo entre dos "
@@ -440,6 +444,188 @@ class FiltroUtilidadCLI(unittest.TestCase):
         with open(self.entrada, encoding="utf-8") as fh:
             despues = fh.read()
         self.assertEqual(antes, despues)
+
+
+class ReintentosYTimeout(unittest.TestCase):
+    """T41.4: maximo 1 reintento por evidencia (2 intentos en total)."""
+
+    def test_primer_fallo_segundo_intento_ok(self):
+        llamadas = {"n": 0}
+
+        def sim(sistema, usuario):
+            llamadas["n"] += 1
+            if llamadas["n"] == 1:
+                return "esto no es json"
+            return _json_afs(["Representa la union y el afecto mutuo."])
+
+        cliente = LLMClient(simulado=sim)
+        res = af.extraer_afirmaciones(cliente, "tarot-copas-02",
+                                     "significado_general", CUERPO)
+        self.assertEqual(res["estado"], "ok")
+        self.assertEqual(len(res["afirmaciones"]), 1)
+        self.assertEqual(llamadas["n"], 2)
+
+    def test_agota_el_reintento_estado_error(self):
+        llamadas = {"n": 0}
+
+        def sim(sistema, usuario):
+            llamadas["n"] += 1
+            return "basura sin json"
+
+        cliente = LLMClient(simulado=sim)
+        res = af.extraer_afirmaciones(cliente, "tarot-copas-02",
+                                     "amor", CUERPO)
+        self.assertEqual(res["estado"], "error")
+        self.assertEqual(llamadas["n"], 2)
+
+
+class OrdenarEvidencias(unittest.TestCase):
+    """T41.3: priorizar por calidad y por familia."""
+
+    def _ev(self, eid, cal):
+        return {"entidad_id": eid, "calidad": cal}
+
+    def test_sin_orden_conserva_el_orden(self):
+        evs = [self._ev("tarot-a", 3), self._ev("tarot-b", 5)]
+        self.assertEqual(af.ordenar_evidencias(evs, catalogo={}), evs)
+
+    def test_orden_calidad_descendente(self):
+        evs = [self._ev("tarot-a", 3), self._ev("tarot-b", 5),
+               self._ev("tarot-c", 4)]
+        out = af.ordenar_evidencias(evs, orden="calidad", catalogo={})
+        self.assertEqual([e["calidad"] for e in out], [5, 4, 3])
+
+    def test_calidad_nula_ordena_como_cero(self):
+        evs = [self._ev("tarot-a", None), self._ev("tarot-b", 2)]
+        out = af.ordenar_evidencias(evs, orden="calidad", catalogo={})
+        self.assertEqual([e["entidad_id"] for e in out],
+                         ["tarot-b", "tarot-a"])
+
+    def test_familias_prioriza_en_el_orden_dado(self):
+        evs = [self._ev("marte|cuadratura|pluton|aspecto", 5),
+               self._ev("tarot-x", 3), self._ev("naipe-y", 4)]
+        out = af.ordenar_evidencias(evs, familias=["tarot", "baraja_espanola"],
+                                   catalogo={})
+        fams = [af.familia_de_entidad(e["entidad_id"], {}) for e in out]
+        self.assertEqual(fams, ["tarot", "baraja_espanola", "astrologia"])
+
+    def test_familias_y_calidad_combinados(self):
+        evs = [self._ev("naipe-b", 3), self._ev("tarot-a", 4),
+               self._ev("naipe-c", 5), self._ev("marte|cuadratura|pluton|aspecto", 5)]
+        out = af.ordenar_evidencias(evs, orden="calidad",
+                                   familias=["tarot", "baraja_espanola"],
+                                   catalogo={})
+        fams = [af.familia_de_entidad(e["entidad_id"], {}) for e in out]
+        self.assertEqual(fams, ["tarot", "baraja_espanola", "baraja_espanola",
+                               "astrologia"])
+        self.assertEqual([e["calidad"] for e in out], [4, 5, 3, 5])
+
+
+class FiltrarMinCalidad(unittest.TestCase):
+    """T41.3: --min-calidad deja fuera lo de menor calidad."""
+
+    def test_deja_fuera_bajo_minimo(self):
+        evs = [{"calidad": 3}, {"calidad": 4}, {"calidad": 5}, {}]
+        out = af.filtrar_min_calidad(evs, 4)
+        self.assertEqual([e.get("calidad") for e in out], [4, 5])
+
+    def test_minimo_cero_no_filtra(self):
+        evs = [{"calidad": 3}, {}]
+        self.assertEqual(af.filtrar_min_calidad(evs, 0), evs)
+
+
+class LogProgreso(unittest.TestCase):
+    """T41.2: el log a stderr trae hechas/total, aceptadas, motivos, ritmo y ETA."""
+
+    def test_contiene_todos_los_campos(self):
+        stats = {
+            "procesadas": 25, "sin_texto": 1, "errores": 0,
+            "afirmaciones": 40,
+            "descartadas": Counter({"vocabulario": 3, "otra_carta": 1}),
+            "por_familia": Counter(),
+        }
+        buf = io.StringIO()
+        af._log_progreso(buf, 25, 100, stats, time.time() - 60.0)
+        s = buf.getvalue()
+        self.assertIn("25/100", s)
+        self.assertIn("aceptadas=40", s)
+        self.assertIn("vocabulario:3", s)
+        self.assertIn("otra_carta:1", s)
+        self.assertIn("ev/min", s)
+        self.assertIn("ETA", s)
+
+
+class EscrituraIncremental(unittest.TestCase):
+    """T41.1: se escribe al instante y la reanudacion no duplica tras un corte."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.web = os.path.join(self.tmp.name, "web")
+        dom = os.path.join(self.web, "example.com")
+        os.makedirs(dom)
+        self.ev_path = os.path.join(self.tmp.name, "evidencias.jsonl")
+        urls = ["https://example.com/s%d" % i for i in range(5)]
+        for i, u in enumerate(urls):
+            with open(os.path.join(dom, "s%d.md" % i), "w",
+                     encoding="utf-8") as fh:
+                fh.write(_md(u, "example.com", CUERPO))
+        with open(self.ev_path, "w", encoding="utf-8") as fh:
+            for u in urls:
+                fh.write(json.dumps(_evidencia(url=u), ensure_ascii=False) + "\n")
+        self.out = os.path.join(self.tmp.name, "out")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _run(self, extra=(), cliente=None):
+        argv = ["--evidencias", self.ev_path, "--web-dir", self.web,
+                "--out-dir", self.out] + list(extra)
+        return af.main(argv, cliente=cliente)
+
+    def _lineas(self, nombre):
+        ruta = os.path.join(self.out, nombre)
+        if not os.path.exists(ruta):
+            return []
+        with open(ruta, encoding="utf-8") as fh:
+            return [l for l in fh.read().splitlines() if l.strip()]
+
+    def test_corte_deja_lo_anterior_y_reanuda_sin_duplicar(self):
+        llamadas = {"n": 0}
+
+        def sim_falla_en_tres(sistema, usuario):
+            llamadas["n"] += 1
+            if llamadas["n"] == 3:
+                raise KeyboardInterrupt()
+            return _json_afs(["Representa la union y el afecto mutuo."])
+
+        with self.assertRaises(KeyboardInterrupt):
+            self._run(cliente=LLMClient(simulado=sim_falla_en_tres))
+        self.assertEqual(len(self._lineas("procesados.jsonl")), 2)
+        self.assertEqual(len(self._lineas("afirmaciones.jsonl")), 2)
+
+        cliente2 = _cliente_simulado(
+            _json_afs(["Habla de encuentros amorosos y acuerdos."]))
+        stats2 = self._run(cliente=cliente2)
+        self.assertEqual(stats2["procesadas"], 3)
+        self.assertEqual(len(self._lineas("procesados.jsonl")), 5)
+        self.assertEqual(len(self._lineas("afirmaciones.jsonl")), 5)
+        claves = [json.loads(l) for l in self._lineas("procesados.jsonl")]
+        vistos = set()
+        for c in claves:
+            k = (c["hash_seccion"], c["entidad_id"], c["faceta"])
+            self.assertNotIn(k, vistos)
+            vistos.add(k)
+
+    def test_multiproceso_escribe_y_reanuda_sin_duplicar(self):
+        cliente = _cliente_simulado(
+            _json_afs(["Representa la union y el afecto mutuo."]))
+        self._run(extra=["--workers", "3"], cliente=cliente)
+        self.assertEqual(len(self._lineas("procesados.jsonl")), 5)
+        self.assertEqual(len(self._lineas("afirmaciones.jsonl")), 5)
+        stats2 = self._run(extra=["--workers", "3"], cliente=cliente)
+        self.assertEqual(stats2["procesadas"], 0)
+        self.assertEqual(len(self._lineas("procesados.jsonl")), 5)
+        self.assertEqual(len(self._lineas("afirmaciones.jsonl")), 5)
 
 
 if __name__ == "__main__":
