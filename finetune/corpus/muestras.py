@@ -143,15 +143,17 @@ def muestrear(registros, fraccion=FRACCION_POR_DEFECTO, estratos=None,
 
 def _leer_jsonl(ruta):
     registros = []
-    with open(ruta, encoding="utf-8") as fh:
+    with open(ruta, encoding="utf-8-sig") as fh:
         for linea in fh:
             linea = linea.strip()
             if not linea:
                 continue
             try:
-                registros.append(json.loads(linea))
+                registro = json.loads(linea)
             except json.JSONDecodeError:
                 continue
+            if isinstance(registro, dict):
+                registros.append(registro)
     return registros
 
 
@@ -270,7 +272,7 @@ def recortar(texto, largo=LARGO_TEXTO):
 def procedencia_de(nivel, registro, resolvedor):
     """Línea de procedencia legible: URL o libro/sección."""
     if nivel == "web":
-        url = registro.get("fuente_id") or "fuente desconocida"
+        url = str(registro.get("fuente_id") or "fuente desconocida")
         dominio = registro.get("dominio")
         return url if not dominio or dominio in url else "%s (%s)" % (
             url, dominio)
@@ -311,7 +313,7 @@ def ficha_markdown(nivel, registro, resolvedor):
     recorte = recortar(texto)
     estrato = _clave_estrato(registro.get("estrato", ()))
     lineas = ["### %s · %s" % (nivel, estrato), ""]
-    lineas.append("- id: `%s`" % registro["id"])
+    lineas.append("- id: `%s`" % (registro.get("id") or id_registro(registro)))
     lineas.append("- procedencia: %s" % procedencia_de(nivel, registro,
                                                        resolvedor))
     entidad = registro.get("entidad_id") or registro.get("sistema") or "?"
@@ -320,9 +322,9 @@ def ficha_markdown(nivel, registro, resolvedor):
     extras = []
     if registro.get("calidad") is not None:
         extras.append("calidad %s" % registro["calidad"])
-    if nivel == "lecturas" and registro.get("cartas"):
-        extras.append("cartas: %s" % ", ".join(
-            str(c) for c in registro["cartas"][:6]))
+    cartas = registro.get("cartas")
+    if nivel == "lecturas" and isinstance(cartas, (list, tuple)) and cartas:
+        extras.append("cartas: %s" % ", ".join(str(c) for c in cartas[:6]))
     if extras:
         detalle += " (%s)" % "; ".join(extras)
     lineas.append("- entidad/faceta: %s" % detalle)
