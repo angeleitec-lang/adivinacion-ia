@@ -1,0 +1,59 @@
+# Plantilla QLoRA 4-bit para Qwen2.5-14B-Instruct (modelo final).
+#
+# NO ejecutar todavía: el dataset está pendiente de la revisión humana del 3 %
+# y de pasar preparar_entrenamiento.py con semáforo verde.
+#
+# Las claves de Soup se han contrastado con su documentación, pero la versión
+# instalada en nodo1 no se ha comprobado. Antes de entrenar:
+#   soup --help  (y el modo de prueba que documente la versión instalada)
+# Si una clave no existe, Soup debe fallar en voz alta; no la elimines a ciegas.
+#
+# Este es el modelo principal de MODELO.md. El 7B sirve para iterar; el 14B
+# solo se entrena cuando el 7B demuestra que la receta y los datos funcionan.
+
+base: Qwen/Qwen2.5-14B-Instruct
+
+task: sft
+
+data:
+  train: finetune/corpus/final/preparado/train.jsonl
+  # Soup puede separar validación del propio train. Si se usa el val.jsonl
+  # preparado, añadir `val:` solo después de verificar que la clave existe.
+  format: chatml
+  val_split: 0.05
+  max_length: 2048
+
+training:
+  epochs: 3
+  # Menos lr que el 7B: el 14B acumula más señal por paso y con 2e-4 suele
+  # sobreajustar o desestabilizarse. Si el loss baja muy despacio, subir a
+  # 1.5e-4 antes que tocar otros hiperparámetros.
+  lr: 0.0001
+  batch_size: 1
+  gradient_accumulation_steps: 16
+  # Lote efectivo = 1 × 16 = 16 ejemplos por paso.
+  eval_steps: 50
+  save_steps: 100
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  lora:
+    r: 32
+    alpha: 64
+    dropout: 0.05
+    target_modules:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+      - gate_proj
+      - up_proj
+      - down_proj
+  quantization: 4bit
+  # QLoRA 4-bit: NF4, doble cuantización y cómputo en bf16 si el backend ROCm
+  # lo permite. Si Soup no acepta estas claves, dejarlas en sus valores por
+  # defecto y anotarlo en ESTADO.md.
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: bfloat16
+
+output: finetune/entrenamiento/salida/14b
