@@ -27,3 +27,6 @@ Trabajos de máquina de la coordinadora (en segundo plano, sin IA): extracción 
 - Decisiones del usuario pendientes: respuesta de Hugging Face (`Pepere45/spanish-esotericism-corpus`); compra de libros solo si la matriz sigue floja en baraja española tras T36; revisión humana del 3 %.
 - YouTube sigue con HTTP 429: probar cookies del navegador o aplazar.
 - Verificar siempre las pistas con casos adversos propios antes de integrar.
+
+## Cola adicional
+- T39 (pedida por el usuario el 2026-10-20): disponibilidad LEGAL de los libros que faltan (dominio público, bibliotecas, precios) para decidir compras. Asignar a la primera pestaña local que quede libre. Sin búsqueda de copias pirata.
