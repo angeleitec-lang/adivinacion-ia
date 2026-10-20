@@ -132,9 +132,9 @@ class LLMClient:
                 except json.JSONDecodeError:
                     pass
 
-        # Buscar primer { ... } balanceado
+        # Buscar el primer { ... } balanceado que sea JSON válido
         inicio = texto.find("{")
-        if inicio != -1:
+        while inicio != -1:
             nivel = 0
             for i, ch in enumerate(texto[inicio:], start=inicio):
                 if ch == "{":
@@ -147,6 +147,7 @@ class LLMClient:
                             return json.loads(candidato)
                         except json.JSONDecodeError:
                             break
+            inicio = texto.find("{", inicio + 1)
 
         raise ValueError("No se encontró JSON válido en la respuesta")
 
