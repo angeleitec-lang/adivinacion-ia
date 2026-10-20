@@ -107,5 +107,136 @@ class Descarga(unittest.TestCase):
         self.assertEqual(rc, 3)
 
 
+class _RespuestaFalsa:
+    def __init__(self, datos, url):
+        self._datos = datos
+        self._url = url
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def read(self):
+        return self._datos
+
+    def geturl(self):
+        return self._url
+
+
+class _OpenerFalso:
+    def __init__(self, respuestas):
+        self.respuestas = list(respuestas)
+        self.llamadas = []
+
+    def open(self, url, timeout=None):
+        self.llamadas.append(url)
+        respuesta = self.respuestas.pop(0)
+        if isinstance(respuesta, Exception):
+            raise respuesta
+        return respuesta
+
+
+def _redireccion(url, destino):
+    return urllib.error.HTTPError(url, 302, "Found",
+                                  {"Location": destino}, None)
+
+
+class RedireccionesSeguras(unittest.TestCase):
+    def _con_opener(self, respuestas):
+        opener = _OpenerFalso(respuestas)
+        parche = mock.patch.object(libros_fetch.urllib.request,
+                                   "build_opener", return_value=opener)
+        parche.start()
+        self.addCleanup(parche.stop)
+        return opener
+
+    def test_acepta_dominios_de_la_lista_blanca(self):
+        for url in ("https://archive.org/download/x/y.txt",
+                    "https://www.gutenberg.org/files/1/1.txt",
+                    "http://es.wikisource.org/wiki/x",
+                    "https://datos.bne.es/x",
+                    "https://www.cervantesvirtual.com/x"):
+            self.assertEqual(libros_fetch.validar_url(url), url)
+
+    def test_rechaza_dominio_externo(self):
+        with self.assertRaises(libros_fetch.DescargaInsegura):
+            libros_fetch.validar_url("https://evil.com/x.txt")
+
+    def test_rechaza_sufijo_enganoso(self):
+        for url in ("https://archive.org.evil.com/x.txt",
+                    "https://evilarchive.org/x.txt",
+                    "https://archive.org@evil.com/x.txt"):
+            with self.assertRaises(libros_fetch.DescargaInsegura):
+                libros_fetch.validar_url(url)
+
+    def test_rechaza_credenciales(self):
+        for url in ("https://user:pass@archive.org/x.txt",
+                    "https://user@archive.org/x.txt"):
+            with self.assertRaises(libros_fetch.DescargaInsegura):
+                libros_fetch.validar_url(url)
+
+    def test_rechaza_esquema_file(self):
+        for url in ("file:///etc/passwd", "ftp://archive.org/x.txt",
+                    "javascript:alert(1)"):
+            with self.assertRaises(libros_fetch.DescargaInsegura):
+                libros_fetch.validar_url(url)
+
+    def test_sigue_redireccion_interna(self):
+        self._con_opener([
+            _redireccion("https://archive.org/a", "https://archive.org/b"),
+            _RespuestaFalsa(b"datos", "https://archive.org/b"),
+        ])
+        self.assertEqual(libros_fetch._obtener("https://archive.org/a"),
+                         b"datos")
+
+    def test_rechaza_redireccion_a_dominio_externo(self):
+        self._con_opener([
+            _redireccion("https://archive.org/a", "https://evil.com/b"),
+        ])
+        with self.assertRaises(libros_fetch.DescargaInsegura):
+            libros_fetch._obtener("https://archive.org/a")
+
+    def test_rechaza_bucle_de_redirecciones(self):
+        opener = self._con_opener([
+            _redireccion("https://archive.org/a", "https://archive.org/a"),
+        ] * 10)
+        with self.assertRaises(libros_fetch.DescargaInsegura):
+            libros_fetch._obtener("https://archive.org/a")
+        self.assertLessEqual(len(opener.llamadas),
+                             libros_fetch.MAX_REDIRECCIONES + 1)
+
+    def test_limita_el_numero_de_saltos(self):
+        saltos = [_redireccion("https://archive.org/%d" % i,
+                               "https://archive.org/%d" % (i + 1))
+                  for i in range(libros_fetch.MAX_REDIRECCIONES + 5)]
+        self._con_opener(saltos)
+        with self.assertRaises(libros_fetch.DescargaInsegura):
+            libros_fetch._obtener("https://archive.org/0")
+
+    def test_valida_la_url_final(self):
+        self._con_opener([
+            _RespuestaFalsa(b"datos", "https://evil.com/b"),
+        ])
+        with self.assertRaises(libros_fetch.DescargaInsegura):
+            libros_fetch._obtener("https://archive.org/a")
+
+    def test_redireccion_bloqueada_no_se_reintenta(self):
+        with mock.patch.object(
+                libros_fetch, "_obtener",
+                side_effect=libros_fetch.DescargaInsegura("host externo")), \
+             mock.patch.object(libros_fetch.time, "sleep") as dormir:
+            res = libros_fetch.descargar_libro(LIBRO, self.crudo)
+        self.assertEqual(res["estado"], "bloqueado")
+        self.assertEqual(res["intentos"], 1)
+        dormir.assert_not_called()
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.crudo = os.path.join(self.tmp.name, "crudo")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,7 @@ import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from libros_fuentes import cargar_inventario
@@ -18,15 +19,67 @@ MIN_BYTES = 30 * 1024
 MAX_INTENTOS = 4
 LIMITE_429_CONSECUTIVOS = 2
 BASE_ESPERA = 2.0
+MAX_REDIRECCIONES = 5
+DOMINIOS_PERMITIDOS = ("gutenberg.org", "archive.org", "wikisource.org",
+                       "bne.es", "cervantesvirtual.com")
 
 
 class ParadaLimitada(Exception):
     """El servidor devuelve 429 de forma repetida: hay que parar en seco."""
 
 
+class DescargaInsegura(Exception):
+    """URL fuera de la lista blanca, con credenciales o redirección no segura."""
+
+
+def validar_url(url):
+    """Comprueba esquema, credenciales y dominio contra la lista blanca."""
+    partes = urllib.parse.urlsplit(url)
+    if partes.scheme not in ("http", "https"):
+        raise DescargaInsegura("esquema no permitido: %r" % partes.scheme)
+    if not partes.netloc:
+        raise DescargaInsegura("URL sin host: %r" % url)
+    if "@" in partes.netloc or partes.username or partes.password:
+        raise DescargaInsegura("URL con credenciales: %r" % url)
+    host = (partes.hostname or "").rstrip(".").lower()
+    if not host:
+        raise DescargaInsegura("URL sin host válido: %r" % url)
+    permitido = any(host == dominio or host.endswith("." + dominio)
+                    for dominio in DOMINIOS_PERMITIDOS)
+    if not permitido:
+        raise DescargaInsegura("dominio no permitido: %r" % host)
+    return url
+
+
+class _SinRedirecciones(urllib.request.HTTPRedirectHandler):
+    """Deja que _obtener siga los saltos a mano para validar cada destino."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _obtener(url, timeout=120):
-    with urllib.request.urlopen(url, timeout=timeout) as resp:
-        return resp.read()
+    actual = validar_url(url)
+    vistos = set()
+    opener = urllib.request.build_opener(_SinRedirecciones())
+    for _ in range(MAX_REDIRECCIONES + 1):
+        validar_url(actual)
+        if actual in vistos:
+            raise DescargaInsegura("bucle de redirecciones en %r" % actual)
+        vistos.add(actual)
+        try:
+            with opener.open(actual, timeout=timeout) as resp:
+                validar_url(resp.geturl())
+                return resp.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (301, 302, 303, 307, 308):
+                raise
+            destino = exc.headers.get("Location") if exc.headers else None
+            if not destino:
+                raise DescargaInsegura("redirección sin Location en %r"
+                                       % actual)
+            actual = urllib.parse.urljoin(actual, destino)
+    raise DescargaInsegura("demasiadas redirecciones desde %r" % url)
 
 
 def es_texto_valido(datos):
@@ -54,6 +107,10 @@ def descargar_libro(libro, crud_dir):
     for intento in range(1, MAX_INTENTOS + 1):
         try:
             datos = _obtener(libro["url"])
+        except DescargaInsegura:
+            motivo = "url_no_permitida"
+            return {"id": libro["id"], "estado": "bloqueado", "bytes": 0,
+                    "intentos": intento}
         except urllib.error.HTTPError as exc:
             consec_429 = consec_429 + 1 if exc.code == 429 else 0
             motivo = "http_%d" % exc.code
