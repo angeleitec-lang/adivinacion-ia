@@ -384,9 +384,19 @@ def construir_consensos(cliente, celdas, cache=None):
             for idx in g:
                 grupo_de[idx] = gi
 
+        pares = []
+        for par in contradicciones:
+            gi, gj = grupo_de.get(par[0]), grupo_de.get(par[1])
+            if gi is None or gj is None or gi == gj:
+                continue
+            if gi > gj:
+                gi, gj = gj, gi
+            pares.append((gi, gj))
+        en_discrepancia = {gi for par in pares for gi in par}
+
         mayoritarias = []
         unica_fuente = []
-        for g in grupos:
+        for gi, g in enumerate(grupos):
             miembros = [utiles[i] for i in g if i < len(utiles)]
             if not miembros:
                 continue
@@ -402,7 +412,7 @@ def construir_consensos(cliente, celdas, cache=None):
                         for m in miembros
                     }),
                 })
-            else:
+            elif gi not in en_discrepancia:
                 unica_fuente.append({
                     "afirmacion": rep.get("afirmacion"),
                     "fuente_id": rep.get("fuente_id"),
@@ -410,17 +420,13 @@ def construir_consensos(cliente, celdas, cache=None):
                         rep.get("fuente_id"), rep.get("periodo")),
                 })
 
-        discrepancias = []
-        for par in contradicciones:
-            gi, gj = grupo_de.get(par[0]), grupo_de.get(par[1])
-            if gi is None or gj is None or gi == gj:
-                continue
-            if gi > gj:
-                gi, gj = gj, gi
-            discrepancias.append({
+        discrepancias = [
+            {
                 "a": _lado_discrepancia([utiles[i] for i in grupos[gi]]),
                 "b": _lado_discrepancia([utiles[i] for i in grupos[gj]]),
-            })
+            }
+            for gi, gj in pares
+        ]
 
         resultados.append({
             "entidad_id": eid,

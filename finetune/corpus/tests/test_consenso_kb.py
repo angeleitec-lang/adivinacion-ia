@@ -294,6 +294,17 @@ class TestConstruirConsensos(unittest.TestCase):
         self.assertIn("clasica", lado_a["tradiciones"] + lado_b["tradiciones"])
         self.assertNotEqual(lado_a["afirmacion"], lado_b["afirmacion"])
 
+    def test_unica_fuente_no_duplica_discrepancia(self):
+        cliente = _cliente_json(
+            {"grupos": [[0], [1], [2]],
+             "contradicciones": [[0, 1]]})
+        res = ck.construir_consensos(cliente, self._celdas())[0]
+        unicas = {u["afirmacion"] for u in res["unica_fuente"]}
+        disp = {res["discrepancias"][0]["a"]["afirmacion"],
+                res["discrepancias"][0]["b"]["afirmacion"]}
+        self.assertTrue(unicas.isdisjoint(disp))
+        self.assertEqual(len(res["unica_fuente"]), 1)
+
 
 class TestCLIConsenso(unittest.TestCase):
     def _escribir(self, ruta, regs):
