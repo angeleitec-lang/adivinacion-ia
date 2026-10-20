@@ -27,6 +27,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import cartas
+import afirmaciones_es as es
 from llm_client import LLMClient
 
 MAX_POR_CELDA = 40
@@ -430,17 +431,25 @@ def construir_consensos(cliente, celdas, cache=None):
 
 
 def normalizar_afirmaciones(regs, corr):
-    """Recalcula ``contradice_kb`` con las comprobaciones deterministas vigentes.
+    """Recalcula ``contradice_kb`` y descarta afirmaciones no utiles.
 
     Se recalcula siempre (aunque el registro ya traiga el campo) para que la
-    alerta final use la lógica actual y no banderas de versiones anteriores.
+    alerta final use la logica actual y no banderas de versiones anteriores.
+    El filtro de utilidad (T34) se aplica a todas las entradas: las de libros
+    ya lo pasaron al generarse; las de web llegan crudas.
+    Devuelve (registros_utiles, n_no_utiles).
     """
     out = []
+    no_utiles = 0
     for r in regs:
         eid = r.get("entidad_id")
         faceta = r.get("faceta")
         texto = r.get("afirmacion")
         if not eid or not faceta or not texto:
+            continue
+        util, _ = es.evaluar_utilidad(texto, eid, faceta)
+        if not util:
+            no_utiles += 1
             continue
         r = dict(r)
         contradice, motivo = contradiccion_kb(texto, eid, corr)
@@ -450,7 +459,7 @@ def normalizar_afirmaciones(regs, corr):
         else:
             r.pop("motivo_contradice", None)
         out.append(r)
-    return out
+    return out, no_utiles
 
 
 def agrupar_en_celdas(regs):
@@ -496,6 +505,9 @@ def escribir_informe(ruta, stats):
         "- Afirmaciones de una sola fuente: %d" % stats["unica_fuente"],
         "- Alertas factuales: %d" % stats["alertas"],
     ]
+    if stats.get("no_utiles"):
+        lineas.append("- Descartadas por filtro de utilidad (T34): %d"
+                      % stats["no_utiles"])
     if stats.get("motivos_alertas"):
         lineas.append("")
         lineas.append("## Alertas por motivo")
@@ -555,7 +567,7 @@ def main(argv=None, cliente=None):
                 except json.JSONDecodeError:
                     continue
 
-    regs = normalizar_afirmaciones(regs, corr)
+    regs, no_utiles = normalizar_afirmaciones(regs, corr)
     celdas = agrupar_en_celdas(regs)
     procesadas = _cargar_celdas_procesadas(ruta_salida)
     pendientes = {k: v for k, v in celdas.items() if k not in procesadas}
@@ -573,6 +585,7 @@ def main(argv=None, cliente=None):
         "unica_fuente": 0,
         "alertas": 0,
         "motivos_alertas": {},
+        "no_utiles": no_utiles,
         "omitidas_existentes": omitidas,
     }
     lock = threading.Lock()

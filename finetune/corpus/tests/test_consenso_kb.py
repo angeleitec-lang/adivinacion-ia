@@ -289,15 +289,15 @@ class TestCLIConsenso(unittest.TestCase):
             self._escribir(web, [
                 {"entidad_id": "aries|signo", "faceta": "personalidad",
                  "fuente_id": "web1", "periodo": "moderna",
-                 "afirmacion": "Aries es un signo de fuego."},
+                 "afirmacion": "Aries se caracteriza por la iniciativa y el coraje."},
             ])
             self._escribir(libros, [
                 {"entidad_id": "aries|signo", "faceta": "personalidad",
                  "fuente_id": "libro1", "periodo": "clasica",
-                 "afirmacion": "Aries pertenece al elemento fuego."},
+                 "afirmacion": "Aries impulsa a tomar la delantera en situaciones nuevas."},
                 {"entidad_id": "tauro|signo", "faceta": "personalidad",
                  "fuente_id": "libro1", "periodo": "moderna",
-                 "afirmacion": "Tauro es un signo de tierra."},
+                 "afirmacion": "Tauro valora la estabilidad y los placeres sensoriales."},
             ])
             out = os.path.join(d, "out")
             stats = ck.main([
