@@ -208,6 +208,44 @@ class BanderaRuidoNavegacionTests(unittest.TestCase):
         )
         self.assertTrue(bandera_ruido_navegacion(texto))
 
+    def test_negativo_real_lista_de_palabras_clave_de_carta(self):
+        # Extraído real de tarotsi.gratis (Osho Zen): «Inicio» es una carta,
+        # no un enlace de navegación; la viñeta impide que ancle.
+        texto = (
+            "**Palabras Claves:**\n"
+            "- Amor\n"
+            "- Compasión\n"
+            "- Libertad\n"
+            "- Inicio\n"
+            "Comienzo, de un amor libre sin exigencias."
+        )
+        self.assertFalse(bandera_ruido_navegacion(texto))
+
+    def test_negativo_real_filas_de_tabla(self):
+        # Extraído real de zodiatarot: tabla Markdown de compatibilidades.
+        texto = (
+            "| Signo | Compatibilidad |\n"
+            "|---|---|\n"
+            "| Piscianos | 8.94% |\n"
+            "| Cancerianos | 8.21% |\n"
+            "| Escorpianos | 7.88% |\n"
+        )
+        self.assertFalse(bandera_ruido_navegacion(texto))
+
+    def test_positivo_real_pie_de_pagina(self):
+        # Pie de página estándar en español. En el corpus actual trafilatura
+        # ya limpia estos bloques (medición 2026-10-20: 0 ruido real), pero
+        # si una descarga futura los deja, la bandera debe cazarlos.
+        texto = (
+            "Gracias por leer la guía completa del tarot del amor.\n\n"
+            "Inicio\n"
+            "Contacto\n"
+            "Aviso legal\n"
+            "Política de privacidad\n"
+            "© 2024 Todos los derechos reservados"
+        )
+        self.assertTrue(bandera_ruido_navegacion(texto))
+
 
 class BanderaRepeticionInternaTests(unittest.TestCase):
     def test_parrafo_repetido_tres_veces(self):

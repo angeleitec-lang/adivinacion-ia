@@ -7,7 +7,8 @@ Lee los Markdown de ``/Users/angelgonzalez/fase0/web/<dominio>/*.md``
 - ``corta``: menos de 1.000 caracteres de texto.
 - ``mojibake``: secuencias típicas de codificación rota.
 - ``no_espanol``: proporción baja de palabras funcionales españolas.
-- ``ruido_navegacion``: menús, pies, cookies o avisos que sobreviven.
+- ``ruido_navegacion``: bloques de menú o pie que sobreviven a la
+  extracción y contienen una etiqueta de navegación inequívoca.
 - ``duplicada``: misma página o párrafos casi idénticos a otra.
 - ``titulo_pobre``: título vacío, corto, truncado o con Markdown.
 - ``repeticion_interna``: un párrafo repetido tres o más veces.
@@ -57,15 +58,25 @@ too under until up very was we were what when where which while who whom why
 will with would you your yours
 """.split())
 
-_KEYWORDS_RUIDO = (
-    "inicio", "menú", "menu", "contacto", "aviso legal", "aviso de cookies",
-    "política de privacidad", "politica de privacidad", "política de cookies",
-    "politica de cookies", "cookies", "compartir", "suscríbete", "suscribete",
-    "newsletter", "síguenos", "siguenos", "todos los derechos", "copyright",
-    "©", "iniciar sesión", "iniciar sesion", "registrarse", "buscar",
-    "publicidad", "aceptar", "rechazar", "home", "blog", "quiénes somos",
-    "quienes somos", "sobre nosotros", "términos", "terminos",
+# Etiquetas que solo aparecen en menús/pies: anclan la bandera sin duda.
+_NAVS_INEQUIVOCAS = (
+    "aviso legal", "aviso de cookies", "política de privacidad",
+    "politica de privacidad", "política de cookies", "politica de cookies",
+    "todos los derechos reservados", "todos los derechos", "copyright",
+    "iniciar sesión", "iniciar sesion", "registrarse", "publicidad",
+    "newsletter", "síguenos", "siguenos", "suscríbete", "suscribete",
+    "mapa del sitio", "quiénes somos", "quienes somos", "sobre nosotros",
+    "términos y condiciones", "terminos y condiciones",
 )
+
+# Etiquetas que también son vocabulario normal del corpus (nombres de cartas,
+# prosa interpretativa): solo anclan si la línea es la etiqueta en sí.
+_NAVS_AMBIGUAS = (
+    "inicio", "menú", "menu", "contacto", "cookies", "compartir", "home",
+    "blog", "buscar", "aceptar", "rechazar", "términos", "terminos",
+)
+
+_COMILLAS_BORDE = "\"'“”«»()[]{}"
 
 _VERBO_RE = re.compile(
     r"\b\w{3,}(?:ar|er|ir|ando|iendo|ado|ada|idos|idas|aba|aban|"
@@ -190,17 +201,31 @@ def bandera_no_espanol(texto: str) -> bool:
     return es < 0.08 and en >= 0.05
 
 
-def _linea_ruido(linea: str) -> bool:
-    texto = linea.strip()
-    if not texto or texto.startswith("#"):
-        return False
+def _quitar_bordes(texto: str) -> str:
+    """Quita viñetas iniciales y comillas o paréntesis de los bordes."""
     texto = re.sub(r"^(?:[-*+>]\s*)+", "", texto).strip()
+    while texto and texto[0] in _COMILLAS_BORDE:
+        texto = texto[1:].strip()
+    while texto and texto[-1] in _COMILLAS_BORDE:
+        texto = texto[:-1].strip()
+    return texto
+
+
+def _match_palabra_completa(texto: str, clave: str) -> bool:
+    return bool(
+        re.search(r"(?:^|\W)" + re.escape(clave) + r"(?:$|\W)", texto, re.IGNORECASE)
+    )
+
+
+def _linea_nav_like(linea: str) -> bool:
+    """Línea corta sin pinta de prosa: candidata a etiqueta de navegación."""
+    texto_bruto = linea.strip()
+    if not texto_bruto or texto_bruto.startswith(("#", "|")):
+        return False
+    texto = _quitar_bordes(texto_bruto)
     if not texto:
         return False
-    minusculas = texto.lower()
-    if any(clave in minusculas for clave in _KEYWORDS_RUIDO):
-        return True
-    if len(texto) > 60 or len(texto.split()) > 8:
+    if len(texto) > 45 or len(texto.split()) > 7:
         return False
     if re.search(r"[.!?;:…]$", texto):
         return False
@@ -209,18 +234,53 @@ def _linea_ruido(linea: str) -> bool:
     return True
 
 
+def _es_ancla_navegacion(linea: str) -> bool:
+    """Línea nav_like que contiene una etiqueta de navegación que ancla la bandera.
+
+    Las etiquetas ambiguas («inicio», «contacto», «buscar»…) solo anclan si
+    la línea es la etiqueta en sí, sin viñeta y sin palabras alrededor: en
+    este corpus esas palabras aparecen en listas de cartas («- Inicio» es una
+    carta del Osho Zen) y en prosa interpretativa.
+    """
+    if not _linea_nav_like(linea):
+        return False
+    texto_bruto = linea.strip()
+    con_vineta = bool(re.match(r"^[-*+>]\s*", texto_bruto))
+    texto = _quitar_bordes(texto_bruto)
+    for clave in _NAVS_INEQUIVOCAS:
+        if _match_palabra_completa(texto, clave):
+            return True
+    if con_vineta:
+        return False
+    for clave in _NAVS_AMBIGUAS:
+        if len(texto) <= len(clave) + 2 and _match_palabra_completa(texto, clave):
+            return True
+    return False
+
+
 def bandera_ruido_navegacion(texto: str) -> bool:
-    """Detecta tres o más líneas cortas consecutivas típicas de navegación."""
-    consecutivas = 0
+    """Tres o más líneas cortas de navegación consecutivas con ancla inequívoca.
+
+    Medición 2026-10-20 sobre el corpus actual (1.626 páginas): no queda
+    ruido de navegación real tras la extracción con trafilatura; la bandera
+    anterior marcaba 599 páginas, todas falsos positivos (listas de cartas,
+    tablas, citas). Se mantiene como red de seguridad para descargas
+    futuras: sin una línea ancla inequívoca no marca nada.
+    """
+    racha = 0
+    anclas = 0
     for linea in texto.splitlines():
         if not linea.strip():
             continue
-        if _linea_ruido(linea):
-            consecutivas += 1
-            if consecutivas >= 3:
+        if _linea_nav_like(linea):
+            racha += 1
+            if _es_ancla_navegacion(linea):
+                anclas += 1
+            if racha >= 3 and anclas >= 1:
                 return True
         else:
-            consecutivas = 0
+            racha = 0
+            anclas = 0
     return False
 
 

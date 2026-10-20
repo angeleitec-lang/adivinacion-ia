@@ -307,6 +307,25 @@ class OrquestadorTests(unittest.TestCase):
             regs = {json.loads(l)["url"]: json.loads(l)["estado"] for l in fh if l.strip()}
         self.assertEqual(regs["https://blogdemo.com/post-uno.html"], "cortas")
 
+    def test_min_chars_configurable_aplica_umbral(self):
+        import os
+
+        ruta = self._escribir_config([self.sitio_blog])
+        cliente = ClienteFalso(
+            {
+                "https://blogdemo.com/index.html": _respuesta_ok(self.indice_html),
+                "https://blogdemo.com/post-uno.html": _respuesta_ok(_html_largo()),
+                "https://blogdemo.com/post-dos.html": _respuesta_ok(_html_largo()),
+            }
+        )
+        # _html_largo() extrae ~2.600 caracteres: con el umbral por defecto
+        # (1.000) pasa; con 5.000 ambas páginas quedan cortas.
+        self._ejecutar(ruta, cliente, min_chars=5000)
+        with open(os.path.join(self.work_dir, "manifest.jsonl"), encoding="utf-8") as fh:
+            regs = {json.loads(l)["url"]: json.loads(l)["estado"] for l in fh if l.strip()}
+        self.assertEqual(regs["https://blogdemo.com/post-uno.html"], "cortas")
+        self.assertEqual(regs["https://blogdemo.com/post-dos.html"], "cortas")
+
     def test_foro_tope_40_hilos(self):
         from web_pipeline import procesar_sitio
 
