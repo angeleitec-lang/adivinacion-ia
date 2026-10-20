@@ -22,6 +22,7 @@ import argparse
 import json
 import random
 import re
+import unicodedata
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -457,8 +458,14 @@ def load_blocked(manifest_path: Path) -> set[str]:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return set()
+    if isinstance(data, dict):
+        data = data.get("pages") or []
+    if not isinstance(data, list):
+        return set()
     blocked = set()
     for entry in data:
+        if not isinstance(entry, dict):
+            continue
         estado = str(entry.get("estado", "")).lower()
         if estado in {"bloqueado", "incompatible", "excluido", "fallo"}:
             url = str(entry.get("url", ""))
@@ -519,8 +526,14 @@ def dedupe(pairs: list[dict]) -> list[dict]:
     seen = set()
     out = []
     for pair in pairs:
-        key = (pair["conversations"][1]["value"],
-               pair["conversations"][2]["value"])
+        charla = pair.get("conversations") if isinstance(pair, dict) else None
+        if not isinstance(charla, list) or len(charla) < 3:
+            continue
+        try:
+            key = (unicodedata.normalize("NFC", charla[1]["value"]),
+                   unicodedata.normalize("NFC", charla[2]["value"]))
+        except (KeyError, TypeError):
+            continue
         if key in seen:
             continue
         seen.add(key)
