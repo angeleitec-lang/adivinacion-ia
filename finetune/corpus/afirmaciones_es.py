@@ -197,8 +197,16 @@ SISTEMA_AFIRMACIONES = (
 )
 
 
+def _calidad_num(valor):
+    try:
+        return float(valor)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def construir_prompt(entidad_id, faceta, texto, max_chars=6000):
     """(sistema, usuario) para pedir afirmaciones atómicas de una sección."""
+    texto = "" if texto is None else str(texto)
     cuerpo = texto if len(texto) <= max_chars else texto[:max_chars] + " [...]"
     usuario = (
         "Entidad: {e}\nFaceta: {f}\n\n"
@@ -406,7 +414,7 @@ def filtrar_min_calidad(evidencias, min_calidad):
     """
     if not min_calidad or min_calidad <= 0:
         return list(evidencias)
-    return [e for e in evidencias if (e.get("calidad") or 0) >= min_calidad]
+    return [e for e in evidencias if _calidad_num(e.get("calidad")) >= min_calidad]
 
 
 def ordenar_evidencias(evidencias, orden=None, familias=None, catalogo=None):
@@ -431,7 +439,7 @@ def ordenar_evidencias(evidencias, orden=None, familias=None, catalogo=None):
             f = familia_de_entidad(ev.get("entidad_id"), catalogo)
             partes.append(fam_list.index(f) if f in fam_list else len(fam_list))
         if orden == "calidad":
-            partes.append(-(ev.get("calidad") or 0))
+            partes.append(-_calidad_num(ev.get("calidad")))
         partes.append(i)
         return tuple(partes)
 
@@ -490,8 +498,14 @@ def main(argv=None, cliente=None):
     with open(args.evidencias, encoding="utf-8") as fh:
         for linea in fh:
             linea = linea.strip()
-            if linea:
-                evidencias.append(json.loads(linea))
+            if not linea:
+                continue
+            try:
+                evidencia = json.loads(linea)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(evidencia, dict):
+                evidencias.append(evidencia)
 
     familias = None
     if args.familias:
@@ -690,7 +704,12 @@ def filtrar_utilidad(ruta_entrada, out_dir):
             linea = linea.strip()
             if not linea:
                 continue
-            rec = json.loads(linea)
+            try:
+                rec = json.loads(linea)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(rec, dict):
+                continue
             ok, motivo = evaluar_utilidad(rec.get("afirmacion"),
                                          rec.get("entidad_id"),
                                          rec.get("faceta"))

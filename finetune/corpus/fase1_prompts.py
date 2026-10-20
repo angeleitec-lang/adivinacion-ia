@@ -452,8 +452,12 @@ def _mencion_carta(nombre, texto):
     if not _tokens_propios(nombre):
         return False
     solo_mayus = not any(ch.islower() for ch in texto if ch.isalpha())
+    nombre_sin_articulo = re.sub(
+        r"^(?:el|la|los|las)\s+", "", str(nombre), flags=re.IGNORECASE
+    )
     forma = (
-        r"(?:cartas?|arcanos?)\s+(?:mayor\s+|menor\s+)?de\s+" + re.escape(nombre)
+        r"(?:cartas?|arcanos?)\s+(?:mayor\s+|menor\s+)?"
+        r"(?:de\s+l[ao]s?\s+|de\s*l\s+|de\s+)?" + re.escape(nombre_sin_articulo)
     )
     if re.search(forma, texto, re.IGNORECASE):
         return True
@@ -474,22 +478,43 @@ def _mencion_carta(nombre, texto):
     return False
 
 
+def _presente_carta(nombre, norm):
+    """True si el nombre está en el texto, tolerando el palo en singular."""
+    base = _norm(nombre)
+    if base and base in norm:
+        return True
+    partes = base.rsplit(" ", 1)
+    if len(partes) == 2 and partes[1].endswith("s"):
+        return (partes[0] + " " + partes[1][:-1]) in norm
+    return False
+
+
 def _verif_cartas(cartas, universo, texto, motivos):
     norm = _norm(texto)
-    drawn = {_norm(c.get("nombre")) for c in cartas}
+    drawn = set()
+    validas = []
     for c in cartas:
-        if _norm(c.get("nombre")) not in norm:
+        if not isinstance(c, dict) or not c.get("nombre"):
+            motivos.append(f"Carta de la tirada no válida: {c!r}")
+            continue
+        validas.append(c)
+        drawn.add(_norm(c.get("nombre")))
+    for c in validas:
+        if not _presente_carta(c.get("nombre"), norm):
             motivos.append(f"Falta la carta de la tirada: {c.get('nombre')}")
-    for nombre in universo:
+    for elemento in universo:
+        nombre = elemento.get("nombre") if isinstance(elemento, dict) else elemento
+        if not nombre:
+            continue
         nn = _norm(nombre)
         if nn in drawn:
             continue
         if nn and _mencion_carta(nombre, texto):
             motivos.append(f"Menciona carta ajena a la tirada: {nombre}")
-    hay_inv = any(c.get("invertida") for c in cartas)
+    hay_inv = any(c.get("invertida") for c in validas)
     inv = _tiene_inversion(texto)
     if hay_inv and not inv:
-        nombres = ", ".join(c.get("nombre") for c in cartas if c.get("invertida"))
+        nombres = ", ".join(c.get("nombre") for c in validas if c.get("invertida"))
         motivos.append(f"No indica la orientación invertida de: {nombres}")
     if (not hay_inv) and inv:
         motivos.append(
@@ -543,7 +568,9 @@ def _verif_juego(texto, motivos):
 def verificar_lectura(tarea, texto):
     """Comprueba presencia, no invención, coherencia con lo calculado y vedados."""
     motivos = []
-    texto = texto or ""
+    if not isinstance(tarea, dict):
+        return False, [f"Tarea no válida: {tarea!r}"]
+    texto = "" if texto is None else texto if isinstance(texto, str) else str(texto)
     calc = tarea.get("calculos") or {}
     cartas = tarea.get("cartas") or []
     if cartas:

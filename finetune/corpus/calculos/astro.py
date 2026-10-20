@@ -196,6 +196,14 @@ def _calcular_carta(jd_ut: float, lat: float, lon: float) -> Dict[str, Any]:
     """Calcula la carta natal completa para un día juliano UT y coordenadas."""
     if not swe:
         raise RuntimeError("swisseph no disponible")
+    if (isinstance(lat, bool) or not isinstance(lat, (int, float))
+            or not math.isfinite(lat)):
+        raise ValueError(f"Latitud inválida: {lat!r}")
+    if abs(lat) > 90:
+        raise ValueError(f"Latitud fuera de rango (-90 a 90): {lat!r}")
+    if (isinstance(lon, bool) or not isinstance(lon, (int, float))
+            or not math.isfinite(lon)):
+        raise ValueError(f"Longitud inválida: {lon!r}")
 
     _init_swe()
 

@@ -47,6 +47,10 @@ def _parse_fecha(fecha: str) -> datetime:
 
 def _normalizar_texto(texto: str) -> str:
     """Normaliza: NFD, quita tildes, mayúsculas, solo letras."""
+    if texto is None:
+        return ""
+    if not isinstance(texto, str):
+        raise TypeError(f"El nombre debe ser texto: {texto!r}")
     if not texto:
         return ""
     nfd = unicodedata.normalize('NFD', texto)
@@ -56,6 +60,8 @@ def _normalizar_texto(texto: str) -> str:
 
 def reducir(n: int, maestros: bool = True) -> int:
     """Reduce un número a 1-9, conservando 11/22/33 si maestros=True."""
+    if isinstance(n, bool) or not isinstance(n, int):
+        raise TypeError(f"Se esperaba un número entero: {n!r}")
     if n <= 0:
         return 0
     while n > 9:
@@ -115,8 +121,16 @@ def _reduccion_sin_maestros(n: int) -> int:
     return n
 
 
+def _validar_anio(anio: int) -> None:
+    if isinstance(anio, bool) or not isinstance(anio, int):
+        raise TypeError(f"El año debe ser un número entero: {anio!r}")
+    if not 1 <= anio <= 9999:
+        raise ValueError(f"Año fuera de rango (1-9999): {anio!r}")
+
+
 def anio_personal(fecha: str, anio: int) -> int:
     """Año personal: día + mes de nacimiento + dígitos del año (reducidos sin maestros)."""
+    _validar_anio(anio)
     dt = _parse_fecha(fecha)
     dia = reducir(dt.day, maestros=False)
     mes = reducir(dt.month, maestros=False)

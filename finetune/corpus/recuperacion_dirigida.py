@@ -122,10 +122,10 @@ _POSICIONES_CONOCIDAS = set(_POSICIONES_EN)
 def _carencias(celda, minimos):
     """Déficit por cada restricción de la celda."""
     return {
-        "independiente": max(0, minimos["fuentes"] - int(celda.get("n_fuentes", 0))),
-        "clasica": max(0, minimos["clasicas"] - int(celda.get("n_clasicas", 0))),
-        "moderna": max(0, minimos["modernas"] - int(celda.get("n_modernas", 0))),
-        "es": max(0, minimos["es"] - int(celda.get("n_es", 0))),
+        "independiente": max(0, minimos["fuentes"] - int(celda.get("n_fuentes") or 0)),
+        "clasica": max(0, minimos["clasicas"] - int(celda.get("n_clasicas") or 0)),
+        "moderna": max(0, minimos["modernas"] - int(celda.get("n_modernas") or 0)),
+        "es": max(0, minimos["es"] - int(celda.get("n_es") or 0)),
     }
 
 
@@ -156,6 +156,7 @@ def tipos_faltantes(celda, minimos=None):
 
 def familia_de(entidad_id):
     """Familia (clave interna) derivada del entidad_id."""
+    entidad_id = str(entidad_id or "")
     if entidad_id.startswith("tarot-"):
         return "tarot"
     if entidad_id.startswith("naipe-"):
@@ -390,9 +391,16 @@ def urls_candidatas(entidad_id, familia, nombre):
 def construir_plan(matriz, minimos=None):
     """Una entrada por entidad con facetas bajo mínimo, ordenada por rentabilidad."""
     m = minimos or MINIMOS
+    if not isinstance(matriz, dict):
+        raise ValueError("La matriz debe ser un objeto JSON")
     catalogo = _catalogo()
     grupos = {}
-    for celda in matriz.get("celdas", []):
+    for indice, celda in enumerate(matriz.get("celdas", [])):
+        if not isinstance(celda, dict):
+            raise ValueError(f"La celda {indice} no es un objeto JSON")
+        for campo in ("entidad_id", "faceta"):
+            if not celda.get(campo):
+                raise ValueError(f"La celda {indice} no tiene el campo {campo}")
         if celda.get("completa"):
             continue
         neces = fuentes_necesarias(celda, m)
@@ -460,7 +468,9 @@ def estimar_meta(celdas, meta=0.10, minimos=None):
 def _resumen_familias(celdas):
     acc = {}
     for c in celdas:
-        f = familia_de(c["entidad_id"])
+        if not isinstance(c, dict):
+            continue
+        f = familia_de(c.get("entidad_id"))
         d = acc.setdefault(f, {"celdas": 0, "completas": 0})
         d["celdas"] += 1
         if c.get("completa"):
