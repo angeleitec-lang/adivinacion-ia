@@ -6,6 +6,7 @@ Usa swisseph (pyswisseph) con Moshier (sin archivos externos).
 
 from __future__ import annotations
 
+import calendar
 import math
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -133,10 +134,48 @@ def _calcular_aspectos(lon1: float, lon2: float, aspectos_lista: List[Tuple[str,
     return resultados
 
 
+def _validar_fecha(fecha: str) -> datetime:
+    """Valida "AAAA-MM-DD" y devuelve el datetime naive; error claro en español."""
+    try:
+        return datetime.strptime(fecha, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        raise ValueError(
+            f"Fecha inválida: {fecha!r}. Use formato AAAA-MM-DD con un día existente "
+            "(recuerde que 1900 no fue bisiesto)."
+        ) from None
+
+
+def _validar_hora(hora: str) -> Tuple[int, int]:
+    """Valida "HH:MM" y devuelve (hora, minuto); error claro en español."""
+    try:
+        partes = hora.split(":")
+        h = int(partes[0])
+        m = int(partes[1])
+        if not (0 <= h <= 23 and 0 <= m <= 59):
+            raise ValueError
+        return h, m
+    except (ValueError, TypeError, IndexError, AttributeError):
+        raise ValueError(
+            f"Hora no válida: {hora!r}. Use formato HH:MM (00:00-23:59)."
+        ) from None
+
+
+def _zona(tz: str) -> ZoneInfo:
+    """Devuelve ZoneInfo o error claro en español si la zona no existe."""
+    try:
+        return ZoneInfo(tz)
+    except Exception:
+        raise ValueError(
+            f"Zona horaria no reconocida: {tz!r}. Use una zona IANA "
+            "(p. ej. Europe/Madrid, UTC)."
+        ) from None
+
+
 def _utc_desde_local(fecha: str, hora: str, tz: str) -> datetime:
-    """Convierte fecha/hora local a UTC usando zoneinfo."""
-    dt_local = datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
-    dt_local = dt_local.replace(tzinfo=ZoneInfo(tz))
+    """Convierte fecha/hora local a UTC usando zoneinfo, con validación clara."""
+    dt_naive = _validar_fecha(fecha)
+    h, m = _validar_hora(hora)
+    dt_local = dt_naive.replace(hour=h, minute=m, tzinfo=_zona(tz))
     return dt_local.astimezone(timezone.utc).replace(tzinfo=None)
 
 
@@ -160,8 +199,16 @@ def _calcular_carta(jd_ut: float, lat: float, lon: float) -> Dict[str, Any]:
 
     _init_swe()
 
-    # Configurar casas Placidus
-    casas, ascmc = swe.houses(jd_ut, lat, lon, b"P")
+    # Configurar casas Placidus; en latitudes polares Placidus no converge y
+    # degradamos a casas iguales (Equal) avisando, en lugar de romper la lectura.
+    aviso_casas: Optional[str] = None
+    try:
+        casas, ascmc = swe.houses(jd_ut, lat, lon, b"P")
+    except Exception:
+        casas, ascmc = swe.houses(jd_ut, lat, lon, b"E")
+        aviso_casas = (
+            "Casas iguales (Equal): Placidus no converge en esta latitud polar."
+        )
 
     # Planetas
     planetas_res = []
@@ -286,6 +333,7 @@ def _calcular_carta(jd_ut: float, lat: float, lon: float) -> Dict[str, Any]:
         "aspectos": aspectos,
         "elemento_dominante": elem_dom,
         "modalidad_dominante": mod_dom,
+        "aviso_casas": aviso_casas,
     }
 
 
@@ -428,8 +476,10 @@ def transitos_periodo(
     """
     from datetime import timedelta
 
-    dt_desde = datetime.strptime(desde, "%Y-%m-%d")
-    dt_hasta = datetime.strptime(hasta, "%Y-%m-%d")
+    if not isinstance(paso_dias, int) or paso_dias < 1:
+        raise ValueError("paso_dias debe ser un entero >= 1.")
+    dt_desde = _validar_fecha(desde)
+    dt_hasta = _validar_fecha(hasta)
 
     resultados = []
     vistos = set()
@@ -477,44 +527,60 @@ def revolucion_solar(
         d = (a - b) % 360
         return d if d <= 180 else d - 360
 
-    # Búsqueda por bisección alrededor del cumpleaños del año
-    fecha_inicio = f"{anio}-{natal_fecha[5:]}"  # mismo mes/día del año objetivo
-    dt_inicio = datetime.strptime(fecha_inicio, "%Y-%m-%d")
-    dt_fin = dt_inicio + timedelta(days=2)
+    # El retorno solar se define por la longitud del Sol, no por la fecha de
+    # calendario: la fecha de partida es solo una ancla. Para nacidos el 29-feb en
+    # un año objetivo no bisiesto se ancla en 28-feb. La ventana se centra en la
+    # ancla ±2 días porque la deriva del año tropical puede desplazar el retorno
+    # real hasta ~1-2 días respecto del cumpleaños de calendario.
+    mes_dia = natal_fecha[5:]
+    if mes_dia == "02-29" and not calendar.isleap(anio):
+        ancla = datetime(anio, 2, 28)
+    else:
+        ancla = _validar_fecha(f"{anio}-{mes_dia}")
 
-    # Bisección: buscar jd donde Sol == sol_natal_lon
     def sol_lon_en_jd(jd):
         res = swe.calc_ut(jd, swe.SUN, swe.FLG_SWIEPH)
         return res[0][0] % 360
 
-    jd_inicio = _julian_day(dt_inicio.replace(tzinfo=timezone.utc))
-    jd_fin = _julian_day(dt_fin.replace(tzinfo=timezone.utc))
+    jd_ancla = _julian_day(ancla.replace(tzinfo=timezone.utc))
 
-    # Ajustar jd_inicio/jd_fin para que engloben el cruce
-    lon_inicio = sol_lon_en_jd(jd_inicio)
-    lon_fin = sol_lon_en_jd(jd_fin)
+    # Escaneo fino para hallar el corchete (cambio de signo de diff_lon).
+    paso = 0.25  # días
+    jd_a = jd_ancla - 2.0
+    bracket: Optional[Tuple[float, float]] = None
+    while jd_a <= jd_ancla + 2.0 + 1e-9:
+        jd_b = jd_a + paso
+        d_a = diff_lon(sol_lon_en_jd(jd_a), sol_natal_lon)
+        if d_a == 0.0:
+            bracket = (jd_a, jd_a)
+            break
+        d_b = diff_lon(sol_lon_en_jd(jd_b), sol_natal_lon)
+        if d_a * d_b < 0:
+            bracket = (jd_a, jd_b)
+            break
+        jd_a = jd_b
 
-    # Normalizar para cruce por 0°
-    def diff_lon(a, b):
-        d = (a - b) % 360
-        return d if d <= 180 else d - 360
+    if bracket is None:
+        raise ValueError(
+            "No se pudo localizar el retorno solar en la ventana esperada "
+            f"alrededor de {anio}-{mes_dia}."
+        )
 
-    # Bisección
-    for _ in range(50):  # suficiente precisión
-        jd_mid = (jd_inicio + jd_fin) / 2
-        lon_mid = sol_lon_en_jd(jd_mid)
-        d_inicio = diff_lon(lon_inicio, sol_natal_lon)
-        d_mid = diff_lon(lon_mid, sol_natal_lon)
-        if d_inicio * d_mid <= 0:
-            jd_fin = jd_mid
-            lon_fin = lon_mid
+    # Bisección dentro del corchete hasta precisión < 1 minuto.
+    jd_lo, jd_hi = bracket
+    d_lo = diff_lon(sol_lon_en_jd(jd_lo), sol_natal_lon)
+    for _ in range(60):
+        jd_mid = (jd_lo + jd_hi) / 2
+        d_mid = diff_lon(sol_lon_en_jd(jd_mid), sol_natal_lon)
+        if d_lo * d_mid <= 0:
+            jd_hi = jd_mid
         else:
-            jd_inicio = jd_mid
-            lon_inicio = lon_mid
-        if abs(jd_fin - jd_inicio) < 1/1440:  # < 1 minuto
+            jd_lo = jd_mid
+            d_lo = d_mid
+        if abs(jd_hi - jd_lo) < 1 / 1440:  # < 1 minuto
             break
 
-    jd_rs = (jd_inicio + jd_fin) / 2
+    jd_rs = (jd_lo + jd_hi) / 2
     sol_rs_lon = sol_lon_en_jd(jd_rs)
 
     # Convertir jd_rs a datetime UTC

@@ -23,10 +23,21 @@ CICLOS = {
 }
 
 
+def _parse_fecha(fecha: str) -> date:
+    """Valida "AAAA-MM-DD" con error claro en español (rechaza días inexistentes)."""
+    try:
+        return date.fromisoformat(fecha)
+    except (ValueError, TypeError):
+        raise ValueError(
+            f"Fecha inválida: {fecha!r}. Use formato AAAA-MM-DD con un día existente "
+            "(recuerde que 1900 no fue bisiesto)."
+        ) from None
+
+
 def _dias_transcurridos(fecha_nacimiento: str, fecha: str) -> int:
     """Calcula días enteros entre dos fechas (fecha - nacimiento)."""
-    fn = date.fromisoformat(fecha_nacimiento)
-    f = date.fromisoformat(fecha)
+    fn = _parse_fecha(fecha_nacimiento)
+    f = _parse_fecha(fecha)
     return (f - fn).days
 
 
@@ -68,8 +79,8 @@ def biorritmos(
         dict con ciclos (valor, porcentaje, fase) para la fecha,
         y opcionalmente "ventana" con lista de días.
     """
-    fn = date.fromisoformat(fecha_nacimiento)
-    f = date.fromisoformat(fecha)
+    fn = _parse_fecha(fecha_nacimiento)
+    f = _parse_fecha(fecha)
 
     if f < fn:
         raise ValueError("La fecha no puede ser anterior al nacimiento")
