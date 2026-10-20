@@ -1,0 +1,149 @@
+{
+  "descripcion": "Sitios en español con una página por naipe de la baraja española (40 cartas: oros, copas, espadas, bastos; As, Dos-Siete, Sota, Caballo, Rey), con significado y ámbitos. Sondeo 2026-10-20: 12 sitios nuevos, ninguno duplicado de sitios_indice_es.json / _lecturas / _tarot. Cada regex fue validada contra el sitemap real del sitio (se anota el número de URLs de naipe capturadas). La unión de los 12 sitios cubre los 40 naipes.",
+  "sitios": [
+    {
+      "nombre": "tiradadetarot.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://tiradadetarot.com/sitemap-podadas.xml"
+      ],
+      "regex": "^https://tiradadetarot\\.com/cartas-espanolas/(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey)-de-(?:oros|copas|espadas|bastos)/?$",
+      "dominio": "tiradadetarot.com",
+      "familia": "baraja",
+      "prioridad": "alta",
+      "nota": "40 páginas por naipe en /cartas-espanolas/<rango>-de-<palo>/ (sin prefijo de idioma). El sitemap también lista variantes /en/ y /pt/ que el anclaje ^https://tiradadetarot\\.com/ excluye. Regex captura 40/40 naipes. Robots permite estas rutas."
+    },
+    {
+      "nombre": "futooro.net",
+      "tipo": "sitio",
+      "indice": [
+        "https://futooro.net/sitemap.xml"
+      ],
+      "regex": "^https://futooro\\.net/tarot/baraja-espanola/(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey)-de-(?:oros|copas|espadas|bastos)/?$",
+      "dominio": "futooro.net",
+      "familia": "baraja",
+      "prioridad": "alta",
+      "nota": "40 páginas exactas en /tarot/baraja-espanola/<rango>-de-<palo>/. Regex captura 40/40 naipes. Robots permite estas rutas."
+    },
+    {
+      "nombre": "www.tarotamigo.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://www.tarotamigo.com/sitemap.xml"
+      ],
+      "regex": "^https://www\\.tarotamigo\\.com/tarot/significado-cartas/baraja-espanola/(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey)-de-(?:oros|copas|espadas|bastos)/$",
+      "dominio": "www.tarotamigo.com",
+      "familia": "baraja",
+      "prioridad": "alta",
+      "nota": "WordPress. Las 40 páginas por naipe están en el hijo sitemap-posttype-page.xml (el pipeline sigue el sitemapindex). Regex captura 40/40 naipes. OJO: el sitio también tiene ocho/nueve de cada palo (baraja de 48) fuera de la matriz de 40; no interfieren."
+    },
+    {
+      "nombre": "jardindeltarot.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://jardindeltarot.com/sitemap-index.xml"
+      ],
+      "regex": "^https://jardindeltarot\\.com/cartas-espanolas/(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey)-de-(?:oros|copas|espadas|bastos)/$",
+      "dominio": "jardindeltarot.com",
+      "familia": "baraja",
+      "prioridad": "alta",
+      "nota": "Las 40 páginas están en el hijo sitemap-0.xml. Regex captura 40/40 naipes. OJO: el sitio tiene además /cartas/... variante de tarot (con caballero) que NO pertenece a baraja; el anclaje a /cartas-espanolas/ la excluye. Robots: Disallow solo /*? y /preview/."
+    },
+    {
+      "nombre": "oraculoseuropeos.blogspot.com",
+      "tipo": "blog",
+      "indice": [
+        "https://oraculoseuropeos.blogspot.com/sitemap.xml"
+      ],
+      "regex": "^https://oraculoseuropeos\\.blogspot\\.com/2011/07/baraja-espanola-(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey)-de-(?:oros|copas|espadas|bastos)\\.html$",
+      "dominio": "oraculoseuropeos.blogspot.com",
+      "familia": "baraja",
+      "prioridad": "baja",
+      "nota": "Blog especializado en cartomancia (Blogger), contenido original humano 2010-2026. La serie 2011/07 cubre los 40 naipes pero las paginas son BREVES (~400-750 chars extraidos; solo as-de-oros supera 1000). Descubrimiento dry-run 40/40 OK; en ejecucion real solo 1 pagina paso el umbral de calidad. Mantenido por originalidad y cobertura redundante; prioridad baja."
+    },
+    {
+      "nombre": "tarotdeabsalon.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://tarotdeabsalon.com/page-sitemap.xml"
+      ],
+      "regex": "^https://tarotdeabsalon\\.com/significado-cartas/baraja-espanola/(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey)(?:-de)?-(?:oros|copas|espadas|bastos)/?$",
+      "dominio": "tarotdeabsalon.com",
+      "familia": "baraja",
+      "prioridad": "alta",
+      "nota": "WordPress. Páginas de ~6000 caracteres por naipe en /significado-cartas/baraja-espanola/. OJO: el As usa slug sin 'de' (as-copas), el resto con 'de'; la regex admite ambos. Captura 39/40 naipes (falta 1, cubierto por otros sitios)."
+    },
+    {
+      "nombre": "soyespiritual.top",
+      "tipo": "sitio",
+      "indice": [
+        "https://soyespiritual.top/sitemap_index.xml"
+      ],
+      "regex": "^https://soyespiritual\\.top/significado-(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey)-de-(?:oros|copas|espadas|bastos)-tarot-baraja-espanola/?$",
+      "dominio": "soyespiritual.top",
+      "familia": "baraja",
+      "prioridad": "media",
+      "nota": "WordPress. Páginas /significado-<rango>-de-<palo>-tarot-baraja-espanola/. Captura 39/40 naipes."
+    },
+    {
+      "nombre": "www.tarotsolaguilar.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://www.tarotsolaguilar.com/sitemap_index.xml"
+      ],
+      "regex": "^https://www\\.tarotsolaguilar\\.com/baraja-espanola/(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey)-de-(?:oros|copas|espadas|bastos)/?$",
+      "dominio": "www.tarotsolaguilar.com",
+      "familia": "baraja",
+      "prioridad": "media",
+      "nota": "WordPress (post-sitemap1..5 + page). Páginas /baraja-espanola/<rango>-de-<palo>/. Captura 38/40 naipes; el sitio también tiene ocho/nueve fuera de la matriz que la regex excluye. Rejilla previa: páginas algo cortas. En ejecucion real: 15/38 paginas superan el umbral de 1000 chars (23 cortas)."
+    },
+    {
+      "nombre": "www.consultacartas.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://www.consultacartas.com/sitemap.xml"
+      ],
+      "regex": "^https://www\\.consultacartas\\.com/baraja_espanola_(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey)_de_(?:oros|copas|espadas|bastos)\\.html$",
+      "dominio": "www.consultacartas.com",
+      "familia": "baraja",
+      "prioridad": "media",
+      "nota": "Páginas estáticas /baraja_espanola_<rango>_de_<palo>.html. Captura 38/40 naipes. robots.txt: crawl-delay=10 → EXCLUIR de la ejecución automática con web_pipeline.py (no soporta crawl-delay); descargar aparte respetando 10 s entre peticiones."
+    },
+    {
+      "nombre": "elreydecopas.com",
+      "tipo": "sitio",
+      "indice": [
+        "https://elreydecopas.com/sitemap_index.xml"
+      ],
+      "regex": "^https://elreydecopas\\.com/baraja-espanola/(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey|[2-7])-de-(?:oros|copas|espadas|bastos)/?$",
+      "dominio": "elreydecopas.com",
+      "familia": "baraja",
+      "prioridad": "alta",
+      "nota": "WordPress. Páginas largas (~13000 caracteres). Mezcla slugs con palabra (as, sota, caballo, rey) y numéricos (2-7); la regex admite ambos. Captura 36/40 naipes (faltan los 4 caballos, cubiertos por otros sitios)."
+    },
+    {
+      "nombre": "tarotgratis.club",
+      "tipo": "sitio",
+      "indice": [
+        "https://tarotgratis.club/sitemap_index.xml"
+      ],
+      "regex": "^https://tarotgratis\\.club/baraja-espanola/cartas/(?:oros|copas|espadas|bastos)/(?:as|dos|tres|cuatro|cinco|seis|siete|sota|caballo|rey)/?$",
+      "dominio": "tarotgratis.club",
+      "familia": "baraja",
+      "prioridad": "media",
+      "nota": "Páginas /baraja-espanola/cartas/<palo>/<rango>/ (orden palo primero). Captura 40/40 naipes. robots.txt: crawl-delay=20 → EXCLUIR de la ejecución automática con web_pipeline.py (no soporta crawl-delay); descargar aparte respetando 20 s entre peticiones."
+    },
+    {
+      "nombre": "tarotdeana.es",
+      "tipo": "sitio",
+      "indice": [
+        "https://tarotdeana.es/sitemap_index.xml"
+      ],
+      "regex": "^https://tarotdeana\\.es/(?:as|[2-7]|sota|caballo|rey)-de-(?:oros|copas|espadas|bastos)-baraja-espanola/$",
+      "dominio": "tarotdeana.es",
+      "familia": "baraja",
+      "prioridad": "media",
+      "nota": "WooCommerce/WordPress. Páginas en la raíz /<rango>-de-<palo>-baraja-espanola/ (rangos numéricos 2-7). Captura 28/40 naipes en post-sitemap.xml. OJO: el sitio tiene además variantes -tarot/ (56 arcanos) que NO pertenecen a baraja; el sufijo -baraja-espanola las excluye."
+    }
+  ]
+}
