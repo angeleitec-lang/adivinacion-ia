@@ -75,19 +75,22 @@ class TestAuditoriaTitulo(unittest.TestCase):
 
 
 class TestGapMapeoIngles(unittest.TestCase):
-    def test_reproduce_defecto_menores_ingles(self):
-        # El defecto: cartas.py NO reconoce menores en ingles.
-        self.assertIsNone(cartas.normalizar_carta("Two of Swords"))
-        self.assertIsNone(cartas.normalizar_carta("King of Wands"))
-        self.assertEqual(cartas.extraer_cartas("the King of Wands is here"), [])
-        # En espanol si funciona (control).
+    def test_menores_ingles_mapean_tras_arreglo_t53(self):
+        # T53 arreglo A: cartas.py YA reconoce menores en ingles.
+        self.assertIsNotNone(cartas.normalizar_carta("Two of Swords"))
+        self.assertEqual(
+            (cartas.normalizar_carta("King of Wands") or {}).get("nombre"),
+            "Rey de Bastos")
+        self.assertTrue(cartas.extraer_cartas("the King of Wands is here"))
+        # En espanol sigue funcionando (control).
         self.assertIsNotNone(cartas.normalizar_carta("Dos de Espadas"))
         self.assertIsNotNone(cartas.normalizar_carta("Rey de Bastos"))
 
-    def test_diagnostico_detecta_gap(self):
+    def test_diagnostico_ya_no_detecta_gap(self):
         gap = diag.gap_mapeo_ingles()
-        self.assertTrue(gap["no_reconoce_ingles"])
-        self.assertIn("Two of Swords", gap["ejemplos_no_reconocidos"])
+        # Gap cerrado por el arreglo A: el ingles se reconoce.
+        self.assertFalse(gap["no_reconoce_ingles"])
+        self.assertEqual(gap["ejemplos_no_reconocidos"], [])
         self.assertTrue(gap["reconoce_espanol"])
 
 
