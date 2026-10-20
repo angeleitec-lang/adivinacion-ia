@@ -111,6 +111,24 @@ class TestContradiccionKB(unittest.TestCase):
         self.assertTrue(vale)
         self.assertEqual(motivo, "tautologia")
 
+    def test_tautologia_contexto_lejano_no_cuenta(self):
+        vale, _ = ck.contradiccion_kb(
+            "El color azul se asocia con el agua y con la letra Mem "
+            "dentro del simbolismo de Cancer.",
+            "cancer|signo", CORR)
+        self.assertFalse(vale)
+
+    def test_tautologia_negada_antes_del_verbo(self):
+        vale, _ = ck.contradiccion_kb(
+            "El Cancer no se asocia con el agua.", "cancer|signo", CORR)
+        self.assertFalse(vale)
+
+    def test_tautologia_negada_en_cola(self):
+        vale, _ = ck.contradiccion_kb(
+            "La verdad corresponde a la carta diecisiete, no al Cancer.",
+            "cancer|signo", CORR)
+        self.assertFalse(vale)
+
     def test_sin_elemento_no_aplica(self):
         vale, _ = ck.contradiccion_kb(
             "El numero 11 se relaciona con el 11.", "11|alma", CORR)

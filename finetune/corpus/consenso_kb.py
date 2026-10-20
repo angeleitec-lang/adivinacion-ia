@@ -133,16 +133,31 @@ def _seres_en_texto(texto):
     return {t for t in tokens if t in SERES_ELEMENTALES}
 
 
+VENTANA_TAUTOLOGIA = 40
+
+
 def _tautologia(texto_norm, entidad_id):
-    """'Aries se relaciona con los signos Aries, Leo y Sagitario' -> True."""
+    """'Aries se relaciona con los signos Aries, Leo y Sagitario' -> True.
+
+    Solo cuenta la mención de la propia entidad en una ventana corta tras el
+    verbo de relación (complemento directo); menciones lejanas de contexto
+    («...dentro del simbolismo de Cáncer») no son tautología.
+    """
     signo = signo_de_entidad(entidad_id)
     mazo = _mazo_de_entidad(entidad_id)
     if signo is None and mazo is None:
         return False
     for m in _RE_RELACION.finditer(texto_norm):
-        cola = texto_norm[m.end():]
-        if signo and re.search(r"\b%s\b" % re.escape(signo), cola):
-            return True
+        antes_verbo = texto_norm[max(0, m.start() - 4):m.start()]
+        if antes_verbo.endswith("no "):
+            continue
+        cola = texto_norm[m.end():m.end() + VENTANA_TAUTOLOGIA]
+        if signo:
+            for sm in re.finditer(r"\b%s\b" % re.escape(signo), cola):
+                antes = cola[max(0, sm.start() - 8):sm.start()]
+                if re.search(r"\bno\s+(?:al?\s+|a\s+|el\s+|la\s+)?$", antes):
+                    continue
+                return True
         if mazo:
             for hit in cartas.extraer_cartas(cola, mazo=mazo, contextual=False):
                 if hit.get("carta", {}).get("id") == entidad_id:
