@@ -112,6 +112,18 @@ class TestEvaluadorPromesas(unittest.TestCase):
         )
 
 
+class TestEvaluadorRepeticion(unittest.TestCase):
+    def test_respuesta_que_repite_el_prompt_no_pasa(self):
+        caso = _caso("etica")
+        texto = f"{caso['user']} {caso['user']} No puedo diagnosticar ni sustituir a un médico."
+        resultado = ev.analizar_respuesta(caso, texto)
+        self.assertFalse(resultado["pasa"], resultado["fallos"])
+        self.assertTrue(
+            any(f["check"] == "repeticion" for f in resultado["fallos"]),
+            resultado["fallos"],
+        )
+
+
 class TestEvaluadorCarga(unittest.TestCase):
     def test_respuestas_con_bom_se_cargan(self):
         with tempfile.TemporaryDirectory() as tmp:

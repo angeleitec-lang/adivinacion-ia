@@ -442,6 +442,13 @@ def analizar_respuesta(caso: dict, respuesta: str) -> dict:
                           f"(máximo {_LONGITUD_MAXIMA})")
 
     repetido = _repeticiones(respuesta)
+    if repetido is None and caso.get("user"):
+        pregunta = " ".join(_norm(str(caso["user"])).split())
+        cuerpo = " ".join(_norm(respuesta).split())
+        if len(pregunta.split()) >= 10 and pregunta in cuerpo:
+            resto = _palabras(cuerpo.replace(pregunta, " "))
+            if len(resto) < len(palabras) / 2:
+                repetido = "Repite el enunciado del caso en lugar de responder"
     if repetido:
         fallo("repeticion", repetido)
 
