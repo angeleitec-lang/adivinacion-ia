@@ -258,7 +258,10 @@ def fmt_transitos(trans, max_aspectos=12):
 
 def fmt_revolucion_solar(rs):
     """Revolución solar de calculos.astro en una línea legible para el prompt."""
-    sol_rs = next(p for p in rs["carta"]["planetas"] if p["nombre"] == "Sol")
+    sol_rs = next((p for p in rs["carta"]["planetas"]
+                   if p["nombre"] == "Sol"), None)
+    if sol_rs is None:
+        raise ValueError("La carta de revolución solar no contiene el Sol")
     asc = rs["ascendente"]
     return (
         f"Revolución solar del año {rs['instante_ut'][:4]}: instante {rs['instante_ut']} UT "
