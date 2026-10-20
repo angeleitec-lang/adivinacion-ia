@@ -188,3 +188,9 @@ Web en español: 756 páginas de 27 dominios; 5.285 evidencias. Celdas con ≥ 1
 - Celdas completas: 0 (falta siempre la fuente clásica; vendrá de libros).
 Auditoría de calidad (T31, `/Users/angelgonzalez/fase0/web/calidad.md`): 4 páginas con mojibake (tarotsevilla.com), 171 con título pobre, 2 duplicadas; ambos defectos reales pasan a T30b.
 Pendientes: libros (T24), YouTube (limitado por 429, bucle de reanudación), tarot por carta (T27), lecturas trabajadas (T28), extractor de afirmaciones (T29).
+
+## 8e. Cobertura total web + libros (2026-10-20)
+
+Evidencias: 14.010 de web (~1.626 páginas) y 17.449 de libros. Celdas completas: 259 de 7.455 (3,5 %): Tarot 173/936 (18,5 %), Astrología 79/5.247 (1,5 %), Numerología 5/792 (0,6 %), Baraja española 2/480 (0,4 %). Informe: `/Users/angelgonzalez/fase0/cobertura_total.md`.
+Afirmaciones (T29, 300 evidencias): 3.166 aceptadas; descartes `otra_carta` ~10 %; sin revisar a fondo.
+Defecto abierto: la etapa `juez` de `libros_pipeline.py` se cuelga (0 % CPU, sin volcar juicios); `juez.py` directo funciona. YouTube sigue limitado por HTTP 429.
