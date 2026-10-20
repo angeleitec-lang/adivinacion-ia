@@ -34,6 +34,17 @@ COMPATIBILIDAD = {
 }
 
 
+def _parse_fecha(fecha: str) -> datetime:
+    """Valida "AAAA-MM-DD" con error claro en español (rechaza días inexistentes)."""
+    try:
+        return datetime.strptime(fecha, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        raise ValueError(
+            f"Fecha inválida: {fecha!r}. Use formato AAAA-MM-DD con un día existente "
+            "(recuerde que 1900 no fue bisiesto)."
+        ) from None
+
+
 def _normalizar_texto(texto: str) -> str:
     """Normaliza: NFD, quita tildes, mayúsculas, solo letras."""
     if not texto:
@@ -60,7 +71,7 @@ def camino_de_vida(fecha: str) -> int:
     Método: reducir día, mes y año por separado conservando maestros en componentes,
     luego sumar y reducir.
     """
-    dt = datetime.strptime(fecha, "%Y-%m-%d")
+    dt = _parse_fecha(fecha)
     dia = reducir(dt.day)
     mes = reducir(dt.month)
     anio = reducir(dt.year)
@@ -106,7 +117,7 @@ def _reduccion_sin_maestros(n: int) -> int:
 
 def anio_personal(fecha: str, anio: int) -> int:
     """Año personal: día + mes de nacimiento + dígitos del año (reducidos sin maestros)."""
-    dt = datetime.strptime(fecha, "%Y-%m-%d")
+    dt = _parse_fecha(fecha)
     dia = reducir(dt.day, maestros=False)
     mes = reducir(dt.month, maestros=False)
     anio_red = _reduccion_sin_maestros(anio)
