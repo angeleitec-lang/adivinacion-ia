@@ -30,3 +30,27 @@ Trabajos de máquina de la coordinadora (en segundo plano, sin IA): extracción 
 
 ## Cola adicional
 - T39 (pedida por el usuario el 2026-10-20): disponibilidad LEGAL de los libros que faltan (dominio público, bibliotecas, precios) para decidir compras. Asignar a la primera pestaña local que quede libre. Sin búsqueda de copias pirata.
+
+## Previsión de 10+ horas (actualizada 2026-10-20 10:00)
+
+**Cuello de botella:** los nodos 1 y 2 (las IAs de las pestañas 2-5, el juez, las afirmaciones y la extracción de lecturas comparten el mismo modelo). Más pistas en paralelo no aumentan el rendimiento; lo que importa es que cada pestaña nunca espere por falta de trabajo y que los trabajos largos corran sin parar.
+
+**En marcha ahora (ETA orientativa):**
+- T37 extractor de lecturas: pasada LLM de 878 evidencias, ~70 hechas en 20 min → ~3-4 h.
+- T38 afirmaciones de libros + consenso A6: código y luego pasada larga sobre 17.449 evidencias de libros → varias horas.
+- T36 sitios de baraja española y numerología: descubrir y rastrear (≈ 1-2 h más).
+- T39 disponibilidad legal de libros (≈ 30-60 min más).
+- Coordinadora: extracción de afirmaciones web en tandas de 500 (`afirmaciones_full/tandas.log`).
+
+**Cola preparada (worktree + SIGUIENTE.md listos), en orden de asignación a la primera pestaña local libre:**
+1. T40 calculos: revolución solar para nacidos el 29-feb y robustez (bug real, rápido).
+2. T41 afirmaciones_es incremental, por tandas y priorizada (necesaria antes de relanzar la pasada completa).
+3. T43 recuperación dirigida de huecos (plan de búsquedas desde la matriz).
+4. T42 sitios de astrología (planetas en casas/signos, aspectos).
+5. T44 prompts de fase 1 con Referencia de la KB y verificador.
+6. T45 conversaciones multi-turno en dos fases.
+Siguientes (por escribir cuando se liberen pestañas): T46 lecturas desde YouTube (si cede el 429), T47 juez de lecturas, T48 muestras del 3 % y conjunto de oro, T49 piloto de generación fase 1 (nodos), T50 segunda iteración de cobertura.
+
+**Hitos (a 10 h):** celdas de tarot ≥ 60 % completas; baraja española y numerología con fuentes nuevas rastreadas y juzgadas; afirmaciones extraídas y filtradas de web y libros; consenso (A6) de las celdas con ≥ 2 fuentes; lecturas trabajadas extraídas de libros; generador de prompts de fase 1 con verificador y multi-turno listos. La generación completa de fase 1 y el entrenamiento esperan a la revisión del 3 % por el usuario.
+
+**Regla de continuidad:** un vigilante único avisa de cada TRACK COMPLETO; al recibirlo reviso con casos adversos, integro, asigno la siguiente pista de la cola (o escribo una nueva) y vuelvo a la pestaña 1. Trabajos de máquina propios: lanzar siempre reanudables y por tandas.
