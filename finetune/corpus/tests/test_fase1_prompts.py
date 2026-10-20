@@ -300,6 +300,60 @@ class TestVerificarLectura(unittest.TestCase):
         ok, motivos = fp.verificar_lectura(t, texto)
         self.assertFalse(ok)
 
+    def test_loteria_vedada(self):
+        t = tarea_tarot([{"nombre": "La Emperatriz", "invertida": False}], familia="tarot_1")
+        texto = "La Emperatriz al derecho; juega el número 23 de lotería."
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertFalse(ok)
+        self.assertTrue(any("juego" in m or "apuest" in m or "loter" in m for m in motivos))
+
+    def test_variantes_juego_vedadas(self):
+        t = tarea_tarot([{"nombre": "La Emperatriz", "invertida": False}], familia="tarot_1")
+        for frase in [
+            "La Emperatriz al derecho; compra un décimo para la primitiva.",
+            "La Emperatriz al derecho; rellena una quiniela esta semana.",
+            "La Emperatriz al derecho; haz una apuesta segura.",
+            "La Emperatriz al derecho; juega loteria sin miedo.",
+        ]:
+            with self.subTest(frase=frase):
+                ok, motivos = fp.verificar_lectura(t, frase)
+                self.assertFalse(ok, motivos)
+
+    def test_sol_minuscula_no_es_carta_ajena(self):
+        t = tarea_tarot([{"nombre": "La Emperatriz", "invertida": False}], familia="tarot_1")
+        texto = "La Emperatriz al derecho brilla como el sol de la mañana."
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertTrue(ok, motivos)
+
+    def test_luna_torre_minusculas_no_ajenas(self):
+        t = tarea_tarot([{"nombre": "La Emperatriz", "invertida": False}], familia="tarot_1")
+        texto = (
+            "La Emperatriz al derecho aporta abundancia; la luna llena y la torre "
+            "del reloj son solo imágenes de tu día a día, no naipes de esta tirada."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertTrue(ok, motivos)
+
+    def test_mayusculas_si_cuentan_como_carta_ajena(self):
+        t = tarea_tarot([{"nombre": "La Emperatriz", "invertida": False}], familia="tarot_1")
+        texto = "LA EMPERATRIZ AL DERECHO BRILLA. EL SOL ANUNCIA UNA NUEVA ETAPA."
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertFalse(ok)
+        self.assertTrue(any("ajena" in m for m in motivos))
+
+    def test_carta_ajena_mayuscula_inicial(self):
+        t = tarea_tarot([
+            {"nombre": "La Luna", "invertida": False},
+            {"nombre": "La Emperatriz", "invertida": False},
+        ], familia="tarot_2")
+        texto = (
+            "La Luna aporta intuición y La Emperatriz fertilidad. Además El Sol "
+            "viene a reforzar el brillo de la tirada."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertFalse(ok)
+        self.assertTrue(any("ajena" in m and "Sol" in m for m in motivos))
+
 
 if __name__ == "__main__":
     unittest.main()

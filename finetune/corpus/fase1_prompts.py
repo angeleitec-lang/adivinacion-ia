@@ -92,6 +92,20 @@ _PROMESAS_VEDADAS = [
     r"n[uú]meros\s+de\s+la\s+loter[ií]a",
 ]
 
+# Juego y apuestas: queda vedado prometer o recomendar cualquier variante.
+_JUEGO_VEDADO = [
+    r"\bloter[ií]a\b",
+    r"\bquinielas?\b",
+    r"\bapuestas?\b",
+    r"\bprimitiva\b",
+    r"\bd[eé]cimos?\b",
+]
+
+# Artículos y preposiciones: no cuentan como nombre propio de una carta.
+_ARTICULOS = {"el", "la", "los", "las", "un", "una", "unos", "unas"}
+_PREPOS = {"de", "del", "a", "al", "en", "con", "y", "e", "u"}
+_LETRAS = "A-Za-zÁÉÍÓÚÜÑáéíóúüñ"
+
 _VERIF_NUM = [
     ("año personal", r"año\s*personal\s*(\d+)", "anio_personal"),
     ("camino de vida", r"camino\s*de\s*vida\s*(\d+)", "camino_de_vida"),
@@ -416,6 +430,50 @@ def _negado(texto, inicio):
     return bool(re.search(r"\bno\s+$", pre, re.IGNORECASE))
 
 
+def _tokens_propios(nombre):
+    """Tokens del nombre de la carta que son nombre propio (no artículo/preposición)."""
+    props = []
+    for t in str(nombre).split():
+        base = _norm(t)
+        if base in _ARTICULOS or base in _PREPOS:
+            continue
+        if t[:1].isupper():
+            props.append(t)
+    return props
+
+
+def _mencion_carta(nombre, texto):
+    """True si el texto nombra la carta como propio (no como uso común en minúscula).
+
+    Cuenta: mayúscula inicial en el nombre propio («El Sol», «la Torre»), la forma
+    «carta/arcano de X», o una lectura escrita toda en mayúsculas. No cuenta el uso
+    común en minúscula («el sol», «la luna», «la torre»).
+    """
+    if not _tokens_propios(nombre):
+        return False
+    solo_mayus = not any(ch.islower() for ch in texto if ch.isalpha())
+    forma = (
+        r"(?:cartas?|arcanos?)\s+(?:mayor\s+|menor\s+)?de\s+" + re.escape(nombre)
+    )
+    if re.search(forma, texto, re.IGNORECASE):
+        return True
+    pat = (
+        r"(?<![" + _LETRAS + r"])" + re.escape(nombre) + r"(?![" + _LETRAS + r"])"
+    )
+    nom_toks = str(nombre).split()
+    for m in re.finditer(pat, texto, re.IGNORECASE):
+        if solo_mayus:
+            return True
+        seg_toks = m.group(0).split()
+        for i, nt in enumerate(nom_toks):
+            base = _norm(nt)
+            if base in _ARTICULOS or base in _PREPOS:
+                continue
+            if i < len(seg_toks) and seg_toks[i][:1].isupper():
+                return True
+    return False
+
+
 def _verif_cartas(cartas, universo, texto, motivos):
     norm = _norm(texto)
     drawn = {_norm(c.get("nombre")) for c in cartas}
@@ -426,7 +484,7 @@ def _verif_cartas(cartas, universo, texto, motivos):
         nn = _norm(nombre)
         if nn in drawn:
             continue
-        if nn and nn in norm:
+        if nn and _mencion_carta(nombre, texto):
             motivos.append(f"Menciona carta ajena a la tirada: {nombre}")
     hay_inv = any(c.get("invertida") for c in cartas)
     inv = _tiene_inversion(texto)
@@ -474,6 +532,14 @@ def _verif_promesas(texto, motivos):
             motivos.append(f"Promesa o diagnóstico vedado: «{m.group(0)}»")
 
 
+def _verif_juego(texto, motivos):
+    for pat in _JUEGO_VEDADO:
+        for m in re.finditer(pat, texto, re.IGNORECASE):
+            if _negado(texto, m.start()):
+                continue
+            motivos.append(f"Promesa vedada de juego o apuestas: «{m.group(0)}»")
+
+
 def verificar_lectura(tarea, texto):
     """Comprueba presencia, no invención, coherencia con lo calculado y vedados."""
     motivos = []
@@ -485,6 +551,7 @@ def verificar_lectura(tarea, texto):
     _verif_numeros(calc, texto, motivos)
     _verif_sol(calc, texto, motivos)
     _verif_promesas(texto, motivos)
+    _verif_juego(texto, motivos)
     return (len(motivos) == 0, motivos)
 
 
