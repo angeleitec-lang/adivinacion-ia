@@ -10,6 +10,7 @@ import urllib.error
 from unittest import mock
 
 import cobertura
+import juez
 import libros_pipeline
 
 
@@ -282,6 +283,114 @@ class JuezCobertura(CadenaLimpieza):
                                              hasta="juez", pausa=0,
                                              simulado=True, solo_ids="loco-es")
         self.assertEqual(code, 0)
+
+
+class JuezLotes(Base):
+    """T32: el juez solo mira los libros pedidos, escribe por lotes con
+    timeout acotado y deja progreso en el log."""
+
+    def _hasta_secciones(self, solo_ids="loco-es,the-fool-en"):
+        self._sembrar_crudos()
+        code, _ = self.run_pipeline(work_dir=self.work,
+                                    knowledge_dir=self.knowledge,
+                                    hasta="segmentacion", pausa=0,
+                                    solo_ids=solo_ids)
+        self.assertEqual(code, 0)
+
+    def _sembrar_crudos(self):
+        _escribir(os.path.join(self.work, "crudo", "loco-es.txt"), CRUDO_ES)
+        _escribir(os.path.join(self.work, "crudo", "the-fool-en.txt"), CRUDO_EN)
+
+    def test_juez_solo_juzga_los_libros_pedidos(self):
+        self._hasta_secciones()
+        ajeno = os.path.join(self.work, "secciones", "libro-ajeno.jsonl")
+        seccion = {"seccion": 1, "titulo": "El loco", "texto": CRUDO_ES,
+                   "chars": len(CRUDO_ES), "id_libro": "libro-ajeno",
+                   "posicion": 0}
+        _escribir(ajeno, json.dumps(seccion, ensure_ascii=False) + "\n")
+        code, salida = self.run_pipeline(work_dir=self.work,
+                                         knowledge_dir=self.knowledge,
+                                         hasta="juez", pausa=0, simulado=True,
+                                         solo_ids="loco-es")
+        self.assertEqual(code, 0)
+        ruta_ev = os.path.join(self.work, "evidencias", "evidencias.jsonl")
+        evidencias = _leer_jsonl(ruta_ev)
+        self.assertGreaterEqual(len(evidencias), 1)
+        self.assertEqual({ev["fuente_id"] for ev in evidencias}, {"loco-es"})
+        # El log anuncia el total real de secciones a juzgar.
+        self.assertIn("lotes de", salida)
+
+    def test_juez_escribe_cada_lote_sin_esperar_al_final(self):
+        """Reproduce el cuelgue: antes no había ni una línea en juicios.jsonl
+        hasta acabar TODAS las secciones; con lotes, la siguiente llamada ya
+        ve escrito el lote anterior."""
+        self._hasta_secciones(solo_ids="loco-es")
+        ruta_sec = os.path.join(self.work, "secciones", "loco-es.jsonl")
+        secciones = _leer_jsonl(ruta_sec)
+        if len(secciones) < 2:
+            # El crudo sintético solo segmenta una sección; se añade una
+            # segunda distinta (otro número y texto con naipes, para que
+            # tenga candidatos) y poder observar el avance entre lotes.
+            segunda = {"seccion": 2, "posicion": 2,
+                       "titulo": "El Loco",
+                       "texto": "el loco del sol y de la luna es un viaje del alma",
+                       "chars": 48, "id_libro": "loco-es"}
+            with open(ruta_sec, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(segunda, ensure_ascii=False) + "\n")
+            secciones = _leer_jsonl(ruta_sec)
+        self.assertGreaterEqual(len(secciones), 2)
+        ruta_juicios = os.path.join(self.work, "evidencias", "juicios.jsonl")
+
+        class ClienteEspia:
+            def __init__(self):
+                self.vistos = []
+
+            def chat(self, sistema, usuario):
+                self.vistos.append(len(_leer_jsonl(ruta_juicios)))
+                return juez._simular(sistema, usuario)
+
+        espia = ClienteEspia()
+        code, _ = self.run_pipeline(work_dir=self.work,
+                                    knowledge_dir=self.knowledge,
+                                    hasta="juez", pausa=0, cliente=espia,
+                                    solo_ids="loco-es", lote_juez=1)
+        self.assertEqual(code, 0)
+        self.assertGreaterEqual(len(espia.vistos), 2)
+        self.assertEqual(espia.vistos[0], 0)
+        self.assertGreaterEqual(espia.vistos[1], 1,
+                                "el lote anterior no se escribió antes de "
+                                "empezar el siguiente")
+
+    def test_cliente_juez_acota_timeout_y_reintentos(self):
+        base = mock.Mock()
+        with mock.patch.object(libros_pipeline.llm_client, "LLMClient",
+                               return_value=base) as constructor:
+            cliente = libros_pipeline._cliente_juez({"timeout": 12})
+        constructor.assert_called_once_with(timeout=12)
+        base.chat.return_value = "{}"
+        cliente.chat("sistema", "usuario")
+        self.assertEqual(base.chat.call_args.kwargs["max_reintentos"],
+                         libros_pipeline.REINTENTOS_JUEZ)
+
+    def test_cliente_explicito_no_se_envuelve(self):
+        propio = object()
+        self.assertIs(libros_pipeline._cliente_juez({"cliente": propio}), propio)
+
+    def test_lote_fallido_no_aborta_la_pasada(self):
+        self._hasta_secciones(solo_ids="loco-es")
+
+        class ClienteQueFalla:
+            def chat(self, sistema, usuario):
+                raise TimeoutError("endpoint mudo")
+
+        code, _ = self.run_pipeline(work_dir=self.work,
+                                    knowledge_dir=self.knowledge,
+                                    hasta="juez", pausa=0,
+                                    cliente=ClienteQueFalla(),
+                                    solo_ids="loco-es", lote_juez=1)
+        self.assertEqual(code, 0)
+        errores = _leer_jsonl(os.path.join(self.work, "errores.jsonl"))
+        self.assertTrue(any(e["etapa"] == "juez" for e in errores))
 
 
 class LimitacionTest(Base):

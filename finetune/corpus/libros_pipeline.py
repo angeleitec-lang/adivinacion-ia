@@ -44,6 +44,15 @@ DEFAULT_KNOWLEDGE_DIR = os.path.join(os.path.dirname(__file__), "..", "knowledge
 MIN_CRUDO_BYTES = 1024
 # Con estos 429 seguidos se corta la pasada (código 3) para no hostigar.
 CUARENTA_Y_NUEVE_SEGUIDOS = 2
+# Juez: las secciones se procesan por lotes para que cada lote quede escrito
+# en `juicios.jsonl` antes de empezar el siguiente. Con lotes grandes una
+# llamada lenta (o un endpoint que no responde) retrasaba horas la primera
+# línea escrita, con el proceso aparentemente colgado al 0 % de CPU.
+SECCIONES_POR_LOTE_JUEZ = 50
+# Timeout por petición al LLM (segundos). Acota la espera de una sección
+# atascada; con `REINTENTOS_JUEZ = 1` el peor caso por sección es 2 timeouts.
+TIMEOUT_JUEZ = 60.0
+REINTENTOS_JUEZ = 1
 
 
 def cargar_inventario(dir_knowledge):
@@ -287,13 +296,46 @@ def _etapa_informe(libros, work_dir, ctx):
     return 0
 
 
+class _ClienteAcotado:
+    """Cliente del juez con reintentos acotados y timeout explícito.
+
+    `juez.juzgar_seccion` llama a `chat` sin fijar `max_reintentos`, de modo
+    que el valor por defecto (3) multiplicaba por cuatro el tiempo de espera
+    de una sección atascada. Aquí se baja a `reintentos` sin tocar `juez.py`.
+    """
+
+    def __init__(self, cliente, reintentos=REINTENTOS_JUEZ):
+        self._cliente = cliente
+        self._reintentos = reintentos
+
+    def chat(self, sistema, usuario, **kwargs):
+        kwargs.setdefault("max_reintentos", self._reintentos)
+        return self._cliente.chat(sistema, usuario, **kwargs)
+
+
 def _cliente_juez(ctx):
     """Cliente para el juez: el explícito, uno simulado o el real."""
     if ctx.get("cliente") is not None:
         return ctx["cliente"]
     if ctx.get("simulado"):
-        return llm_client.LLMClient(simulado=juez._simular)
-    return llm_client.LLMClient()
+        base = llm_client.LLMClient(simulado=juez._simular)
+    else:
+        base = llm_client.LLMClient(
+            timeout=ctx.get("timeout") or TIMEOUT_JUEZ)
+    return _ClienteAcotado(base)
+
+
+def secciones_de_libros(libros, work_dir):
+    """Secciones de `secciones/` que pertenecen a los libros de esta pasada.
+
+    Sin este filtro `--solo-ids` y `--max` solo recortaban inventario,
+    descarga, limpieza y segmentación: el juez seguía recorriendo las 74
+    secciones del directorio (miles de secciones) aunque se pidiera una
+    muestra de dos libros.
+    """
+    ids = {libro["id"] for libro in libros}
+    return [s for s in juez.leer_secciones(os.path.join(work_dir, "secciones"))
+            if s.get("id_libro") in ids]
 
 
 def _etapa_juez(libros, work_dir, ctx):
@@ -310,16 +352,58 @@ def _etapa_juez(libros, work_dir, ctx):
         rutas_meta.extend(sorted(glob.glob(
             os.path.join(ctx["knowledge_dir"], patron))))
     meta = juez.cargar_meta_libros(rutas_meta)
-    secciones = juez.leer_secciones(secciones_dir)
-    errores_ruta = os.path.join(work_dir, "errores.jsonl")
-    try:
-        stats = juez.procesar_secciones(secciones, _cliente_juez(ctx), out_dir,
-                                        meta=meta, workers=ctx["workers"])
-    except Exception as exc:
-        _anotar(errores_ruta, {"id": "*", "etapa": "juez",
-                               "motivo": "juez_%s" % type(exc).__name__})
-        print("juez: error %s" % exc, file=sys.stderr)
+    secciones = secciones_de_libros(libros, work_dir)
+    if not secciones:
+        print("juez: no hay secciones de los libros seleccionados",
+              file=sys.stderr)
         return 0
+    errores_ruta = os.path.join(work_dir, "errores.jsonl")
+    cliente = _cliente_juez(ctx)
+    lote = ctx.get("lote_juez") or SECCIONES_POR_LOTE_JUEZ
+    total = len(secciones)
+    print("juez: %d secciones de %d libros, lotes de %d, %d workers"
+          % (total, len(libros), lote, ctx["workers"]), flush=True)
+    stats = {"juzgadas": 0, "llamadas": 0, "evidencias": 0,
+             "reaprovechadas": 0, "sin_candidatos": 0, "error": 0,
+             "lotes_fallidos": 0}
+    inicio = time.monotonic()
+    for desde in range(0, total, lote):
+        trozo = secciones[desde:desde + lote]
+        try:
+            parcial = juez.procesar_secciones(trozo, cliente, out_dir,
+                                              meta=meta,
+                                              workers=ctx["workers"])
+        except Exception as exc:
+            stats["lotes_fallidos"] += 1
+            _anotar(errores_ruta, {"id": "*", "etapa": "juez",
+                                   "motivo": "juez_%s" % type(exc).__name__})
+            print("juez: lote %d-%d falló (%s: %s), se continúa"
+                  % (desde + 1, desde + len(trozo), type(exc).__name__, exc),
+                  file=sys.stderr, flush=True)
+            continue
+        for clave in ("juzgadas", "llamadas", "evidencias", "reaprovechadas",
+                      "sin_candidatos", "error"):
+            stats[clave] += parcial[clave]
+        # `juzgar_seccion` no propaga los fallos del endpoint: los convierte
+        # en juicios `tipo=error`. Para que el operador los vea en el log de
+        # incidencias del orquestador (y no solo en `juicios.jsonl`), se
+        # anota aquí el número de secciones que el juez no pudo resolver.
+        if parcial["error"]:
+            _anotar(errores_ruta,
+                    {"id": "*", "etapa": "juez",
+                     "motivo": "juez_error_secciones",
+                     "secciones_error": parcial["error"],
+                     "desde": desde + 1, "hasta": desde + len(trozo)})
+        print("juez: %d/%d secciones (%.0fs) — %d juzgadas, %d reaprovechadas,"
+              " %d sin candidatos, %d errores, %d evidencias"
+              % (min(desde + lote, total), total, time.monotonic() - inicio,
+                 stats["juzgadas"], stats["reaprovechadas"],
+                 stats["sin_candidatos"], stats["error"], stats["evidencias"]),
+              flush=True)
+    if stats["lotes_fallidos"]:
+        print("juez: %d lotes fallidos (ver errores.jsonl)"
+              % stats["lotes_fallidos"], file=sys.stderr)
+    stats.pop("lotes_fallidos")
     juez.escribir_informe(out_dir, stats)
     evidencias, _ = cobertura.leer_evidencias(
         [os.path.join(out_dir, "evidencias.jsonl")])
@@ -364,8 +448,9 @@ def plan_de_pruebas(libros, work_dir):
 
 
 def ejecutar(work_dir=DEFAULT_WORK_DIR, knowledge_dir=DEFAULT_KNOWLEDGE_DIR,
-             hasta="juez", solo_ids=None, max=0, pausa=2.5, workers=1,
-             simulado=False, dry_run=False, cliente=None):
+             hasta="juez", solo_ids=None, max=0, pausa=2.5, workers=4,
+             simulado=False, dry_run=False, cliente=None,
+             timeout=TIMEOUT_JUEZ, lote_juez=None):
     """Corre las etapas hasta `hasta`. Devuelve el código de salida."""
     if hasta not in ETAPAS:
         print("Etapa desconocida: %s (válidas: %s)" % (hasta, ", ".join(ETAPAS)),
@@ -384,7 +469,8 @@ def ejecutar(work_dir=DEFAULT_WORK_DIR, knowledge_dir=DEFAULT_KNOWLEDGE_DIR,
         print("No hay libros que procesar.")
         return 0
     ctx = {"pausa": pausa, "workers": workers, "simulado": simulado,
-           "cliente": cliente, "knowledge_dir": knowledge_dir}
+           "cliente": cliente, "knowledge_dir": knowledge_dir,
+           "timeout": timeout, "lote_juez": lote_juez}
     for etapa_nombre in ETAPAS[:ETAPAS.index(hasta) + 1]:
         funcion = ETAPAS_IMPLEMENTADAS.get(etapa_nombre, _etapa_pendiente(etapa_nombre))
         code = funcion(libros, work_dir, ctx)
@@ -406,7 +492,15 @@ def main(argv=None):
                         help="máximo de libros (0 = sin límite)")
     parser.add_argument("--pausa", type=float, default=2.5,
                         help="segundos entre descargas")
-    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--workers", type=int, default=4,
+                        help="hilos de llamada al LLM en el juez (por "
+                             "defecto: 4, como juez.py)")
+    parser.add_argument("--timeout", type=float, default=TIMEOUT_JUEZ,
+                        help="timeout por petición al LLM en segundos "
+                             "(por defecto: %.0f)" % TIMEOUT_JUEZ)
+    parser.add_argument("--lote-juez", type=int, default=None,
+                        help="secciones por lote del juez (por defecto: %d)"
+                             % SECCIONES_POR_LOTE_JUEZ)
     parser.add_argument("--simulado", action="store_true",
                         help="cliente LLM simulado para el juez")
     parser.add_argument("--dry-run", action="store_true",
@@ -415,7 +509,8 @@ def main(argv=None):
     return ejecutar(work_dir=args.work_dir, knowledge_dir=args.knowledge_dir,
                     hasta=args.hasta, solo_ids=args.solo_ids or None,
                     max=args.max, pausa=args.pausa, workers=args.workers,
-                    simulado=args.simulado, dry_run=args.dry_run)
+                    simulado=args.simulado, dry_run=args.dry_run,
+                    timeout=args.timeout, lote_juez=args.lote_juez)
 
 
 if __name__ == "__main__":
