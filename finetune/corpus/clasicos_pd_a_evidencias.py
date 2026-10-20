@@ -225,6 +225,38 @@ def _hashes_juzgados(work_dir):
     return hechos
 
 
+def purgar_errores_juez(work_dir):
+    """Quita de `juicios.jsonl` los juicios `tipo=error` (timeouts del nodo).
+
+    Sin esto, un juicio-error queda guardado como hecho y la reanudación no
+    lo reintenta: los timeouts de un nodo saturado envenenarian el work-dir.
+    Devuelve el número de registros eliminados.
+    """
+    ruta = os.path.join(work_dir, "evidencias", "juicios.jsonl")
+    if not os.path.exists(ruta):
+        return 0
+    buenos = []
+    errores = 0
+    with open(ruta, encoding="utf-8") as fh:
+        for linea in fh:
+            stripped = linea.strip()
+            if not stripped:
+                continue
+            try:
+                registro = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+            if registro.get("juicio", {}).get("tipo") == "error":
+                errores += 1
+            else:
+                buenos.append(stripped)
+    if errores:
+        with open(ruta, "w", encoding="utf-8") as fh:
+            for linea in buenos:
+                fh.write(linea + "\n")
+    return errores
+
+
 def procesar_libro(libro, work_dir, hasta="juez", max_llamadas=0, workers=1,
                   timeout=TIMEOUT_CLASICO, simulado=False, cliente=None):
     """Corre limpieza, segmentación y juez para un libro; devuelve el resumen."""
@@ -244,6 +276,10 @@ def procesar_libro(libro, work_dir, hasta="juez", max_llamadas=0, workers=1,
         return {"id": libro["id"], "hasta": hasta, "secciones": 0,
                 "juzgadas": 0, "llamadas": 0, "evidencias": 0,
                 "reaprovechadas": 0, "sin_candidatos": 0, "error": 0}
+    purgados = purgar_errores_juez(work_dir)
+    if purgados:
+        print("%s: %d juicios-error purgados para reintentar"
+              % (libro["id"], purgados), flush=True)
     cliente_juez = libros_pipeline._cliente_juez(ctx)
     meta = juez.cargar_meta_libros(
         [os.path.join(work_dir, "knowledge", META_NOMBRE)])

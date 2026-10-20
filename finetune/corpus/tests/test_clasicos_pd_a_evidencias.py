@@ -206,6 +206,31 @@ class TestProceso(unittest.TestCase):
                          solo_ids={"libro_negro_1886"})
         self.assertGreater(cliente2.llamadas, 1)
 
+    def test_purga_errores_reintenta_en_reanudacion(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            mod.ejecutar(work_dir=self.work, cliente=ClienteFalso(),
+                         solo_ids={"libro_negro_1886"})
+        ruta = os.path.join(self.work, "evidencias", "juicios.jsonl")
+        with open(ruta, encoding="utf-8") as fh:
+            registros = [json.loads(l) for l in fh if l.strip()]
+        self.assertTrue(registros)
+        con_error = [dict(r, juicio={"tipo": "error", "calidad": 0,
+                                    "idioma": "otro", "entidades": [],
+                                    "llamadas": 1})
+                    for r in registros]
+        with open(ruta, "w", encoding="utf-8") as fh:
+            for r in con_error:
+                fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+        purgados = mod.purgar_errores_juez(self.work)
+        self.assertEqual(purgados, len(registros))
+        with open(ruta, encoding="utf-8") as fh:
+            self.assertEqual([l for l in fh if l.strip()], [])
+        cliente2 = ClienteFalso()
+        with contextlib.redirect_stdout(io.StringIO()):
+            mod.ejecutar(work_dir=self.work, cliente=cliente2,
+                         solo_ids={"libro_negro_1886"})
+        self.assertGreater(cliente2.llamadas, 0)
+
     def test_periodo_clasica_en_evidencias(self):
         with contextlib.redirect_stdout(io.StringIO()):
             mod.ejecutar(work_dir=self.work, cliente=ClienteFalso(),
