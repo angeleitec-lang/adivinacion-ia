@@ -133,6 +133,8 @@ def main(argv=None):
                              "los pendientes)")
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--limite", type=int, default=None)
+    parser.add_argument("--timeout", type=float, default=60.0,
+                        help="timeout por petición al LLM (segundos)")
     parser.add_argument("--simulado", action="store_true",
                         help="cliente determinista sin red (pruebas)")
     parser.add_argument("--dry-run", action="store_true",
@@ -145,7 +147,7 @@ def main(argv=None):
     if args.simulado:
         cliente = llm_client.LLMClient(simulado=juez._simular)
     else:
-        cliente = llm_client.LLMClient()
+        cliente = llm_client.LLMClient(timeout=args.timeout)
     stats = ejecutar_incremento(args.web_dir, args.evidencias, cliente,
                                 dominios=filtro, workers=args.workers,
                                 limite=args.limite, dry_run=args.dry_run)

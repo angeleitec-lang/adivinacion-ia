@@ -181,6 +181,13 @@ class TestEjecucionIncremento(BaseTemporal):
         self.assertEqual(stats["secciones"], 0)
         self.assertFalse(os.path.exists(self.ruta_ev))
 
+    def test_cli_timeout_pasa_al_cliente(self):
+        from unittest import mock
+        with mock.patch.object(ei.llm_client, "LLMClient") as fab:
+            ei.main(["--web-dir", self.web_dir, "--evidencias", self.ruta_ev,
+                    "--dominios", "x", "--timeout", "240"])
+        self.assertEqual(fab.call_args.kwargs.get("timeout"), 240.0)
+
     def test_dry_run_no_escribe_ni_llama(self):
         self.escribir_pagina("dominioa", "p1",
                             _pagina("dominioa", "As de Bastos uno"))
