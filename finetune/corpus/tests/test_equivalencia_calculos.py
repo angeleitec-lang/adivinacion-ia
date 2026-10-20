@@ -153,7 +153,7 @@ FECHAS_EQUIVALENCIA = [
     "2000-02-29", "2004-02-29", "2008-02-29",
     "1990-11-11", "1990-11-22", "1990-11-29", "1999-11-11", "1999-11-22",
     "2000-11-22", "2000-11-29", "1993-05-17", "2009-05-17", "1993-11-11",
-    "2009-11-22", "1990-02-22",
+    "2009-11-22", "1990-02-22", "2009-11-29",
 ]
 
 NOMBRES_EQUIVALENCIA = [
@@ -176,6 +176,13 @@ class TestEquivalenciaNumerologia(unittest.TestCase):
         for fecha in FECHAS_EQUIVALENCIA:
             with self.subTest(fecha=fecha):
                 self.assertEqual(gt.camino_de_vida(fecha), calc_num.camino_de_vida(fecha))
+
+    def test_maestros_11_22_33_cubiertos(self):
+        caminos = {gt.camino_de_vida(f) for f in FECHAS_EQUIVALENCIA}
+        for maestro in (11, 22, 33):
+            with self.subTest(maestro=maestro):
+                self.assertIn(maestro, caminos)
+                self.assertIn(maestro, {calc_num.camino_de_vida(f) for f in FECHAS_EQUIVALENCIA})
 
     def test_anio_personal_igual(self):
         for fecha in FECHAS_EQUIVALENCIA:
