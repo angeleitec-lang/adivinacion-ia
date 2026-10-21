@@ -19,6 +19,7 @@ Las comprobaciones deterministas de la KB se comparten con
 from __future__ import annotations
 
 import argparse
+import glob
 import hashlib
 import json
 import os
@@ -30,6 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import cartas
 import afirmaciones_es as es
+import diagnostico_tarot_libros as diag
 from llm_client import LLMClient
 
 MAX_POR_CELDA = 40
@@ -600,15 +602,112 @@ def _cargar_consenso_existente(ruta):
     return existentes
 
 
-def _reescribir_consenso_sin(ruta, excluir):
+def cargar_claves_exclusion(ruta):
+    """Claves de exclusin (T71) indexadas por (entidad_id, faceta).
+
+    Cada lnea del JSONL debe traer hash_seccion, entidad_id y faceta.
+    Devuelve dict (entidad_id, faceta) -> set(hash_seccion).
+    """
+    claves = {}
+    if not ruta or not os.path.exists(ruta):
+        return claves
+    with open(ruta, "r", encoding="utf-8") as f:
+        for linea in f:
+            linea = linea.strip()
+            if not linea:
+                continue
+            try:
+                reg = json.loads(linea)
+                claves.setdefault((reg["entidad_id"], reg["faceta"]), set()).add(
+                    reg["hash_seccion"])
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return claves
+
+
+def indexar_secciones_por_libro(secciones_dir):
+    """Secciones de libros indexadas por id_libro: [(hash_seccion, texto_norm)].
+
+    El hash se recalcula con diag.hash_seccion (sha256 de
+    'id_libro|seccion|texto'), igual que en la auditora T71.
+    """
+    por_libro = {}
+    if not secciones_dir or not os.path.isdir(secciones_dir):
+        return por_libro
+    for ruta in sorted(glob.glob(os.path.join(secciones_dir, "*.jsonl"))):
+        with open(ruta, "r", encoding="utf-8") as f:
+            for linea in f:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    sec = json.loads(linea)
+                    h = diag.hash_seccion(sec["id_libro"], sec["seccion"],
+                                        sec["texto"])
+                except (json.JSONDecodeError, KeyError):
+                    continue
+                por_libro.setdefault(sec["id_libro"], []).append(
+                    (h, cartas.norm(sec["texto"])))
+    return por_libro
+
+
+def excluir_claves_por_cita(afirmaciones, claves, secciones_por_libro):
+    """Descarta afirmaciones cuyo origen (seccin de libro) est excluido.
+
+    El origen se resuelve por cita: se buscan las secciones del libro cuya
+    texto normalizado contiene la cita normalizada (misma regla que
+    afirmaciones_libros.cita_verbatim). Se excluye SOLO si TODAS las
+    secciones que contienen la cita estn excluidas para esa celda; si
+    alguna no lo est (cita ambigua) se conserva por criterio conservador.
+    Las fuentes que no son libros (no aparecen en el ndice) no se tocan.
+
+    Devuelve (conservadas, excluidas_por_celda, sin_resolver) donde
+    excluidas_por_celda es dict (entidad_id, faceta) -> n excludas y
+    sin_resolver el nmero de afirmaciones cuya cita no resolvi a ninguna
+    seccin del libro (se conservan).
+    """
+    conservadas = []
+    excluidas_por_celda = {}
+    sin_resolver = 0
+    for reg in afirmaciones:
+        clave = (reg.get("entidad_id"), reg.get("faceta"))
+        hashes_celda = claves.get(clave)
+        if not hashes_celda:
+            conservadas.append(reg)
+            continue
+        fuente = reg.get("fuente_id")
+        secciones = secciones_por_libro.get(fuente)
+        cita = reg.get("cita_original") or ""
+        if not secciones or not cita:
+            conservadas.append(reg)
+            continue
+        cita_norm = cartas.norm(cita)
+        excl_hit = 0
+        no_excl_hit = 0
+        for h, texto_norm in secciones:
+            if cita_norm in texto_norm:
+                if h in hashes_celda:
+                    excl_hit += 1
+                else:
+                    no_excl_hit += 1
+        if excl_hit and not no_excl_hit:
+            excluidas_por_celda[clave] = excluidas_por_celda.get(clave, 0) + 1
+            continue
+        if not excl_hit and not no_excl_hit:
+            sin_resolver += 1
+        conservadas.append(reg)
+    return conservadas, excluidas_por_celda, sin_resolver
+
+
+def _reescribir_consenso_sin(ruta, excluir, sufijo="pre-extra"):
     """Deja copia previa de consenso.jsonl y lo reescribe sin las celdas
-    excluidas (las que se van a reprocesar con extras).
+    excluidas (las que se van a reprocesar con extras o por exclusin).
 
     Devuelve la ruta de la copia previa, o None si no haba fichero.
     """
     if not os.path.exists(ruta):
         return None
-    ruta_backup = "%s.pre-extra-%s" % (ruta, time.strftime("%Y%m%d_%H%M%S"))
+    ruta_backup = "%s.%s-%s" % (ruta, sufijo, time.strftime("%Y%m%d_%H%M%S"))
     shutil.copy2(ruta, ruta_backup)
     tmp = ruta + ".tmp"
     with open(ruta, "r", encoding="utf-8") as fin, \
@@ -664,6 +763,17 @@ def escribir_informe(ruta, stats):
     if stats.get("rehacer_afectadas"):
         lineas.append("- Celdas rehechas por ganar afirmaciones con extra: %d"
                       % stats["rehacer_afectadas"])
+    if stats.get("excluidas_por_clave"):
+        lineas.append("- Afirmaciones excluidas por claves (T71): %d en %d celdas"
+                      % (stats["excluidas_por_clave"],
+                         stats.get("exclusion_celdas", 0)))
+        lineas.append("- Citas sin resolver (se conservan): %d"
+                      % stats.get("exclusion_sin_resolver", 0))
+    if stats.get("rehacer_por_exclusion"):
+        lineas.append("- Celdas rehechas por perder afirmaciones: %d"
+                      % stats["rehacer_por_exclusion"])
+        lineas.append("- Celdas eliminadas del consenso (sin afirmaciones): %d"
+                      % stats.get("exclusion_celdas_eliminadas", 0))
     if stats.get("motivos_alertas"):
         lineas.append("")
         lineas.append("## Alertas por motivo")
@@ -704,6 +814,23 @@ def main(argv=None, cliente=None):
         "--rehacer-celdas-con-extra", action="store_true",
         help="Reprocesa solo las celdas ya procesadas que ganan afirmaciones "
              "con los extras; deja copia previa de consenso.jsonl")
+    parser.add_argument(
+        "--excluir-claves", default=None,
+        help="JSONL de claves a excluir (T71: hash_seccion, entidad_id, "
+             "faceta). Descarta antes de agrupar las afirmaciones de libros "
+             "cuyo origen (seccion) este excluido para esa celda.")
+    parser.add_argument(
+        "--secciones-dir",
+        default="/Users/angelgonzalez/fase0/libros/secciones",
+        help="Directorio de secciones de libros (*.jsonl) para resolver el "
+             "origen de cada afirmacion por cita")
+    parser.add_argument(
+        "--rehacer-celdas-con-exclusion", action="store_true",
+        help="Reprocesa solo las celdas ya procesadas que pierden "
+             "afirmaciones por la exclusion; deja copia previa de "
+             "consenso.jsonl. Una celda que se queda sin afirmaciones se "
+             "elimina del consenso (la copia previa conserva el estado "
+             "anterior).")
     args = parser.parse_args(argv)
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -747,30 +874,64 @@ def main(argv=None, cliente=None):
                 except json.JSONDecodeError:
                     continue
 
+    excluidas_por_celda = {}
+    exclusion_sin_resolver = 0
+    base_y_extra = regs + extra_regs
+    if args.excluir_claves:
+        claves_exclusion = cargar_claves_exclusion(args.excluir_claves)
+        secciones_por_libro = indexar_secciones_por_libro(args.secciones_dir)
+        base_y_extra, excluidas_por_celda, exclusion_sin_resolver = \
+            excluir_claves_por_cita(base_y_extra, claves_exclusion,
+                                   secciones_por_libro)
+        n_excl = sum(excluidas_por_celda.values())
+        print("Exclusion por claves: %d afirmaciones excluidas en %d celdas "
+              "(%d sin resolver, se conservan)"
+              % (n_excl, len(excluidas_por_celda), exclusion_sin_resolver))
+        if excluidas_por_celda:
+            ruta_exclusion = os.path.join(args.out_dir,
+                                        "exclusion_por_celda.jsonl")
+            with open(ruta_exclusion, "w", encoding="utf-8") as f:
+                for (eid, faceta), n in sorted(excluidas_por_celda.items()):
+                    f.write(json.dumps(
+                        {"entidad_id": eid, "faceta": faceta,
+                         "n_excluidas": n}, ensure_ascii=False) + "\n")
+
     # La base va primero: al fusionar duplicados el registro base conserva sus
     # campos y el extra aporta los extractores que faltaran.
-    regs, fusionadas = deduplicar_por_fuente(regs + extra_regs)
+    regs, fusionadas = deduplicar_por_fuente(base_y_extra)
 
     regs, no_utiles = normalizar_afirmaciones(regs, corr)
     celdas = agrupar_en_celdas(regs)
     procesadas = _cargar_celdas_procesadas(ruta_salida)
 
     rehacer = set()
+    rehacer_extra = set()
+    rehacer_por_exclusion = set()
+    existentes = {}
+    if args.rehacer_celdas_con_extra or args.rehacer_celdas_con_exclusion:
+        existentes = _cargar_consenso_existente(ruta_salida)
     if args.rehacer_celdas_con_extra:
         if not extra_regs:
             print("Aviso: --rehacer-celdas-con-extra sin --extra-afirmaciones "
                   "no reprocesa nada")
         else:
-            existentes = _cargar_consenso_existente(ruta_salida)
             for clave, regs_celda in celdas.items():
                 prev = existentes.get(clave)
                 if prev is not None and len(regs_celda) > int(
                         prev.get("n_afirmaciones") or 0):
-                    rehacer.add(clave)
-            if rehacer:
-                ruta_backup = _reescribir_consenso_sin(ruta_salida, rehacer)
-                print("Celdas a rehacer por extra: %d (copia previa en %s)"
-                      % (len(rehacer), ruta_backup))
+                    rehacer_extra.add(clave)
+    if args.rehacer_celdas_con_exclusion:
+        for clave in existentes:
+            if clave in excluidas_por_celda:
+                rehacer_por_exclusion.add(clave)
+    rehacer = rehacer_extra | rehacer_por_exclusion
+    if rehacer:
+        sufijo = ("pre-exclusion" if args.rehacer_celdas_con_exclusion
+                 else "pre-extra")
+        ruta_backup = _reescribir_consenso_sin(ruta_salida, rehacer,
+                                              sufijo=sufijo)
+        print("Celdas a rehacer: %d (copia previa en %s)"
+              % (len(rehacer), ruta_backup))
 
     pendientes = {k: v for k, v in celdas.items()
                  if k not in procesadas or k in rehacer}
@@ -793,7 +954,13 @@ def main(argv=None, cliente=None):
         "omitidas_existentes": omitidas,
         "extra_entrada": len(extra_regs),
         "duplicadas_por_fuente": fusionadas,
-        "rehacer_afectadas": len(rehacer),
+        "rehacer_afectadas": len(rehacer_extra),
+        "excluidas_por_clave": sum(excluidas_por_celda.values()),
+        "exclusion_celdas": len(excluidas_por_celda),
+        "exclusion_sin_resolver": exclusion_sin_resolver,
+        "rehacer_por_exclusion": len(rehacer_por_exclusion),
+        "exclusion_celdas_eliminadas": sum(
+            1 for c in rehacer_por_exclusion if c not in celdas),
     }
     lock = threading.Lock()
 
