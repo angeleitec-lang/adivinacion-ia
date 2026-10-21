@@ -17,6 +17,7 @@ contexto/foco, las cartas dibujadas y, en `calculos`, los datos deterministas.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -102,6 +103,139 @@ SYSTEM = (
     "prometes resultados ni garantías; cuando algo excede la lectura, derivas con cuidado "
     "a un profesional. Si la Referencia señala discrepancias entre tradiciones, las "
     "mencionas con honestidad en lugar de ocultarlas."
+)
+
+APERTURAS_VETADAS = (
+    "Claro, con gusto te acompaño en esta lectura",
+    "Claro, te acompaño en esta lectura",
+    "Querido consultante, gracias por compartir tu pregunta conmigo",
+    "Querido/a consultante, gracias por compartir tu pregunta conmigo",
+    "Querido consultante, gracias por compartir tu carta conmigo",
+    "Querido consultante, gracias por compartir tu carta natal conmigo",
+    "Qué hermosa carta tienes, y qué pregunta tan profunda",
+    "Qué hermosa carta y qué pregunta tan profunda",
+    "Qué hermosa consulta me traes hoy",
+    "Hola, gracias por compartir tu consulta",
+    "Hola, querido consultante",
+)
+
+CIERRES_VETADOS = (
+    "Estoy aquí para acompañarte",
+    "Estoy aquí para lo que necesites",
+    "Un abrazo cálido",
+    "¿Hay algo más que quieras explorar sobre esta lectura?",
+    "Con cariño y respeto, tu tarotista y astróloga",
+    "Con cariño y luz, tu tarotista y astróloga",
+    "Con cariño, tu tarotista",
+)
+
+MULETILLAS_VETADAS = (
+    "estoy aquí para acompañarte",
+    "es importante que",
+    "recuerda que esto es una tendencia",
+    "no es una sentencia",
+    "en el fondo",
+    "desde el corazón",
+    "vamos a mirar con calma",
+    "luz al final",
+    "como quien hojea",
+    "hilo dorado",
+    "respira hondo",
+    "el universo no te abandona",
+    "confía en el proceso",
+    "todo sucede por una razón",
+)
+
+ESTILOS = (
+    {
+        "nombre": "directo",
+        "apertura": "entra en la interpretación sin saludo ni fórmula de cortesía",
+        "desarrollo": "frases claras y concretas, con pocos rodeos",
+        "cierre": "termina con una idea útil, sin pregunta retórica ni firma",
+    },
+    {
+        "nombre": "narrativo",
+        "apertura": "abre con un pequeño relato sobre la situación que describe la tirada",
+        "desarrollo": "encadena las cartas como momentos de una historia",
+        "cierre": "cierra la historia con una imagen sobria, sin moraleja",
+    },
+    {
+        "nombre": "imagen_simbolica",
+        "apertura": "abre con una imagen simbólica propia de la carta o del naipe",
+        "desarrollo": "traduce cada símbolo a la vida cotidiana del consultante",
+        "cierre": "cierra con una imagen breve que resuma la lectura",
+    },
+    {
+        "nombre": "pregunta_abierta",
+        "apertura": "abre con una pregunta abierta que nazca de la tirada",
+        "desarrollo": "responde esa pregunta con lo que muestran las cartas",
+        "cierre": "cierra con una invitación a observar, sin interrogatorio final",
+    },
+    {
+        "nombre": "consejo_primero",
+        "apertura": "empieza por el consejo principal que se desprende de la tirada",
+        "desarrollo": "justifica ese consejo con las cartas y el contexto",
+        "cierre": "cierra con una condición práctica para llevarlo a cabo",
+    },
+    {
+        "nombre": "conversacional",
+        "apertura": "habla como en una conversación tranquila, sin fórmulas de recepción",
+        "desarrollo": "alterna observación e interpretación con un tono cercano",
+        "cierre": "cierra de forma natural, sin despedida protocolaria",
+    },
+    {
+        "nombre": "sobrio",
+        "apertura": "entra con una observación sobria y precisa sobre la tirada",
+        "desarrollo": "prioriza claridad y contención, sin adornos",
+        "cierre": "cierra con una síntesis breve y seca",
+    },
+    {
+        "nombre": "sensorial",
+        "apertura": "abre con una sensación concreta que evoque la carta",
+        "desarrollo": "usa detalles sensoriales sin caer en tópicos",
+        "cierre": "cierra con una sensación que deje poso, sin promesas",
+    },
+    {
+        "nombre": "contraste",
+        "apertura": "abre contrastando dos fuerzas que aparecen en la tirada",
+        "desarrollo": "muestra cómo se equilibran o chocan esas fuerzas",
+        "cierre": "cierra con el punto de equilibrio posible",
+    },
+    {
+        "nombre": "escena_cotidiana",
+        "apertura": "sitúa la lectura en una escena cotidiana reconocible",
+        "desarrollo": "interpreta las cartas desde esa escena, sin alegorías huecas",
+        "cierre": "cierra volviendo a la escena con una idea práctica",
+    },
+    {
+        "nombre": "carta_central",
+        "apertura": "abre por la carta que consideras central y explica por qué",
+        "desarrollo": "ordena el resto de la tirada alrededor de esa carta",
+        "cierre": "cierra con lo que esa carta central deja como tarea",
+    },
+    {
+        "nombre": "practico",
+        "apertura": "abre con lo que la persona puede hacer ya, según la tirada",
+        "desarrollo": "conecta cada carta con un paso concreto y realista",
+        "cierre": "cierra con el paso más pequeño y útil, sin garantías",
+    },
+)
+
+_ESTILOS_POR_NOMBRE = {e["nombre"]: e for e in ESTILOS}
+
+INSTRUCCION_ESTILO = (
+    "VETOS DE ESTILO (obligatorios en esta lectura):\n"
+    "- No empieces con ninguna de estas fórmulas: "
+    + "; ".join(f"«{a}»" for a in APERTURAS_VETADAS)
+    + ".\n- No cierres con ninguna de estas fórmulas ni con una firma: "
+    + "; ".join(f"«{c}»" for c in CIERRES_VETADOS)
+    + ".\n- No uses estas muletillas: "
+    + "; ".join(f"«{m}»" for m in MULETILLAS_VETADAS)
+    + ".\n- No atribuyas género al consultante si el prompt no lo indica; evita "
+    "«Querido/a» y usa fórmulas neutras.\n"
+    "- No dejes paréntesis vacíos ni copies la ficha técnica del prompt "
+    "(«Datos de nacimiento: ...», «Posiciones:», «Aspectos:»).\n"
+    "- No conviertas la lectura en una lista de viñetas si el esquema pide prosa."
 )
 
 INSTRUCCIONES = {
@@ -589,7 +723,79 @@ def _esquema_texto(tarea):
     return "\n".join(lineas)
 
 
-def construir_prompt(tarea, kb, calculos=None):
+def _indice_estilo(valor):
+    clave = "0" if valor is None else str(valor)
+    digest = hashlib.sha256(clave.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % len(ESTILOS)
+
+
+def estilo_para_job(job_id):
+    """Devuelve el estilo determinista que corresponde a un id de job."""
+    return ESTILOS[_indice_estilo(job_id)]
+
+
+def _resolver_estilo(estilo, semilla, tarea):
+    if estilo is None:
+        return None
+    if isinstance(estilo, dict):
+        nombre = estilo.get("nombre")
+        if nombre not in _ESTILOS_POR_NOMBRE:
+            raise ValueError(f"Estilo no válido: {nombre!r}")
+        return _ESTILOS_POR_NOMBRE[nombre]
+    nombre = str(estilo).strip().lower()
+    if nombre in ("", "base", "none"):
+        return None
+    if nombre in ("auto", "variedad"):
+        if semilla is None:
+            return estilo_para_job(tarea.get("id"))
+        if isinstance(semilla, int):
+            return ESTILOS[semilla % len(ESTILOS)]
+        return estilo_para_job(semilla)
+    if nombre not in _ESTILOS_POR_NOMBRE:
+        raise ValueError(f"Estilo no válido: {estilo!r}")
+    return _ESTILOS_POR_NOMBRE[nombre]
+
+
+def _bloque_estilo(estilo):
+    return (
+        "ESTILO DE ESTA LECTURA (no cambia el esquema, la Referencia ni los datos):\n"
+        f"- Apertura: {estilo['apertura']}.\n"
+        f"- Desarrollo: {estilo['desarrollo']}.\n"
+        f"- Cierre: {estilo['cierre']}.\n\n"
+        + INSTRUCCION_ESTILO
+    )
+
+
+def puntuar_estilo(respuesta, bloque=None):
+    """Puntúa fórmulas de estilo sin rechazar la lectura."""
+    texto = "" if respuesta is None else str(respuesta)
+    n = _norm(texto)
+    inicio = n[:400].lstrip(" #*-_\t\n")
+    final = n[-350:]
+    aperturas = [frase for frase in APERTURAS_VETADAS
+                 if inicio.startswith(_norm(frase))]
+    cierres = [frase for frase in CIERRES_VETADOS
+               if _norm(frase) in final]
+    muletillas = [frase for frase in MULETILLAS_VETADAS
+                  if _norm(frase) in n]
+    motivos = []
+    if aperturas:
+        motivos.append("apertura_vetada:" + aperturas[0])
+    if cierres:
+        motivos.append("cierre_vetado:" + cierres[0])
+    motivos.extend("muletilla:" + m for m in muletillas)
+    puntos = 3 * len(aperturas) + 2 * len(cierres) + len(muletillas)
+    return {
+        "puntos": puntos,
+        "motivos": motivos,
+        "apertura_vetada": bool(aperturas),
+        "cierre_vetado": bool(cierres),
+        "muletillas": muletillas,
+        "bloque": bloque,
+    }
+
+
+def construir_prompt(tarea, kb, calculos=None, estilo=None, semilla=None):
     """Devuelve {"system", "user"} con estilo, Referencia de la KB y datos calculados."""
     calc = calculos if calculos is not None else (tarea.get("calculos") or {})
     f = tarea.get("familia", "")
@@ -597,7 +803,10 @@ def construir_prompt(tarea, kb, calculos=None):
     esquema = _esquema_texto(tarea)
     referencia = _referencia(tarea, kb, calc)
     instruccion = INSTRUCCIONES.get(f, "Interpreta la consulta con las técnicas indicadas.")
-    user = "\n\n".join(p for p in (cuerpo, esquema, referencia, instruccion) if p)
+    elegido = _resolver_estilo(estilo, semilla, tarea)
+    bloque_estilo = _bloque_estilo(elegido) if elegido else ""
+    user = "\n\n".join(
+        p for p in (cuerpo, esquema, referencia, instruccion, bloque_estilo) if p)
     return {"system": SYSTEM, "user": user}
 
 
