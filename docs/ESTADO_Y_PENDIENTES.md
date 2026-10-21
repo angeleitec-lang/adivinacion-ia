@@ -327,3 +327,130 @@ agotado; hacen falta fuentes nuevas (T74).
   el riesgo de cerrar la fase 0 con la cobertura actual es alto.
 - Presupuesto: Mercury es gratuito por ahora, pero no hay que asumir que lo sea
   siempre; medir consumo antes de tandas grandes.
+
+## 8h. Actualización 2026-10-21 (T104): cierre de la fase 0 y arranque de la fase 1
+
+Desde T77 han entrado en `main` 23 merges (T78–T101d): exclusiones del consenso
+(T78), fuentes ronda 3 (T79), tareas de baraja (T80), auditoría ronda 5 y sus
+arreglos (T81/T91), cobertura v3 (T82), piloto Mercury (T83), inventario legal
+(T84), cierre de la recopilación (T85/T90), fuentes ronda 4 (T86), clave completa
+del consenso (T87), filtro de atribución (T88), baraja en el ejecutor (T89),
+pasada rápida parcial (T94), documento de generación y formato ShareGPT (T95),
+auditoría ronda 6 y sus arreglos (T96/T101/T101b/T101c/T101d), línea base de modelos
+(T99) y muestra de revisión v2 (T93). Detalle de cada módulo en `docs/PIPELINE.md`
+(revisado hoy) y en los documentos `docs/CIERRE_RECOPILACION.md`,
+`docs/COBERTURA_V3.md`, `docs/ATRIBUCION_ENTIDADES.md`,
+`docs/INVENTARIO_LEGAL.md`, `docs/PILOTO_MERCURY.md`, `docs/GENERACION_FASE1.md`,
+`docs/LINEA_BASE_MODELOS.md`, `docs/REVISION_3PC.md` y `docs/AUDITORIA_RONDA5.md`
+/`RONDA6.md`.
+
+### Cierre de la fase 0 (recopilación)
+
+- Orquestador `cierre_recopilacion.py` (T85/T90): 7 pasos con copias previas
+  (`pre-cierre-ts`, `pre-filtro-atrib-ts`, `pre-exclusion-ts`) y log en
+  `fase0/cierre/cierre_log.jsonl`.
+- Consenso **cerrado**: 3.688 celdas. `kb_v2` ya tiene las cuatro familias
+  (existe `kb_v2/tarot.json`): 1.719 celdas nuevas frente a v1, 203 afirmaciones
+  que contradicen a v1, sin respaldo en v1: 1 de tarot, 22 de astrología, 0 de
+  numerología y baraja. Cobertura del núcleo: tarot 88,7 %, astrología 31,6 %,
+  baraja 33,5 %, numerología 32,3 %.
+- Cobertura v3 (pasada real 2026-10-21): 7.455 celdas, **304 completas (4,1 %)**:
+  tarot 172/936 (18,4 %), baraja 36/480 (7,5 %), astrología 85/5247 (1,6 %),
+  numerología 11/792 (1,4 %). La v2 marcaba 259. Base: 19.481 evidencias web
+  limpias + 14.223 de libros.
+- Filtro de atribución (T88): 2.188 evidencias retiradas (1.365 web, 823 libros),
+  1.372 claves propuestas para el consenso; revisión manual 20+20 con 0 falsos
+  positivos. **No aplicado todavía a producción**: el paso 3 del cierre espera
+  decisión humana. Antes/después del filtro, celdas completas: astrología 86→75,
+  numerología 11→6, total 308→292.
+- Inventario legal (T84): 204 fuentes (38 libres, 112 a consultar, 54 de riesgo
+  alto). Simulación de excluir el riesgo alto: 310→297 celdas completas
+  (pierden astrología y numerología; tarot y baraja no pierden ninguna).
+- Pasada rápida de afirmaciones (T94, Mercury): **parada de seguridad el
+  2026-10-21 17:35** al 2.214/10.512 evidencias por >20 % de errores al coincidir
+  con el arranque de T100 en el mismo backend. Aceptó 17.681 afirmaciones y gastó
+  3.935.034 tokens. Reanudable con `--workers 1` al terminar T100; sus extras no
+  entran en el consenso hasta fusionarlos con `--extra-afirmaciones` y
+  `--rehacer-celdas-con-extra`.
+- Muestra de revisión del 3 % (T93): nueva en `fase0/muestras_v2/revisor.html`
+  con 6.982 fichas (web 754, libros 447, afirmaciones 5.645, lecturas 16,
+  consenso 120), 659 (9,4 %) prerevisadas. **La revisión humana no ha
+  empezado**: 6–10 h en total; ~40 min si solo se validan las marcadas.
+
+### Fase 1: primera pasada real de generación
+
+- Piloto Mercury (T83): 42/45 tareas ok (93 % con reintento); latencia media
+  4,1 s frente a 169,9 s del nodo local (~40×); coste estimado de la pasada
+  completa ~6,7 USD a precios de lanzamiento.
+- Pasada completa **en curso (T100)**: 11.936 tareas (12.536 pendientes tras
+  regenerar `jobs.db` en T95 con `--replace-pending`, D6 verificado: 0 sin
+  tildes; menos 600 de `sinastria` excluidas porque el 65 % salió truncada en la
+  muestra de 300). PID 78477, backend Mercury, 3 workers, formato ShareGPT,
+  arranque 17:47. Instantánea al redactar este documento: 5.490 aceptadas / 71
+  rechazadas en `fase0/fase1_mercury/`, ~53 lecturas/min, ETA ~3,7 h. La clave
+  `INCEPTION_API_KEY` solo viaja por entorno; parada de seguridad rc=3 si el
+  ratio de errores supera el 20 % en la ventana. Opt-out de entrenamiento de
+  Inception desactivado (confirmado por el usuario).
+- Reverificación (T101): `reverificar_fase1.py` aplica el verificador corregido
+  de la ronda 6 a las aceptadas; `fase0/fase1_reverif/` provisional: 5.340 ok / 1
+  rechazada (misma instantánea, crece con la pasada).
+- Línea base sin entrenar (T99): Flash Next en nodo2 179/240 (74,6 %; ≈86,3 %
+  ajustados los 28 rechazos que eran artefactos del verificador). Umbrales
+  propuestos para el entrenado por familia en `docs/LINEA_BASE_MODELOS.md`.
+  Peores familias: tránsitos (1/20), numerología (9/20), carta natal (10/20).
+
+### Calidad: auditorías ronda 5 y 6
+
+- Ronda 5 (T81→T91): consenso agrupado mal por `source_id`, payloads malformados
+  que abortaban el ejecutor, líneas corruptas en recuperación, `kb_v2` pasa a
+  last-wins, `merge_final` atómico, prompts con la etiqueta de año personal,
+  sinónimos de baraja.
+- Ronda 6 (T96→T101): `--replace-pending` duplicaba hechos, fuga de casos de
+  evaluación a entrenamiento, cartas inventadas y orientación por carta en las
+  tiradas largas, números en frase natural, promesas vedadas por perífrasis,
+  dedupe que conservaba el peor. **t101d integrado al redactar este documento**
+  (merge `97c2e55`, commit `59f9985`): el detector de cartas inventadas ahora se
+  ejecuta también en `cruz_celta`, `lectura_completa` y `astro_natal` cuando no
+  se reconstruye la tirada; rechaza el 100 % de los 7.424 casos inventados de
+  prueba sin tocar ninguna lectura original.
+
+### Procesos vivos (cuidado)
+
+- Ejecutor T100 PID 78477 (Mercury; no usa nodo1). No lanzar otra pasada al mismo
+  backend hasta que termine.
+- T94 parado, relanzable. Generadores viejos 66101/66396 suspendidos y **no se
+  reanudan**. Nodo1 reservado (comprobar antes de lanzar nada).
+
+### Pistas en worktree sin merge
+
+- **t92** clásicos de astrología/tarot PD a `libros_clasicos_pd2/` (sin fusionar).
+- **t97** recopilación nocturna (descubrir+descargar+evidencias hacia huecos v3).
+- **t100** pasada de generación fase 1 (en curso).
+- **t103** `armar_dataset_v1.py` (no existe aún): copia → reverificar → fuga a
+  evaluación → ShareGPT → `validate_synthetic` → `merge_final` →
+  `preparar_entrenamiento`, salida en `fase0/dataset_fase1_v1/`.
+- **t104** esta pista: documentación.
+
+### Decisiones abiertas (actualiza §8g)
+
+1. Revisión humana del 3 % sobre las 6.982 fichas nuevas de `muestras_v2/`.
+2. Aplicar o no el filtro de atribución a producción (paso 3 del cierre).
+3. Hito de cobertura: para el 10 % faltan ~12 fuentes de baraja, ~440 de
+   astrología y ~69 de numerología (recuperación dirigida); tarot ya supera el
+   listón. Asumir completo solo en tarot.
+4. Subir el piso de `sinastria` de 4096 a 6144 tokens y relanzar sus 600 tareas.
+5. Libros no españoles (55 % de la muestra) y compra de libros de baraja (Salas).
+6. Backend (FastAPI) y frontend de la app: sigue sin código.
+
+### Riesgos (actualiza §8g)
+
+- Dos pasadas simultáneas al mismo backend Mercury provocan la parada de
+  seguridad (ya pasó con T94/T100): un solo inquilino.
+- `fase1_mercury/` y `fase1_reverif/` crecen mientras T100 corre: las cifras de
+  este documento son una instantánea.
+- La reverificación de la pasada T100 debe rehacerse con `reverificar_fase1.py`
+  tras el detector corregido de t101d antes de armar el dataset v1; `id 11881`
+  queda como único rechazo discutible.
+- Cuota Mercury 100 M de tokens gratis: T69 gastó ~28 M, T94 ~3,9 M y T100
+  consumirá ~26 M entre entrada y salida; si se agota, la pasada completa cuesta
+  ~6,7 USD.

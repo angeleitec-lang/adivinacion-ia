@@ -1,9 +1,9 @@
 # Plan de trabajo de las IAs: 20 horas más (desde 2026-10-20 ~21:15)
 
-Revisado el 2026-10-21 (T77) con el estado real de `main` y de los procesos
-vivos. Lo que sigue marcado como **hecho** ya está integrado y con `check.sh` =
-CHECK OK; lo **en curso** vive en worktrees sin merge; la **cola** es lo que
-queda por asignar.
+Revisado el 2026-10-21 (T104) con el estado real de `main` y de los procesos
+vivos (la revisión anterior era la de T77). Lo que sigue marcado como **hecho**
+ya está integrado y con `check.sh` = CHECK OK; lo **en curso** vive en worktrees
+sin merge; la **cola** es lo que queda por asignar.
 
 ## Restricción que manda
 
@@ -38,46 +38,67 @@ interrumpir a las que trabajan. Nodo1 admite concurrencia; nodo2 va más justo.
 - **T73** consenso rápido: dedup por fuente (nunca por extractor) y campo
   `extractores`; `--extra-afirmaciones` y `--rehacer-celdas-con-extra`.
 - Cerradas además T38, T41, T45, T46, T47, T48, T49, T50 y T51.
+- **T78** exclusiones de celdas en el consenso (`--excluir-claves`). **T79** y
+  **T86** rondas 3 y 4 de fuentes (`descubrir_fuentes.py`, `web_recup4/5/`).
+  **T80** tareas de baraja en `generate_tasks`.
+- **T81/T91** auditoría ronda 5 y arreglos. **T96/T101/T101b/T101c/T101d** ronda 6 y
+  arreglos (`reverificar_fase1.py`).
+- **T82** `cobertura_v3.py`: 304 celdas completas de 7.455 (`docs/COBERTURA_V3.md`).
+- **T83** piloto Mercury: 42/45 ok, ~40× más rápido que el nodo local.
+- **T84** `inventario_legal.py`: 204 fuentes, 54 de riesgo alto.
+- **T85/T90** `cierre_recopilacion.py`: consenso cerrado en 3.688 celdas,
+  `kb_v2/tarot.json` construido, limpieza de libros aplicada en `libros_limpio/`.
+- **T87** clave completa del consenso (hash+entidad+faceta). **T88**
+  `filtro_atribucion.py`: 2.188 retiradas propuestas, 0 falsos positivos; sin
+  aplicar a producción (decisión humana).
+- **T89** baraja en el ejecutor. **T93** `muestras_v2`: 6.982 fichas, 659
+  prerevisadas. **T95** documento de generación y `--formato sharegpt`.
+- **T99** `linea_base.py`: Flash Next 179/240 (≈86,3 % ajustado).
 
 ## En ejecución (máquina, 2026-10-21)
 
-- Consenso de la KB: dos procesos `consenso_kb.py` (PID 3552 y 96681) escriben a
-  la vez en `fase0/consenso_kb/`. **Riesgo de carrera**: dejar uno y conservar
-  `consenso.jsonl.bak-0858`.
-- Pasada rápida de afirmaciones (T69, PID 81434): ~6.225 de 14.188 evidencias,
-  59,3 evidencias/min, ETA ~134 min; log `afirmaciones_rapido/pasada.log`.
-- Recuperación 3 (T74, PID 14273): 200 páginas a `web_recup3/`, sin LLM.
-- Piloto de tiradas largas (T72, PID 6474): 12 lecturas en
-  `fase0/piloto_fase1_v2/prueba.jsonl`.
+- **T100 pasada completa de fase 1** (en curso): PID 78477, 11.936 tareas con
+  Mercury, 3 workers, ShareGPT; instantánea al revisar este plan: 5.490
+  aceptadas / 71 rechazadas en `fase0/fase1_mercury/`, ~53 lecturas/min,
+  ETA ~3,7 h desde las 17:47. Parada de seguridad rc=3 si hay >20 % de errores.
+- **T94 pasada rápida**: parada de seguridad 2026-10-21 17:35 al 2.214/10.512
+  evidencias (choque con T100 en el mismo backend). Relanzar con `--workers 1`
+  al terminar T100.
 - Los generadores viejos PID 66101/66396 siguen suspendidos y **no se reanudan**
-  (prompts sin tildes).
+  (prompts sin tildes). Nodo1 reservado: comprobar antes de lanzar nada.
 
 ## En curso como pistas (sin merge)
 
-- **T69** pasada rápida con Mercury (`afirmaciones_rapido.py`, solo en su
-  worktree).
-- **T71** limpieza de libros en copia `libros_limpio/`, con
-  `docs/LIMPIEZA_LIBROS.md` y `claves_excluir_consenso.jsonl`; no toca evidencias
-  reales.
-- **T72** prompts de tiradas largas (cruz celta y lectura completa) y familia de
-  baraja española; `docs/FASE1_TIRADAS_LARGAS.md`.
-- **T74** fuentes nuevas de baraja y numerología y rutas de biddytarot y
-  labyrinthos; `descubrir_fuentes.py`, `fuentes_nuevas_t74.md` y tanda real de
-  200 páginas.
-- **T75** alinear la fase 1 con D1/D2/D3/D7 del ensayo: `--formato sharegpt` en
-  el ejecutor, exención de `etica` en `merge_final`, grounding del validador y
-  repetición del ensayo.
-- **T76** consenso Mercury frente a nodos en 40 celdas, con acuerdo ≥ 85 %.
+- **t92** clásicos de astrología/tarot de dominio público a
+  `libros_clasicos_pd2/` (descarga, sin fusionar).
+- **t97** recopilación nocturna: descubrir + descargar + evidencias hacia los
+  huecos de cobertura v3 (nodo2, ≤2 workers).
+- **t100** pasada de generación de fase 1 (en ejecución, ver arriba).
+- **t103** `armar_dataset_v1.py` (no existe aún): cadena copia → reverificar →
+  fuga a evaluación → ShareGPT → validar → `merge_final` → `preparar`, salida en
+  `fase0/dataset_fase1_v1/`.
+- **t104** documentación al día (esta pista).
 
 ## Cola de pistas
 
-1. **T77** (esta pista): documentación al día; no consume LLM.
-2. Fusionar o descartar `web_recup3/` cuando termine T74 y recalcular cobertura.
-3. Dejar un único proceso de consenso y construir `kb_v2/tarot.json`.
-4. Repetir el ensayo extremo tras T75 y comprobar que los desajustes bajan.
-5. Entrenamiento de humo sobre un dataset diminuto, solo con los nodos libres y
+1. Dejar terminar **T100**, reverificar la totalidad con
+   `reverificar_fase1.py` (detector de t101d ya integrado, merge `97c2e55`) y
+   validar solo las aceptadas (`validate_synthetic --min-chars 400`); después
+   **t103** arma el dataset v1.
+2. Relanzar **T94** con `--workers 1` cuando T100 suelte el backend; sus
+   afirmaciones extras se fusionan en el consenso con `--extra-afirmaciones` y
+   `--rehacer-celdas-con-extra` solo en las celdas que ganan fuentes.
+3. Decisión humana del paso 3 del cierre: aplicar `filtro_atribucion.py` a
+   producción (`--paso 3` + paso 4 con `--excluir-claves`).
+4. Revisión humana del 3 % sobre `muestras_v2/` (6.982 fichas; ~40 min si solo
+   se validan las 659 prerevisadas, 6–10 h la muestra completa).
+5. **t92** y **t97**: terminar y fusionar clásicos y `web_recup4/5/` cuando
+   haya hueco de nodo; recalcular cobertura con `cobertura_v3.py`.
+6. Decidir piso de `sinastria` (4096→6144), validar con muestra y relanzar sus
+   600 tareas excluidas.
+7. Esqueleto del backend (FastAPI) y del frontend, cuando el usuario lo decida.
+8. Entrenamiento de humo sobre el dataset v1, solo con los nodos libres y
    decisión expresa del usuario.
-6. Esqueleto del backend (FastAPI) y del frontend, cuando el usuario lo decida.
 
 DeepSeek (pestaña 6) solo 10:00–24:00; Qwen (pestaña 7) solo si las demás están
 ocupadas. Pestañas 8 y 9: del usuario.
@@ -93,18 +114,23 @@ ocupadas. Pestañas 8 y 9: del usuario.
   línea base, pero las pasadas de afirmaciones y el consenso no han cerrado y la
   generación completa sigue esperando la revisión humana y la decisión del hito
   de cobertura.
+- **Recuento T104:** las 20 h están consumidas. La fase 0 ha cerrado (consenso
+  3.688 celdas, `kb_v2` completo, cobertura v3 con 304 celdas), la primera pasada
+  real de fase 1 está en curso (T100) y quedan la revisión humana del 3 %, el
+  filtro de atribución en producción y el ensamblado del dataset v1 (t103).
 
 ## Decisiones pendientes del usuario
 
-1. Revisión del 3 % (2.712 fichas): usar `revisor.html` de T54 y
-   `prerevision.md`, o reducir el alcance.
+1. Revisión del 3 % (ahora 6.982 fichas en `muestras_v2/`, T93): usar
+   `revisor.html` y la prerevisión (659 marcadas), o reducir el alcance.
 2. Tratamiento de libros no españoles (55,7 % de la muestra).
 3. Redefinir el hito de cobertura (completa solo en tarot; mínimos menores en el
    resto).
 4. Compra de libros, prioridad baraja española (Salas), con presupuesto limitado.
 5. Respuesta de Hugging Face (`Pepere45/spanish-esotericism-corpus`).
 6. Esqueleto del backend y del frontend de la app.
-7. Generación completa de fase 1: con qué modelo y en qué nodo.
+7. Generación de fase 1: decidida con Mercury (T100 en curso). Falta relanzar
+   las 600 `sinastria` excluidas (decidir piso 4096→6144) y la pasada rápida T94.
 
 ## Decisión del usuario (2026-10-20 22:45): terminar primero la recopilación de datos
 
@@ -117,3 +143,6 @@ relanzó con `--workers 8 --orden calidad --min-calidad 4 --timeout 180` (log
 se asignan si son de recopilación; el resto, código sin LLM o esperar. El piloto
 de fase 1 (T49) midió ~64 s por lectura: 10.000 lecturas serían ~59 h con 3
 workers.
+
+**Cumplida (T104):** la recopilación cerró en T85/T90 (consenso 3.688 celdas y
+`kb_v2` completo) y la generación arrancó con Mercury (T100) el 2026-10-21.
