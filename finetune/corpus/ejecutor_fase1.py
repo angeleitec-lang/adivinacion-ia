@@ -22,8 +22,11 @@ escritura; `--dry-run` solo cuenta y estima horas; nunca escribe en
 
 max_tokens: el piloto (T49) usó 2048 y truncó las tiradas largas (cruz_celta
 y lectura_completa al 0% de aprobación por respuestas cortadas). Este ejecutor
-usa `max_tokens = max(job.max_tokens, --max-tokens-piso)`, con piso recomendado
-4096 para todas las familias y 6144 para cruz_celta y lectura_completa.
+usa `max_tokens = max(job.max_tokens, --max-tokens-piso, tabla)`: el piso global
+(--max-tokens-piso, 4096) se combina con el suelo por bloque de la tabla única
+`fase1_prompts.RECOMENDACION_MAX_TOKENS` (T89: cruz_celta y lectura_completa
+6144, espanola_7 5120, espanola_5 4096, espanola_3 2560, etc.). Ninguna fila
+queda por debajo del piso y ninguna tirada larga se queda corta.
 
 Latencia de referencia: 169,9 s/lectura (piloto T49, incluye reintentos, con
 los nodos 10.0.0.3/10.0.0.4 saturados). La estimación del `--dry-run` usa ese
@@ -74,7 +77,6 @@ from llm_client import LLMClient  # noqa: E402
 
 LATENCIA_PILOTO_S = 169.9
 PISO_MAX_TOKENS = 4096
-PISOS_PESADOS = {"cruz_celta": 6144, "lectura_completa": 6144}
 MOTIVO_TRUNCADO = (
     "respuesta_truncada: la lectura quedó cortada antes de cerrar; entrégala "
     "completa y terminada en puntuación."
@@ -115,7 +117,18 @@ def cargar_kb():
         "tarot": gt.load_kb("tarot.json"),
         "astrologia": gt.load_kb("astrologia.json"),
         "numerologia": gt.load_kb("numerologia.json"),
+        "baraja": gt.load_kb("baraja_espanola.json"),
     }
+
+
+def universo_baraja(kb):
+    """Universo de la baraja española (40 naipes con sinónimos más los nombres del
+    tarot como control de cartas ajenas); se cachea en la propia KB."""
+    cache = kb.get("_universo_baraja")
+    if cache is None:
+        cache = fp.universo_baraja(kb["baraja"], kb["tarot"])
+        kb["_universo_baraja"] = cache
+    return cache
 
 
 def tarea_desde_job(bloque, payload, pregunta, kb):
@@ -128,6 +141,18 @@ def tarea_desde_job(bloque, payload, pregunta, kb):
         tarea["cartas"] = [dict(c) for c in (cartas or [])]
         tarea["contexto"] = payload.get("contexto", "")
         tarea["universo_cartas"] = universo_tarot(kb)
+        posiciones = list(payload.get("posiciones") or [])
+        if posiciones:
+            tarea["posiciones"] = posiciones
+        tarea["calculos"] = {}
+    elif bloque in fp.FAMILIAS_ESPAÑOLA:
+        tarea["cartas"] = [dict(c) for c in payload.get("cartas", [])]
+        tarea["mazo"] = payload.get("mazo", "espanol")
+        tarea["contexto"] = payload.get("contexto", "")
+        posiciones = list(payload.get("posiciones") or [])
+        if posiciones:
+            tarea["posiciones"] = posiciones
+        tarea["universo_cartas"] = universo_baraja(kb)
         tarea["calculos"] = {}
     elif bloque == "astro_natal":
         tarea["ciudad"] = payload.get("ciudad", "")
@@ -246,8 +271,8 @@ def liberar_vuelo(con, worker):
 # --------------------------------------------------------------------------- #
 def max_tokens_efectivo(fila, piso):
     bloque = fila.get("bloque", "")
-    piso_bloque = PISOS_PESADOS.get(bloque)
-    efectivo = int(piso) if piso_bloque is None else max(int(piso), int(piso_bloque))
+    rec = fp.RECOMENDACION_MAX_TOKENS.get(bloque)
+    efectivo = int(piso) if rec is None else max(int(piso), int(rec))
     return max(int(fila.get("max_tokens") or 1024), efectivo)
 
 
@@ -485,9 +510,12 @@ def estimar_dry_run(db_path, workers=4, latencia_s=LATENCIA_PILOTO_S):
     con.close()
     n = conteos.get("pending", 0)
     horas = n * latencia_s / 3600.0 / max(1, workers)
+    horas_por_bloque = {}
     print(f"Pendientes: {n} (por estado: {conteos})")
     for bloque, c in bloques:
-        print(f"  - {bloque}: {c}")
+        h = c * latencia_s / 3600.0 / max(1, workers)
+        horas_por_bloque[bloque] = h
+        print(f"  - {bloque}: {c} lecturas (~{h:.1f} h con {workers} workers)")
     print(
         f"Estimación: {n} lecturas x {latencia_s} s/lectura / {workers} workers "
         f"= {horas:.1f} h ({horas / 24:.1f} días)."
@@ -503,6 +531,7 @@ def estimar_dry_run(db_path, workers=4, latencia_s=LATENCIA_PILOTO_S):
         "workers": workers,
         "latencia_s": latencia_s,
         "horas_estimadas": horas,
+        "horas_por_bloque": horas_por_bloque,
     }
 
 
@@ -566,22 +595,103 @@ def _sim_ejes(usuario):
     return list(vistos.values())
 
 
+_SIM_ESQUEMA_RE = re.compile(
+    r"(?m)^#{1,6}[ \t]*(\d+)[.)][ \t]+(.+?)[ \t]+—[ \t]+(.+?)[ \t]*\((al derecho|invertida)\)[ \t]*$"
+)
+
+
+def _sim_esquema_cabeceras(usuario):
+    """Cabeceras del esquema obligatorio del prompt: [(n, posición, carta, invertida)]."""
+    cabeceras = []
+    for m in _SIM_ESQUEMA_RE.finditer(usuario or ""):
+        cabeceras.append(
+            (int(m.group(1)), m.group(2).strip(), m.group(3).strip(), m.group(4) == "invertida")
+        )
+    return cabeceras
+
+
+def _sim_frase_carta(nombre, inv):
+    if inv:
+        return f"La carta {nombre} aparece invertida y pide mirar ese bloqueo con calma"
+    return f"La carta {nombre} sale al derecho y acompaña tu momento con claridad"
+
+
+_SIM_SINTESIS_CIERRE = "Esta lectura orienta, no sentencia: cuídate y decide con calma."
+
+
+def _sim_posicion(nombre, inv):
+    frase = _sim_frase_carta(nombre, inv)
+    if inv:
+        return (
+            f"En esta posición, {frase}; no fuerces la salida, dale su tiempo a lo que "
+            "trae y observa qué es lo que bloquea el paso."
+        )
+    return (
+        f"En esta posición, {frase}; apóyate en lo que trae y dale forma a tu decisión "
+        "con calma, sin adelantarte a los tiempos de los demás."
+    )
+
+
+def _sim_sintesis():
+    return (
+        "Sumadas, las cartas dibujadas forman un cuadro que puedes manejar con calma: "
+        "quédate con lo que más te hable hoy y da el paso pequeño que te pida. "
+        + _SIM_SINTESIS_CIERRE
+    )
+
+
+def _sim_tirada_esquema(cabeceras):
+    """Lectura con las cabeceras `## n. posición — carta (orientación)` del esquema."""
+    partes = [
+        f"## {num}. {pos} — {nombre} ({'invertida' if inv else 'al derecho'})\n\n"
+        + _sim_posicion(nombre, inv)
+        for num, pos, nombre, inv in cabeceras
+    ]
+    partes.append("## Síntesis\n\n" + _sim_sintesis())
+    return "\n\n".join(partes)
+
+
+def _sim_lectura_completa(usuario):
+    """Lectura de cuatro secciones: Carta natal / Tirada / Numerología / Síntesis."""
+    ejes = _sim_ejes(usuario)
+    cielo = (
+        "En el cielo consultado, " + ", ".join(ejes) + " dan el marco de la lectura. "
+        if ejes else ""
+    )
+    secciones = [
+        "## Carta natal\n\n" + cielo +
+        "Es el fondo estable sobre el que caen las cartas: tómalo como contexto, "
+        "no como destino.",
+    ]
+    cartas = _sim_cartas(usuario)
+    if cartas:
+        tirada = "; ".join(_sim_frase_carta(nombre, inv) for nombre, inv in cartas) + "."
+    else:
+        tirada = "Las cartas acompañan tu momento con claridad y piden calma."
+    secciones.append("## Tirada de tres cartas\n\n" + tirada)
+    numeros = _sim_numeros(usuario)
+    if numeros:
+        num_txt = " ".join(
+            f"En lo numérico, el {frase} marca el ritmo de esta etapa." for frase in numeros
+        )
+    else:
+        num_txt = "En lo numérico, el ritmo de esta etapa se lee con calma."
+    secciones.append("## Numerología\n\n" + num_txt)
+    secciones.append("## Síntesis\n\n" + _sim_sintesis())
+    return "\n\n".join(secciones)
+
+
 def simulacion_fase1(sistema, usuario):
+    if "cuatro secciones" in (usuario or ""):
+        return _sim_lectura_completa(usuario)
+    if "ESQUEMA OBLIGATORIO" in (usuario or ""):
+        cabeceras = _sim_esquema_cabeceras(usuario)
+        if cabeceras:
+            return _sim_tirada_esquema(cabeceras)
     cartas = _sim_cartas(usuario)
     frases = []
     if cartas:
-        partes = []
-        for nombre, inv in cartas:
-            if inv:
-                partes.append(
-                    f"La carta {nombre} aparece invertida y pide mirar ese "
-                    "bloqueo con calma"
-                )
-            else:
-                partes.append(
-                    f"La carta {nombre} sale al derecho y acompaña tu momento "
-                    "con claridad"
-                )
+        partes = [_sim_frase_carta(nombre, inv) for nombre, inv in cartas]
         frases.append("; ".join(partes) + ".")
     ejes = _sim_ejes(usuario)
     if ejes:
@@ -594,7 +704,7 @@ def simulacion_fase1(sistema, usuario):
         frases.append(
             "Te escucho con atención y acompaño tu consulta con honestidad."
         )
-    frases.append("Esta lectura orienta, no sentencia: cuídate y decide con calma.")
+    frases.append(_SIM_SINTESIS_CIERRE)
     return " ".join(frases)
 
 
@@ -613,8 +723,9 @@ def main(argv=None):
     ap.add_argument("--timeout", type=float, default=300.0,
                     help="timeout por petición al nodo (s)")
     ap.add_argument("--max-tokens-piso", type=int, default=PISO_MAX_TOKENS,
-                    help="piso de max_tokens (6144 recomendado para cruz_celta/"
-                         "lectura_completa, ya aplicado por defecto)")
+                    help="piso global de max_tokens; el suelo por bloque sale de la "
+                         "tabla fase1_prompts.RECOMENDACION_MAX_TOKENS (cruz_celta/"
+                         "lectura_completa 6144, espanola_7 5120, etc.)")
     ap.add_argument("--temperature", type=float, default=0.2)
     ap.add_argument("--limite", type=int, default=0,
                     help="máximo de tareas a procesar en esta pasada (0 = sin límite)")
