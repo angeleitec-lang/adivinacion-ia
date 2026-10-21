@@ -26,6 +26,7 @@ import juez
 import libros_limpiar
 import libros_pipeline
 import libros_segmentar
+import llm_client
 
 WORK_DIR_REAL = "/Users/angelgonzalez/fase0/libros"
 WORK_DIR_CLASICOS = "/Users/angelgonzalez/fase0/libros_clasicos_pd"
@@ -35,6 +36,8 @@ UMBRAL_LLAMADAS = 600
 PASO_LLAMADAS = 300
 TIMEOUT_CLASICO = 90.0
 MIN_CRUDO_BYTES = 1024
+# Reservado por el usuario: el juez del LLM nunca debe apuntar a nodo1.
+NODO1_RESERVADO = "10.0.0.3"
 
 
 class LibroAusenteError(Exception):
@@ -83,6 +86,11 @@ CLASICOS = (
     {"id": "sepharial_horoscope_1920",
      "titulo": "Astrology: How to Make and Read Your Own Horoscope",
      "autor": "Sepharial", "anio": 1920, "idioma": "en",
+     "familia": "astrologia"},
+    # Añadido en T92: disponible en Gutenberg durante el apagón de archive.org.
+    {"id": "tetrabiblos_ashmand_1900",
+     "titulo": "Ptolemy's Tetrabiblos (trad. Ashmand)",
+     "autor": "Ptolomeo (trad. J. M. Ashmand)", "anio": 1900, "idioma": "en",
      "familia": "astrologia"},
 )
 
@@ -264,6 +272,27 @@ def purgar_errores_juez(work_dir):
     return errores
 
 
+def construir_cliente_endpoints(endpoints_csv, timeout=TIMEOUT_CLASICO):
+    """Cliente del juez fijado a los endpoints indicados, con reintentos acotados.
+
+    Aplica el ajuste del usuario: permite forzar el juez a un solo nodo (p. ej.
+    ``http://10.0.0.4:8000/v1``) sin tocar ``libros_pipeline``. Como
+    ``_cliente_juez`` devuelve el cliente explícito tal cual, se envuelve aquí
+    en ``_ClienteAcotado`` para conservar los reintentos bajos. Rechaza el
+    nodo1 reservado (10.0.0.3) para no usarlo por descuido.
+    """
+    endpoints = [e.strip() for e in (endpoints_csv or "").split(",") if e.strip()]
+    if not endpoints:
+        raise ValueError("--endpoints vacío")
+    for url in endpoints:
+        if NODO1_RESERVADO in url:
+            raise ValueError(
+                "nodo1 (%s) está reservado por el usuario; el juez no puede "
+                "usarlo: %r" % (NODO1_RESERVADO, url))
+    base = llm_client.LLMClient(endpoints=endpoints, timeout=timeout)
+    return libros_pipeline._ClienteAcotado(base)
+
+
 def procesar_libro(libro, work_dir, hasta="juez", max_llamadas=0, workers=1,
                   timeout=TIMEOUT_CLASICO, simulado=False, cliente=None):
     """Corre limpieza, segmentación y juez para un libro; devuelve el resumen."""
@@ -382,6 +411,10 @@ def main(argv=None):
                        help="hilos de llamada al LLM (nodos saturados: 1)")
     parser.add_argument("--timeout", type=float, default=TIMEOUT_CLASICO,
                        help="timeout por petición al LLM en segundos")
+    parser.add_argument("--endpoints", default="",
+                       help="URLs del LLM del juez separadas por comas; fuerza "
+                            "el nodo (p. ej. http://10.0.0.4:8000/v1). Nunca "
+                            "10.0.0.3 (reservado por el usuario).")
     parser.add_argument("--simulado", action="store_true",
                        help="cliente LLM simulado para el juez")
     parser.add_argument("--dry-run", action="store_true",
@@ -399,10 +432,18 @@ def main(argv=None):
             print("error: %s" % exc, file=sys.stderr)
             return 2
         return 0
+    cliente = None
+    if args.endpoints and not args.simulado:
+        try:
+            cliente = construir_cliente_endpoints(args.endpoints,
+                                                timeout=args.timeout)
+        except ValueError as exc:
+            print("error: %s" % exc, file=sys.stderr)
+            return 2
     return ejecutar(work_dir=args.work_dir, solo_ids=solo, hasta=args.hasta,
                    max_llamadas=args.max_llamadas, workers=args.workers,
                    timeout=args.timeout, simulado=args.simulado,
-                   dry_run=args.dry_run)
+                   dry_run=args.dry_run, cliente=cliente)
 
 
 if __name__ == "__main__":
