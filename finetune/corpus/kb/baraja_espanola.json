@@ -1,0 +1,845 @@
+{
+  "aviso": "Significados provisionales de la tradición clásica de cartomancia española, escritos sin consenso de fuentes; validar contra las afirmaciones de fase 0 (naipe-*) antes del dataset final.",
+  "naipes": [
+    {
+      "id": "naipe-oros-01",
+      "nombre": "As de Oros",
+      "palo": "Oros",
+      "rango": "As",
+      "numero": 1,
+      "elemento": "tierra",
+      "tema": "lo material: dinero, trabajo remunerado, recursos, salud",
+      "palabras_clave": [
+        "prosperidad",
+        "inicio",
+        "estabilidad"
+      ],
+      "significado": "Comienzo material sólido: oportunidad económica, estabilidad que se abre paso.",
+      "invertida": "La oportunidad llega tardía o se dispersa en gastos sin rumbo.",
+      "contextos": {
+        "amor": "Un vínculo que ofrece seguridad y proyectos en común.",
+        "trabajo": "Puerta de trabajo o ingresos nuevos que conviene aprovechar."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-oros-02",
+      "nombre": "Dos de Oros",
+      "palo": "Oros",
+      "rango": "Dos",
+      "numero": 2,
+      "elemento": "tierra",
+      "tema": "lo material: dinero, trabajo remunerado, recursos, salud",
+      "palabras_clave": [
+        "equilibrio",
+        "cambio",
+        "intercambio"
+      ],
+      "significado": "Equilibrio entre dos asuntos materiales: cambio de manos, intercambio justo.",
+      "invertida": "Desequilibrio: cuentas que no cuadran o promesas que se esquivan.",
+      "contextos": {
+        "amor": "Ida y vuelta en la relación; hace falta conversar para cuadrar.",
+        "trabajo": "Alternar tareas o dos fuentes de ingreso con agilidad."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-oros-03",
+      "nombre": "Tres de Oros",
+      "palo": "Oros",
+      "rango": "Tres",
+      "numero": 3,
+      "elemento": "tierra",
+      "tema": "lo material: dinero, trabajo remunerado, recursos, salud",
+      "palabras_clave": [
+        "obra",
+        "equipo",
+        "reconocimiento"
+      ],
+      "significado": "Trabajo bien hecho que rinde sus primeros frutos visibles.",
+      "invertida": "Frutos que se retrasan por descuidos o falta de coordinación.",
+      "contextos": {
+        "amor": "Relación que se construye a base de esfuerzo compartido.",
+        "trabajo": "Colaboración profesional con resultados concretos."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-oros-04",
+      "nombre": "Cuatro de Oros",
+      "palo": "Oros",
+      "rango": "Cuatro",
+      "numero": 4,
+      "elemento": "tierra",
+      "tema": "lo material: dinero, trabajo remunerado, recursos, salud",
+      "palabras_clave": [
+        "prudencia",
+        "reserva",
+        "seguridad"
+      ],
+      "significado": "Lo ganado se protege: prudencia con el dinero y con el propio terreno.",
+      "invertida": "Avaricia o miedo a perder que deja pasar oportunidades.",
+      "contextos": {
+        "amor": "Apego y celos: cuesta abrirse de más.",
+        "trabajo": "Mantener lo conquistado antes de expandirse."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-oros-05",
+      "nombre": "Cinco de Oros",
+      "palo": "Oros",
+      "rango": "Cinco",
+      "numero": 5,
+      "elemento": "tierra",
+      "tema": "lo material: dinero, trabajo remunerado, recursos, salud",
+      "palabras_clave": [
+        "pérdida",
+        "solidaridad",
+        "recurso"
+      ],
+      "significado": "Estrechez temporal: carencia que se puede sobrellevar con apoyo.",
+      "invertida": "Se toca fondo y aparece la ayuda que no se quería ver.",
+      "contextos": {
+        "amor": "Sentirse fuera del vínculo; conviene pedir claro lo que se necesita.",
+        "trabajo": "Aprieto económico pasajero; no aísles a nadie por ello."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-oros-06",
+      "nombre": "Seis de Oros",
+      "palo": "Oros",
+      "rango": "Seis",
+      "numero": 6,
+      "elemento": "tierra",
+      "tema": "lo material: dinero, trabajo remunerado, recursos, salud",
+      "palabras_clave": [
+        "generosidad",
+        "equidad",
+        "gratitud"
+      ],
+      "significado": "Dar y recibir en justa medida: ayuda, don, beneficio compartido.",
+      "invertida": "Cuentas desiguales: dar de más o cobrar de menos.",
+      "contextos": {
+        "amor": "Un reparto afectivo equilibrado cura viejas deudas.",
+        "trabajo": "Mejoras materiales gracias a quien tiende la mano."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-oros-07",
+      "nombre": "Siete de Oros",
+      "palo": "Oros",
+      "rango": "Siete",
+      "numero": 7,
+      "elemento": "tierra",
+      "tema": "lo material: dinero, trabajo remunerado, recursos, salud",
+      "palabras_clave": [
+        "paciencia",
+        "inversión",
+        "espera"
+      ],
+      "significado": "Paciencia activa: esperar la cosecha sin dejar de cuidar el campo.",
+      "invertida": "Cosecha anticipada o rendirse antes de tiempo.",
+      "contextos": {
+        "amor": "Dejar madurar lo sembrado sin agobiar.",
+        "trabajo": "Proyecto a largo plazo; hoy toca regar, no recoger."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-oros-08",
+      "nombre": "Sota de Oros",
+      "palo": "Oros",
+      "rango": "Sota",
+      "numero": 8,
+      "elemento": "tierra",
+      "tema": "lo material: dinero, trabajo remunerado, recursos, salud",
+      "palabras_clave": [
+        "mensaje",
+        "estudio",
+        "oportunidad"
+      ],
+      "significado": "Mensajero práctico y estudioso: noticia concreta sobre dinero o trabajo.",
+      "invertida": "Juventud insegura o promesas materiales sin fundamento.",
+      "contextos": {
+        "amor": "Alguien leal y discreto que se gana tu confianza despacio.",
+        "trabajo": "Aprendizaje, curso o propuesta laboral sensata."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-oros-09",
+      "nombre": "Caballo de Oros",
+      "palo": "Oros",
+      "rango": "Caballo",
+      "numero": 9,
+      "elemento": "tierra",
+      "tema": "lo material: dinero, trabajo remunerado, recursos, salud",
+      "palabras_clave": [
+        "llegada",
+        "estabilidad",
+        "noticia"
+      ],
+      "significado": "Noticia o cambio material que llega seguro, sin prisa pero sin pausa.",
+      "invertida": "Estancamiento: lo esperado se retrasa por exceso de cautela.",
+      "contextos": {
+        "amor": "Pretendiente constante y de hecho, no de palabra.",
+        "trabajo": "Movimientos firmes en el terreno profesional."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-oros-10",
+      "nombre": "Rey de Oros",
+      "palo": "Oros",
+      "rango": "Rey",
+      "numero": 10,
+      "elemento": "tierra",
+      "tema": "lo material: dinero, trabajo remunerado, recursos, salud",
+      "palabras_clave": [
+        "protección",
+        "experiencia",
+        "administración"
+      ],
+      "significado": "Adulto responsable y próspero: consejo sensato, respaldo material.",
+      "invertida": "Rigidez, control o poder usado para imponer.",
+      "contextos": {
+        "amor": "Pareja madura que da seguridad más que fuegos artificiales.",
+        "trabajo": "Jefe, cliente o asesor que maneja bien los recursos."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-copas-01",
+      "nombre": "As de Copas",
+      "palo": "Copas",
+      "rango": "As",
+      "numero": 1,
+      "elemento": "agua",
+      "tema": "lo emocional: amor, familia, amistad, sentimientos",
+      "palabras_clave": [
+        "amor",
+        "emoción",
+        "comienzo"
+      ],
+      "significado": "El corazón se abre: amor naciente, emoción nueva, sanación afectiva.",
+      "invertida": "Sentimiento que no encuentra cauce o se ofrece tarde.",
+      "contextos": {
+        "amor": "Chispa verdadera; cuídala sin idealizarla.",
+        "trabajo": "Ambiente agradable que da ganas de quedarse."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-copas-02",
+      "nombre": "Dos de Copas",
+      "palo": "Copas",
+      "rango": "Dos",
+      "numero": 2,
+      "elemento": "agua",
+      "tema": "lo emocional: amor, familia, amistad, sentimientos",
+      "palabras_clave": [
+        "vínculo",
+        "acuerdo",
+        "encuentro"
+      ],
+      "significado": "Unión y acuerdo: dos que se eligen con claridad.",
+      "invertida": "Desavenencia pasajera o promesa incumplida por una parte.",
+      "contextos": {
+        "amor": "La carta del pareja: entendimiento y atracción mutua.",
+        "trabajo": "Sociadad afectuosa con la que se puede contar."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-copas-03",
+      "nombre": "Tres de Copas",
+      "palo": "Copas",
+      "rango": "Tres",
+      "numero": 3,
+      "elemento": "agua",
+      "tema": "lo emocional: amor, familia, amistad, sentimientos",
+      "palabras_clave": [
+        "celebración",
+        "amistad",
+        "gratitud"
+      ],
+      "significado": "Celebración compartida: amistad, festejo, logro que se brinda juntos.",
+      "invertida": "Alegría dispersa en excesos o habladurías.",
+      "contextos": {
+        "amor": "Relación ligera y feliz; cuidado con los triángulos.",
+        "trabajo": "Éxito de equipo que merece celebrarse."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-copas-04",
+      "nombre": "Cuatro de Copas",
+      "palo": "Copas",
+      "rango": "Cuatro",
+      "numero": 4,
+      "elemento": "agua",
+      "tema": "lo emocional: amor, familia, amistad, sentimientos",
+      "palabras_clave": [
+        "apatía",
+        "oferta",
+        "introspección"
+      ],
+      "significado": "Cansancio afectivo: lo ofrecido no se ve por estar mirando otra cosa.",
+      "invertida": "Se recupera el interés; la propuesta que se desdeñaba vuelve a tiempo.",
+      "contextos": {
+        "amor": "Dar por hecho el cariño de quien está al lado.",
+        "trabajo": "Desmotivación: revisar qué falta de verdad."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-copas-05",
+      "nombre": "Cinco de Copas",
+      "palo": "Copas",
+      "rango": "Cinco",
+      "numero": 5,
+      "elemento": "agua",
+      "tema": "lo emocional: amor, familia, amistad, sentimientos",
+      "palabras_clave": [
+        "pérdida",
+        "duelo",
+        "consuelo"
+      ],
+      "significado": "Duelo: pérdida sentida; quedan copas en pie todavía.",
+      "invertida": "El duelo empieza a cerrarse: se vuelve a mirar adelante.",
+      "contextos": {
+        "amor": "Echar de menos lo que fue y no ver lo que queda.",
+        "trabajo": "Decepción en un proyecto; no todo se perdió."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-copas-06",
+      "nombre": "Seis de Copas",
+      "palo": "Copas",
+      "rango": "Seis",
+      "numero": 6,
+      "elemento": "agua",
+      "tema": "lo emocional: amor, familia, amistad, sentimientos",
+      "palabras_clave": [
+        "nostalgia",
+        "regalo",
+        "reencuentro"
+      ],
+      "significado": "Recuerdo y reencuentro: lo de antes vuelve con dulzura.",
+      "invertida": "Anclarse en el pasado e impedir el presente.",
+      "contextos": {
+        "amor": "Viejo amor o amistad que reaparece.",
+        "trabajo": "Volver a algo conocido con cariño."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-copas-07",
+      "nombre": "Siete de Copas",
+      "palo": "Copas",
+      "rango": "Siete",
+      "numero": 7,
+      "elemento": "agua",
+      "tema": "lo emocional: amor, familia, amistad, sentimientos",
+      "palabras_clave": [
+        "fantasía",
+        "opciones",
+        "ilusión"
+      ],
+      "significado": "Ilusiones múltiples: fantasía que promete más de lo que sostiene.",
+      "invertida": "Se aclara la niebla y se elige una opción real.",
+      "contextos": {
+        "amor": "Idealización: distinguir deseo de realidad.",
+        "trabajo": "Muchas ideas y poca ejecución; concretar una."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-copas-08",
+      "nombre": "Sota de Copas",
+      "palo": "Copas",
+      "rango": "Sota",
+      "numero": 8,
+      "elemento": "agua",
+      "tema": "lo emocional: amor, familia, amistad, sentimientos",
+      "palabras_clave": [
+        "atención",
+        "mensaje",
+        "sensibilidad"
+      ],
+      "significado": "Mensajero del afecto: atención sincera, invitación, confidencia.",
+      "invertida": "Inmadurez emocional o halago con intención.",
+      "contextos": {
+        "amor": "Declaración tímida pero verdadera.",
+        "trabajo": "Compañero joven o aprendiz sensible al ambiente."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-copas-09",
+      "nombre": "Caballo de Copas",
+      "palo": "Copas",
+      "rango": "Caballo",
+      "numero": 9,
+      "elemento": "agua",
+      "tema": "lo emocional: amor, familia, amistad, sentimientos",
+      "palabras_clave": [
+        "propuesta",
+        "romance",
+        "llegada"
+      ],
+      "significado": "Llega una propuesta emocional: noticia del corazón, gesto romántico.",
+      "invertida": "Palabras bonitas que no se sostienen.",
+      "contextos": {
+        "amor": "El pretendiente encantador; mirar los hechos.",
+        "trabajo": "Oportunidad que ilusiona; verificar el detalle."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-copas-10",
+      "nombre": "Rey de Copas",
+      "palo": "Copas",
+      "rango": "Rey",
+      "numero": 10,
+      "elemento": "agua",
+      "tema": "lo emocional: amor, familia, amistad, sentimientos",
+      "palabras_clave": [
+        "comprensión",
+        "tacto",
+        "madurez"
+      ],
+      "significado": "Adulto de buen corazón: comprensión, tacto, madurez afectiva.",
+      "invertida": "Manipulación sentimental o dependencia emocional.",
+      "contextos": {
+        "amor": "Pareja empática que escucha de verdad.",
+        "trabajo": "Liderazgo humano; mediador eficaz."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-espadas-01",
+      "nombre": "As de Espadas",
+      "palo": "Espadas",
+      "rango": "As",
+      "numero": 1,
+      "elemento": "aire",
+      "tema": "la prueba: conflicto, enfermedad, pérdida, pensamiento",
+      "palabras_clave": [
+        "claridad",
+        "verdad",
+        "decisión"
+      ],
+      "significado": "Verdad que corta: claridad mental, decisión firme, comienzo difícil pero limpio.",
+      "invertida": "Confusión: la espada no encuentra su filo.",
+      "contextos": {
+        "amor": "Hablar claro evita más daño que el silencio.",
+        "trabajo": "Un corte necesario (contrato, rumbo) que libera."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-espadas-02",
+      "nombre": "Dos de Espadas",
+      "palo": "Espadas",
+      "rango": "Dos",
+      "numero": 2,
+      "elemento": "aire",
+      "tema": "la prueba: conflicto, enfermedad, pérdida, pensamiento",
+      "palabras_clave": [
+        "duda",
+        "equilibrio",
+        "elección"
+      ],
+      "significado": "Encrucijada: elegir con la información que hay, no con la que falta.",
+      "invertida": "La decisión tomada disipa la tensión.",
+      "contextos": {
+        "amor": "Impasse afectivo; no dejar que otros elijan por ti.",
+        "trabajo": "Dos opciones que obligan a priorizar."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-espadas-03",
+      "nombre": "Tres de Espadas",
+      "palo": "Espadas",
+      "rango": "Tres",
+      "numero": 3,
+      "elemento": "aire",
+      "tema": "la prueba: conflicto, enfermedad, pérdida, pensamiento",
+      "palabras_clave": [
+        "herida",
+        "duelo",
+        "verdad"
+      ],
+      "significado": "Dolor claro: traición, despedida o palabra que hiere.",
+      "invertida": "La herida empieza a cicatrizar; se agradece la verdad.",
+      "contextos": {
+        "amor": "Ruptura o decepción que hay que llorar a solas y luego soltar.",
+        "trabajo": "Crítica dura; separar el fondo de la forma."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-espadas-04",
+      "nombre": "Cuatro de Espadas",
+      "palo": "Espadas",
+      "rango": "Cuatro",
+      "numero": 4,
+      "elemento": "aire",
+      "tema": "la prueba: conflicto, enfermedad, pérdida, pensamiento",
+      "palabras_clave": [
+        "reposo",
+        "recuperación",
+        "silencio"
+      ],
+      "significado": "Tregua necesaria: reposo tras el esfuerzo, pausa que restaura.",
+      "invertida": "Descanso que no llega o parón que se vuelve aislamiento.",
+      "contextos": {
+        "amor": "Distancia sana para no decir lo que no se piensa.",
+        "trabajo": "Baja activa: recuperarse antes de volver."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-espadas-05",
+      "nombre": "Cinco de Espadas",
+      "palo": "Espadas",
+      "rango": "Cinco",
+      "numero": 5,
+      "elemento": "aire",
+      "tema": "la prueba: conflicto, enfermedad, pérdida, pensamiento",
+      "palabras_clave": [
+        "disputa",
+        "orgullo",
+        "reconciliación"
+      ],
+      "significado": "Conflicto: victoria que deja sabor amargo; conviene elegir la paz.",
+      "invertida": "Se deponen las armas: reconciliación o perdón.",
+      "contextos": {
+        "amor": "Ganar la discusión puede costar la relación.",
+        "trabajo": "Rivalidad y zancadillas; no escalar."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-espadas-06",
+      "nombre": "Seis de Espadas",
+      "palo": "Espadas",
+      "rango": "Seis",
+      "numero": 6,
+      "elemento": "aire",
+      "tema": "la prueba: conflicto, enfermedad, pérdida, pensamiento",
+      "palabras_clave": [
+        "cambio",
+        "transición",
+        "viaje"
+      ],
+      "significado": "Travesía: alejarse de aguas revueltas hacia algo más sereno.",
+      "invertida": "Volver a la orilla dejada cuando el viaje era lo correcto.",
+      "contextos": {
+        "amor": "Alejarse juntos o separarse con cariño.",
+        "trabajo": "Cambio de aires, de equipo o de ciudad."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-espadas-07",
+      "nombre": "Siete de Espadas",
+      "palo": "Espadas",
+      "rango": "Siete",
+      "numero": 7,
+      "elemento": "aire",
+      "tema": "la prueba: conflicto, enfermedad, pérdida, pensamiento",
+      "palabras_clave": [
+        "engaño",
+        "estratega",
+        "cautela"
+      ],
+      "significado": "Astucia: algo se oculta o se negocia a medias; revisar el detalle.",
+      "invertida": "La trampa se descubre; lo recuperado vuelve.",
+      "contextos": {
+        "amor": "Medias verdades: preguntar sin acusar.",
+        "trabajo": "Pacto con letra pequeña; leer antes de firmar."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-espadas-08",
+      "nombre": "Sota de Espadas",
+      "palo": "Espadas",
+      "rango": "Sota",
+      "numero": 8,
+      "elemento": "aire",
+      "tema": "la prueba: conflicto, enfermedad, pérdida, pensamiento",
+      "palabras_clave": [
+        "vigilancia",
+        "noticia",
+        "astucia"
+      ],
+      "significado": "Mente alerta: noticia dura o joven observador que no se deja engañar.",
+      "invertida": "Desconfianza que sabotea; oír sin acusar.",
+      "contextos": {
+        "amor": "Vigilancia y celos; la duda no es prueba.",
+        "trabajo": "Contrato o persona que exige leer la letra pequeña."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-espadas-09",
+      "nombre": "Caballo de Espadas",
+      "palo": "Espadas",
+      "rango": "Caballo",
+      "numero": 9,
+      "elemento": "aire",
+      "tema": "la prueba: conflicto, enfermedad, pérdida, pensamiento",
+      "palabras_clave": [
+        "prontitud",
+        "franco",
+        "embate"
+      ],
+      "significado": "Impulso veloz: llegada repentina, franqueza que atropella.",
+      "invertida": "La prisa se frena; hay que pensar antes de cargar.",
+      "contextos": {
+        "amor": "Declaración directa, sin rodeos.",
+        "trabajo": "Cambios rápidos y decisiones tajantes."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-espadas-10",
+      "nombre": "Rey de Espadas",
+      "palo": "Espadas",
+      "rango": "Rey",
+      "numero": 10,
+      "elemento": "aire",
+      "tema": "la prueba: conflicto, enfermedad, pérdida, pensamiento",
+      "palabras_clave": [
+        "justicia",
+        "criterio",
+        "distancia"
+      ],
+      "significado": "Autoridad serena: criterio, ley y distancia para juzgar bien.",
+      "invertida": "Dureza sin compasión: autoridad que hiere.",
+      "contextos": {
+        "amor": "Alguien que pone límites sanos.",
+        "trabajo": "Asesor, juez o jefe de palabra firme."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-bastos-01",
+      "nombre": "As de Bastos",
+      "palo": "Bastos",
+      "rango": "As",
+      "numero": 1,
+      "elemento": "fuego",
+      "tema": "la acción: trabajo, creatividad, energía, proyectos",
+      "palabras_clave": [
+        "impulso",
+        "creatividad",
+        "iniciativa"
+      ],
+      "significado": "Chispa de arranque: energía creativa, inspiración, iniciativa.",
+      "invertida": "La chispa se dispersa: comenzar sin rumbo.",
+      "contextos": {
+        "amor": "Atracción nueva; encender sin quemar.",
+        "trabajo": "Proyecto apasionante que pide el primer paso."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-bastos-02",
+      "nombre": "Dos de Bastos",
+      "palo": "Bastos",
+      "rango": "Dos",
+      "numero": 2,
+      "elemento": "fuego",
+      "tema": "la acción: trabajo, creatividad, energía, proyectos",
+      "palabras_clave": [
+        "plan",
+        "decisión",
+        "visión"
+      ],
+      "significado": "Plan de futuro: elegir rumbo con el mundo delante.",
+      "invertida": "Dudar del mapa o aferrarse a un plan que ya no sirve.",
+      "contextos": {
+        "amor": "Decidir hacia dónde crecer juntos.",
+        "trabajo": "Dos frentes abiertos; repartir bien la energía."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-bastos-03",
+      "nombre": "Tres de Bastos",
+      "palo": "Bastos",
+      "rango": "Tres",
+      "numero": 3,
+      "elemento": "fuego",
+      "tema": "la acción: trabajo, creatividad, energía, proyectos",
+      "palabras_clave": [
+        "expansión",
+        "logro",
+        "horizonte"
+      ],
+      "significado": "Expansión: lo sembrado sale bien y se abren caminos.",
+      "invertida": "El barco no llega: expectativa sobreestimada.",
+      "contextos": {
+        "amor": "Relación que mira lejos sin perder el puerto.",
+        "trabajo": "Primeros frutos de un proyecto que crece."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-bastos-04",
+      "nombre": "Cuatro de Bastos",
+      "palo": "Bastos",
+      "rango": "Cuatro",
+      "numero": 4,
+      "elemento": "fuego",
+      "tema": "la acción: trabajo, creatividad, energía, proyectos",
+      "palabras_clave": [
+        "refugio",
+        "armonía",
+        "hito"
+      ],
+      "significado": "Base firme: hogar, comunidad y celebración de lo conseguido.",
+      "invertida": "La celebración se pospone o el refugio se siente rígido.",
+      "contextos": {
+        "amor": "Convivencia alegre; presentar a la familia.",
+        "trabajo": "Equipo consolidado; momento para agasajar."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-bastos-05",
+      "nombre": "Cinco de Bastos",
+      "palo": "Bastos",
+      "rango": "Cinco",
+      "numero": 5,
+      "elemento": "fuego",
+      "tema": "la acción: trabajo, creatividad, energía, proyectos",
+      "palabras_clave": [
+        "conflicto",
+        "competencia",
+        "esfuerzo"
+      ],
+      "significado": "Rivalidad sana o no: choques de energía que enseñan a sostenerse.",
+      "invertida": "Se sueltan las armas y aparece la colaboración.",
+      "contextos": {
+        "amor": "Discutir por tonterías; elegir la batalla.",
+        "trabajo": "Equipo con roces: ordenar roles."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-bastos-06",
+      "nombre": "Seis de Bastos",
+      "palo": "Bastos",
+      "rango": "Seis",
+      "numero": 6,
+      "elemento": "fuego",
+      "tema": "la acción: trabajo, creatividad, energía, proyectos",
+      "palabras_clave": [
+        "victoria",
+        "prestigio",
+        "avance"
+      ],
+      "significado": "Reconocimiento: el esfuerzo se ve y se aplaude.",
+      "invertida": "Triunfo que se desinfla por vanidad o descuido.",
+      "contextos": {
+        "amor": "Ser elegido y celebrarlo juntos.",
+        "trabajo": "Promoción, premio o logro público."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-bastos-07",
+      "nombre": "Siete de Bastos",
+      "palo": "Bastos",
+      "rango": "Siete",
+      "numero": 7,
+      "elemento": "fuego",
+      "tema": "la acción: trabajo, creatividad, energía, proyectos",
+      "palabras_clave": [
+        "defensa",
+        "perseverancia",
+        "terreno"
+      ],
+      "significado": "Defender la posición: resistencia activa ante quien cuestiona.",
+      "invertida": "Dejar la defensa cuando ya estaba ganada.",
+      "contextos": {
+        "amor": "Poner límites sin agresividad.",
+        "trabajo": "Sostener lo logrado contra competidores."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-bastos-08",
+      "nombre": "Sota de Bastos",
+      "palo": "Bastos",
+      "rango": "Sota",
+      "numero": 8,
+      "elemento": "fuego",
+      "tema": "la acción: trabajo, creatividad, energía, proyectos",
+      "palabras_clave": [
+        "entusiasmo",
+        "mensaje",
+        "aprendiz"
+      ],
+      "significado": "Mensajero entusiasta: noticia, invitación o aprendizaje ilusionante.",
+      "invertida": "Entusiasmo sin método: quedarse en el amago.",
+      "contextos": {
+        "amor": "Alguien simpático que trae aire nuevo.",
+        "trabajo": "Curso, idea o propuesta que ilusiona."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-bastos-09",
+      "nombre": "Caballo de Bastos",
+      "palo": "Bastos",
+      "rango": "Caballo",
+      "numero": 9,
+      "elemento": "fuego",
+      "tema": "la acción: trabajo, creatividad, energía, proyectos",
+      "palabras_clave": [
+        "viaje",
+        "ímpetu",
+        "empresa"
+      ],
+      "significado": "Aventura en marcha: viaje, impulso emprendedor, energía que llega.",
+      "invertida": "Impulsividad: arrancar sin frenos ni mapa.",
+      "contextos": {
+        "amor": "Pretendiente apasionado e inquieto.",
+        "trabajo": "Proyecto viajero o cambio de aires laboral."
+      },
+      "estado": "provisional"
+    },
+    {
+      "id": "naipe-bastos-10",
+      "nombre": "Rey de Bastos",
+      "palo": "Bastos",
+      "rango": "Rey",
+      "numero": 10,
+      "elemento": "fuego",
+      "tema": "la acción: trabajo, creatividad, energía, proyectos",
+      "palabras_clave": [
+        "liderazgo",
+        "visión",
+        "emprendimiento"
+      ],
+      "significado": "Emprendedor maduro: liderazgo creativo, visión y hechos.",
+      "invertida": "Autoritarismo o empresas que desbordan a su dueño.",
+      "contextos": {
+        "amor": "Pareja segura, cálida y con iniciativa.",
+        "trabajo": "Mentor o jefe con ideas y mano firme."
+      },
+      "estado": "provisional"
+    }
+  ]
+}
