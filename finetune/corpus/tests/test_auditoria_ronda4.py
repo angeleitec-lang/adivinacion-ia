@@ -306,18 +306,19 @@ class TestPurgarErroresJuez(unittest.TestCase):
 
 
 class TestSaludDatosExclusiones(unittest.TestCase):
-    """salud_datos: el patrón de exclusión .bak es demasiado amplio."""
+    """salud_datos (B6 arreglado en T67): exclusión ceñida a copias reales."""
 
     def test_excluye_residuos_reales(self):
         self.assertTrue(salud_datos._es_excluido("evidencias.jsonl.bak-1"))
         self.assertTrue(salud_datos._es_excluido("x.truncada-20261001"))
+        self.assertTrue(salud_datos._es_excluido("afirmaciones.jsonl.tmp"))
+        self.assertTrue(salud_datos._es_excluido("juicios.jsonl.bak"))
 
-    @unittest.expectedFailure
     def test_no_deberia_excluir_nombres_con_bak(self):
         self.assertFalse(
             salud_datos._es_excluido("naipes.bakery-ventas.jsonl"),
-            "DEFECTO B6: cualquier nombre que contenga '.bak' se oculta al "
-            "descubrimiento, aunque no sea una copia de seguridad")
+            "B6 (T63): el patrón antiguo ocultaba ficheros legítimos que "
+            "solo contienen '.bak' como subcadena")
 
     def test_repara_tras_copia(self):
         dir_ = tempfile.mkdtemp()
@@ -335,6 +336,8 @@ class TestSaludDatosExclusiones(unittest.TestCase):
         self.assertEqual(acciones[0]["estado"], "reparado")
         with open(ruta, encoding="utf-8") as fh:
             self.assertEqual(len([l for l in fh if l.strip()]), 1)
+        residuos = [n for n in os.listdir(dir_) if n.endswith(".tmp")]
+        self.assertEqual(residuos, [])
 
 
 class TestJuezReanudacionFacetas(unittest.TestCase):

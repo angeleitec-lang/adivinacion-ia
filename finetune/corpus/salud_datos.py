@@ -106,7 +106,11 @@ GENERICO = {"requeridos": (), "clave": ("id",)}
 
 
 def _es_excluido(nombre):
-    return (".bak" in nombre or ".truncada" in nombre
+    # T67 (B6): «.bak» como subcadena ocultaba ficheros legítimos (p. ej.
+    # naipes.bakery-ventas.jsonl). Solo excluyen los sufijos reales de copia:
+    # «.bak-...» (copia diaria) o nombre terminado en «.bak».
+    return (".bak-" in nombre or nombre.endswith(".bak")
+            or ".truncada" in nombre
             or nombre.endswith(".tmp") or nombre.startswith("."))
 
 
@@ -389,8 +393,13 @@ def reparar_ficheros(rutas, si=False, intervalo=INTERVALO_VIGILANCIA,
             partes = fh.readlines()
         ultima = partes[-1] if partes else b""
         prefijo = b"".join(partes[:-1])
-        with open(ruta, "wb") as fh:
+        # T67 (B6): el truncado se escribe en un .tmp y se sustituye con
+        # os.replace; si el proceso muere a medias, el original intacto sigue
+        # en pie (antes se vaciaba el fichero y se reescribía a mano).
+        tmp = "%s.tmp" % ruta
+        with open(tmp, "wb") as fh:
             fh.write(prefijo)
+        os.replace(tmp, ruta)
         ruta_truncada = "%s.truncada-%s" % (ruta, sello_dia)
         with open(ruta_truncada, "ab") as fh:
             if os.path.exists(ruta_truncada) and os.path.getsize(ruta_truncada) > 0:
