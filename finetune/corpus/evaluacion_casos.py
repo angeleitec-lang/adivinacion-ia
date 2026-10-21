@@ -26,6 +26,8 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Sequence
 
@@ -550,8 +552,43 @@ def es_caso_de_evaluacion(fila: dict) -> bool:
 
 
 def escribir_casos(ruta: str | Path, casos: list[dict]) -> Path:
+    """Escribe el conjunto de evaluación con salvaguardas (T67, defecto B3).
+
+    - Si la ruta ya existe, ningún id puede reaparecer con contenido distinto:
+      eso denotaría una regeneración con otra semilla sobre el mismo fichero
+      (los ids «eval-{familia}-{NN}» no incluyen la semilla). Se aborta antes
+      de tocar el disco y el conjunto congelado queda intacto.
+    - Cuando la reescritura es legítima se deja antes una copia
+      ``.bak-AAAAMMDD`` (una por día, como en el resto de la tubería).
+    """
     ruta = Path(ruta)
     ruta.parent.mkdir(parents=True, exist_ok=True)
+    if ruta.exists():
+        previos: dict[str, dict] = {}
+        with ruta.open("r", encoding="utf-8") as fh:
+            for linea in fh:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    fila = json.loads(linea)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(fila, dict) and "id" in fila:
+                    previos[str(fila["id"])] = fila
+        conflicto = [str(c["id"]) for c in casos
+                     if c.get("id") in previos and previos[str(c["id"])] != c]
+        if conflicto:
+            raise ValueError(
+                f"{len(conflicto)} ids de evaluación coinciden con contenido "
+                f"distinto en {ruta} (¿regeneración con otra semilla?). "
+                f"Ejemplo: {conflicto[0]}. Escribe en otra ruta o retira el "
+                "fichero antiguo primero."
+            )
+        sello = datetime.now().strftime("%Y%m%d")
+        respaldo = Path(f"{ruta}.bak-{sello}")
+        if not respaldo.exists():
+            shutil.copy2(ruta, respaldo)
     with ruta.open("w", encoding="utf-8") as fh:
         for caso in casos:
             fh.write(json.dumps(caso, ensure_ascii=False) + "\n")

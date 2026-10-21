@@ -8,6 +8,7 @@ Nada de esto toca red ni LLM. Ver docs/AUDITORIA_RONDA4.md.
 import datetime
 import json
 import os
+import pathlib
 import shutil
 import sys
 import tempfile
@@ -398,6 +399,46 @@ class TestJuezReanudacionFacetas(unittest.TestCase):
         stats = self._relanzar()
         self.assertEqual(stats["evidencias"], 2)
         self.assertEqual(len(self._lineas_ev()), 2)
+
+
+class TestEscribirCasosCopia(unittest.TestCase):
+    """B3 (T63) arreglado en T67: el conjunto congelado no se destruye."""
+
+    def _caso(self, usuario="pregunta"):
+        return {"id": "eval-tarot_1-01", "system": "s", "user": usuario,
+                "familia": "tarot_1", "origen": "evaluacion"}
+
+    def test_primera_escritura_sin_copia(self):
+        import evaluacion_casos as ec
+        with tempfile.TemporaryDirectory() as dir:
+            ruta = pathlib.Path(dir) / "casos.jsonl"
+            ec.escribir_casos(ruta, [self._caso()])
+            residuos = [p.name for p in pathlib.Path(dir).iterdir()
+                        if ".bak" in p.name]
+            self.assertEqual(residuos, [])
+
+    def test_reescritura_identica_deja_copia(self):
+        import evaluacion_casos as ec
+        with tempfile.TemporaryDirectory() as dir:
+            ruta = pathlib.Path(dir) / "casos.jsonl"
+            casos = [self._caso()]
+            ec.escribir_casos(ruta, casos)
+            ec.escribir_casos(ruta, casos)
+            sello = datetime.datetime.now().strftime("%Y%m%d")
+            respaldo = pathlib.Path(f"{ruta}.bak-{sello}")
+            self.assertTrue(respaldo.exists())
+            self.assertEqual(ruta.read_text(encoding="utf-8"),
+                             respaldo.read_text(encoding="utf-8"))
+
+    def test_id_con_otro_contenido_aborta_sin_tocar_disco(self):
+        import evaluacion_casos as ec
+        with tempfile.TemporaryDirectory() as dir:
+            ruta = pathlib.Path(dir) / "casos.jsonl"
+            ec.escribir_casos(ruta, [self._caso("original")])
+            antes = ruta.read_text(encoding="utf-8")
+            with self.assertRaises(ValueError):
+                ec.escribir_casos(ruta, [self._caso("otra semilla")])
+            self.assertEqual(ruta.read_text(encoding="utf-8"), antes)
 
 
 if __name__ == "__main__":
