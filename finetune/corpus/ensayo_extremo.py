@@ -306,8 +306,13 @@ def _leer_jsonl(ruta):
     with ruta.open(encoding="utf-8") as fh:
         for linea in fh:
             linea = linea.strip()
-            if linea:
+            if not linea:
+                continue
+            try:
                 filas.append(json.loads(linea))
+            except json.JSONDecodeError:
+                # Escritura interrumpida a mitad de linea: se ignora.
+                continue
     return filas
 
 
