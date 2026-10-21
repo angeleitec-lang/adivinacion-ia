@@ -632,5 +632,34 @@ class TestVerificarEsquema(unittest.TestCase):
         self.assertTrue(ok, motivos)
 
 
+class TestMascaraAstros(unittest.TestCase):
+    def test_blanquea_luminar_en_signo(self):
+        txt = "La Luna en Capricornio pide calma y el Sol en Leo brilla."
+        m = fp._mascara_astros(txt)
+        self.assertNotIn("Luna", m)
+        self.assertNotIn("Sol", m)
+
+    def test_respeta_menciones_sin_signo(self):
+        txt = "La Luna ilumina el final del camino."
+        self.assertIn("Luna", fp._mascara_astros(txt))
+
+    def test_lectura_con_natal_no_marca_luminares_como_ajenos(self):
+        t = tarea_tarot([{"nombre": "El Loco", "invertida": False}])
+        t["calculos"] = {"carta_natal": {"signos": {}}}
+        texto = (
+            "El Loco abre el camino con ilusión; La Luna en Cáncer "
+            "solo es un apunte de tu carta natal."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertTrue(ok, motivos)
+
+    def test_sin_natal_si_marca_ajena(self):
+        t = tarea_tarot([{"nombre": "El Loco", "invertida": False}])
+        texto = "El Loco abre el camino y La Luna sugiere paciencia."
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertFalse(ok)
+        self.assertTrue(any("La Luna" in m for m in motivos))
+
+
 if __name__ == "__main__":
     unittest.main()

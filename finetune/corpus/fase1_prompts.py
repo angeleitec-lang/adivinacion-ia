@@ -636,7 +636,30 @@ def _presente_carta_any(carta, norm):
     return any(_presente_carta(x, norm) for x in candidatos if x)
 
 
-def _verif_cartas(cartas, universo, texto, motivos):
+_SIGNOS_ZODIACO = (
+    r"aries|tauro|g[ée]minis|c[áa]ncer|leo|virgo|libra|escorpio(?:n)?|"
+    r"sagitario|capricornio|acuario|piscis"
+)
+_RE_ASTRO_LUMINAR = re.compile(
+    r"(?i)\b(?:el\s+sol|la\s+luna)\s+en\s+(?:" + _SIGNOS_ZODIACO + r")(?![" + _LETRAS + r"])"
+)
+
+
+def _mascara_astros(texto):
+    """Blanquea las menciones astrológicas «el sol / la luna en <signo>».
+
+    En lecturas con carta natal, El Sol y La Luna nombran astros, no arcanos:
+    sin este filtro el verificador los marcaría como cartas ajenas.
+    """
+    return _RE_ASTRO_LUMINAR.sub(lambda m: " " * len(m.group(0)), texto)
+
+
+def _verif_cartas(cartas, universo, texto, motivos, texto_ajenas=None):
+    """Presencia, repetición, orientación y cartas ajenas.
+
+    texto_ajenas: si se aporta, se usa solo para buscar menciones ajenas
+    (permite ocultar los astros homónimos en lecturas con carta natal).
+    """
     norm = _norm(texto)
     drawn = set()
     drawn_todo = set()
@@ -656,6 +679,7 @@ def _verif_cartas(cartas, universo, texto, motivos):
     for c in validas:
         if not _presente_carta_any(c, norm):
             motivos.append(f"Falta la carta de la tirada: {c.get('nombre')}")
+    for_ajenas = texto if texto_ajenas is None else texto_ajenas
     for elemento in universo:
         nombre = elemento.get("nombre") if isinstance(elemento, dict) else elemento
         if not nombre:
@@ -666,7 +690,7 @@ def _verif_cartas(cartas, universo, texto, motivos):
         sinon = (elemento.get("sinonimos") or []) if isinstance(elemento, dict) else []
         if any(_norm(s) in drawn_todo for s in sinon):
             continue
-        if nn and _mencion_carta(nombre, texto):
+        if nn and _mencion_carta(nombre, for_ajenas):
             motivos.append(f"Menciona carta ajena a la tirada: {nombre}")
     hay_inv = any(c.get("invertida") for c in validas)
     inv = _tiene_inversion(texto)
@@ -808,7 +832,9 @@ def verificar_lectura(tarea, texto):
     calc = tarea.get("calculos") or {}
     cartas = tarea.get("cartas") or []
     if cartas:
-        _verif_cartas(cartas, tarea.get("universo_cartas") or [], texto, motivos)
+        texto_ajenas = _mascara_astros(texto) if "carta_natal" in calc else None
+        _verif_cartas(cartas, tarea.get("universo_cartas") or [], texto, motivos,
+                      texto_ajenas=texto_ajenas)
     f = tarea.get("familia", "")
     if f in FAMILIAS_ESQUEMA or f == "lectura_completa":
         _verif_esquema(tarea, texto, motivos)
