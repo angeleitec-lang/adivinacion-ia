@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import time
 from urllib.parse import urlsplit
@@ -296,6 +297,12 @@ def dominios_bloqueados() -> frozenset:
     return DOMINIOS_BLOQUEADOS
 
 
+def esta_bloqueado(dominio: str, bloqueados=None) -> bool:
+    """True si el dominio (o un subdominio suyo) está bloqueado."""
+    bloqueados = DOMINIOS_BLOQUEADOS if bloqueados is None else bloqueados
+    return any(dominio == b or dominio.endswith("." + b) for b in bloqueados)
+
+
 def extraer_locs(xml_text: str) -> list:
     """Devuelve el contenido de todas las etiquetas ``<loc>`` de un sitemap.
 
@@ -407,17 +414,24 @@ def construir_plan(fuentes, cliente, max_por_dominio=60, sleep=time.sleep,
     por_familia = {}
     bloqueados = dominios_bloqueados()
     for f in fuentes:
-        dominio = norm_dominio(f["dominio"])
-        if dominio in bloqueados:
+        try:
+            dominio = norm_dominio(f["dominio"])
+            sitemap = f["sitemap"]
+            patron = f["patron"]
+            familia = f["familia"]
+        except (KeyError, TypeError):
+            # Fuente malformada en la config: se ignora en lugar de tumbar.
+            continue
+        if esta_bloqueado(dominio, bloqueados):
             continue
         robots = robots_fn(cliente, dominio, sleep=sleep)
         urls = descubrir_desde_sitemap(
-            cliente, f["sitemap"], f["patron"],
+            cliente, sitemap, patron,
             limite=max_por_dominio, robots=robots, sleep=sleep,
             excluir=excluir,
         )
         for u in urls:
-            bucket = por_familia.setdefault(f["familia"], [])
+            bucket = por_familia.setdefault(familia, [])
             if u not in bucket:
                 bucket.append(u)
     return por_familia
@@ -439,8 +453,10 @@ def escribir_plan(por_familia, ruta, prefijo="t74") -> int:
         }
         lineas.append(json.dumps(entrada, ensure_ascii=False))
         total += len(urls)
-    with open(ruta, "w", encoding="utf-8") as fh:
+    tmp = ruta + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lineas) + ("\n" if lineas else ""))
+    os.replace(tmp, ruta)
     return total
 
 
