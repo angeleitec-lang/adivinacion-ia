@@ -45,6 +45,7 @@ import build_dataset as bd
 import evaluacion_casos
 import merge_final
 import preparar_entrenamiento as pe
+import qa_dataset as qa
 import reverificar_fase1
 import validate_synthetic as vs
 from ejecutor_fase1 import a_sharegpt
@@ -165,6 +166,38 @@ class Registro:
             fh.write(json.dumps(entrada, ensure_ascii=False) + "\n")
 
 
+def filtrar_fugas_eval(filas: list[dict],
+                       casos_eval: dict) -> tuple[list[dict], list[dict]]:
+    """Descarta (T112) filas cuyo prompt coincida con un caso de evaluacion.
+
+    Usa qa_dataset (normalizacion sin plantilla + n-gramas de 12 palabras con
+    umbral UMBRAL_NGRAMAS_FUGA), que detecta tambien coincidencias que la
+    normalizacion antigua de merge_final pasaba por alto. Devuelve
+    (mantenidas, descartes) con el fragmento humano para los ejemplos.
+    """
+    marcador = qa.fugas_eval([("", i, f) for i, f in enumerate(filas)],
+                             casos_eval,
+                             min_compartidos=qa.UMBRAL_NGRAMAS_FUGA)
+    por_fila: dict[int, list[dict]] = defaultdict(list)
+    for h in marcador["hallazgos"]:
+        por_fila[h["fila"]].append(h)
+    mantenidas, descartes = [], []
+    for i, fila in enumerate(filas):
+        if not isinstance(fila, dict) or i not in por_fila:
+            mantenidas.append(fila)
+            continue
+        hs = por_fila[i]
+        motivo = ("fuga_evaluacion_contenido_qa"
+                  if any(h["chequeo"] != "fuga_eval_fragmento" for h in hs)
+                  else "fuga_evaluacion_ngramas")
+        bloque = nfc(fila.get("bloque")) or "sin_bloque"
+        descartes.append({"id": fila.get("id"), "bloque": bloque,
+                         "motivo": motivo,
+                         "fragmento": nfc(qa.humano_de(fila))[:160],
+                         "detalle": hs[0]["detalle"][:300]})
+    return mantenidas, descartes
+
+
 class Tuberia:
     """Cadena completa reanudable hacia dataset_fase1_v1."""
 
@@ -172,7 +205,8 @@ class Tuberia:
                  real_raw=None, manifest=None, min_chars: int = 400,
                  max_chars: int = 12000, max_repetition: float = 0.12,
                  train_ratio: float = 0.8, val_ratio: float = 0.1,
-                 formato: str = "chatml"):
+                 formato: str = "chatml", puerta_real: bool = True,
+                 min_real_filas: int = 200):
         self.entrada = Path(entrada)
         self.salida = Path(salida_dir)
         self.semilla = semilla
@@ -184,6 +218,8 @@ class Tuberia:
         self.train_ratio = train_ratio
         self.val_ratio = val_ratio
         self.formato = formato
+        self.puerta_real = puerta_real
+        self.min_real_filas = min_real_filas
         self.etapas_dir = self.salida / "_etapas"
         self.eval_dir = self.etapas_dir / "eval"
         self.registro = Registro(self.etapas_dir / "registro.jsonl")
@@ -288,12 +324,20 @@ class Tuberia:
                                                "validas.jsonl"))
         humanos_eval = merge_final.cargar_humanos_evaluacion([self.eval_sharegpt])
         humanos_eval.discard("")
+        casos_eval = qa.cargar_eval(self.eval_dir)
+        validas, descartes_qa = filtrar_fugas_eval(validas, casos_eval)
         exactos: dict[str, set] = defaultdict(set)
         casi: dict[str, vs.IndiceCasiDuplicados] = defaultdict(
             vs.IndiceCasiDuplicados)
-        mantenidas, descartes = [], []
+        mantenidas, descartes = [], list(descartes_qa)
         conteo = Counter()
         ejemplos: dict[str, list] = defaultdict(list)
+        for d in descartes_qa:
+            if len(ejemplos[d["motivo"]]) < MAX_EJEMPLOS_MOTIVO:
+                ejemplos[d["motivo"]].append({
+                    "id": d["id"], "bloque": d["bloque"],
+                    "fragmento": d["fragmento"],
+                })
         for fila in validas:
             if not isinstance(fila, dict):
                 continue
@@ -332,7 +376,9 @@ class Tuberia:
             json.dumps(ejemplos, ensure_ascii=False, indent=2),
             encoding="utf-8")
         conteo.update(m["motivo"] for m in descartes)
-        return {"entrada": len(validas), "mantenidas": len(mantenidas),
+        return {"entrada": len(validas) + len(descartes_qa),
+               "fugas_qa": len(descartes_qa),
+               "mantenidas": len(mantenidas),
                "descartes": dict(conteo)}
 
     def etapa_sharegpt(self) -> dict:
@@ -390,7 +436,7 @@ class Tuberia:
         ])
         if rc != 0:
             raise RuntimeError(f"build_dataset devolvio {rc}")
-        rc = merge_final.main([
+        argv_fusion = [
             "--real-train", str(real_dir / "train.jsonl"),
             "--real-val", str(real_dir / "val.jsonl"),
             "--synth", str(self._p("04_validacion", "synth_clean.jsonl")),
@@ -401,7 +447,12 @@ class Tuberia:
             "--train-ratio", str(self.train_ratio),
             "--val-ratio", str(self.val_ratio),
             "--eval-casos", str(self.eval_sharegpt),
-        ])
+            "--max-repetition", str(self.max_repetition),
+        ]
+        if self.puerta_real:
+            argv_fusion += ["--puerta-real", "--min-real",
+                            str(self.min_real_filas)]
+        rc = merge_final.main(argv_fusion)
         if rc != 0:
             raise RuntimeError(f"merge_final devolvio {rc}")
         informe = json.loads((self.salida / "report.json")
@@ -426,6 +477,48 @@ class Tuberia:
             raise RuntimeError(
                 "semforo ROJO en preparar_entrenamiento: "
                 + "; ".join(stats["errores"]))
+        return stats
+
+    def etapa_qa(self) -> dict:
+        """Puerta final T112: audita train/val/test con qa_dataset.
+
+        Aborta (semforo rojo) si queda cualquier fuga con el conjunto de
+        evaluacion (umbral UMBRAL_NGRAMAS_FUGA) o solapes exactos de prompts
+        entre splits.
+        """
+        reporte = qa.run_qa(self.salida, out_dir=self.etapas_dir / "qa",
+                            eval_dir=self.eval_dir, semilla=self.semilla,
+                            min_compartidos=qa.UMBRAL_NGRAMAS_FUGA)
+        fe = reporte["fugas_eval"]
+        fs = reporte["fugas_splits"]
+        res = fs["resumen"]
+        solape = int(res.get("prompts_exactos_entre_splits", 0))
+        solape_total = int(res.get("prompts_completos_exactos_entre_splits", 0))
+        rojos = []
+        if fe["hallazgos"]:
+            rojos.append(f"{len(fe['hallazgos'])} fugas con el conjunto de "
+                         f"evaluacion ({dict(fe['por_chequeo'])})")
+        if solape or solape_total:
+            rojos.append("solapes exactos entre splits: "
+                         f"prefijo={solape} completo={solape_total}")
+        if fs["hallazgos"]:
+            rojos.append(f"{len(fs['hallazgos'])} hallazgos de fuga entre "
+                         "splits")
+        stats = {
+            "fugas_eval": len(fe["hallazgos"]),
+            "motivos_fuga_eval": dict(fe["por_chequeo"]),
+            "solape_prefijo": solape,
+            "solape_completo": solape_total,
+            "casi_identificados": res.get("casi_identificados_muestreado", 0),
+            "buckets_solapados": res.get("buckets_misma_carta_pregunta", 0),
+            "hallazgos_formato": len(reporte["formato"]["hallazgos"]),
+            "motivos_formato": dict(reporte["formato"]["por_chequeo"]),
+            "filas_con_fallo_sanidad": sum(
+                t["fallan"] for t in reporte["sanidad"]["tabla"]),
+            "semaforo_qa": "rojo" if rojos else "verde",
+        }
+        if rojos:
+            raise RuntimeError("puerta QA en ROJO: " + "; ".join(rojos))
         return stats
 
     # -- ejecución ---------------------------------------------------------
@@ -468,6 +561,14 @@ class Tuberia:
                             self.salida / "test.jsonl",
                             formato=self.formato),
              self.etapa_preparar),
+            ("qa",
+             lambda: _huella(self.salida / "train.jsonl",
+                            self.salida / "val.jsonl",
+                            self.salida / "test.jsonl",
+                            self.eval_combinada,
+                            umbral=qa.UMBRAL_NGRAMAS_FUGA,
+                            semilla=self.semilla),
+             self.etapa_qa),
         ]
 
     def ejecutar(self) -> int:
@@ -562,7 +663,7 @@ class Tuberia:
     def generar_informe(self) -> Path:
         st = {e: self._leer_stats(e) for e in
               ("snapshot", "eval", "reverificar", "filtro", "sharegpt",
-               "validar", "fusion", "preparar")}
+               "validar", "fusion", "preparar", "qa")}
         splits = self._conteos_finales()
         cartas = self._distribucion_cartas()
         fusion = st.get("fusion", {})
@@ -575,7 +676,8 @@ class Tuberia:
 
         lineas = []
         ahora = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        lineas.append("# dataset_fase1_v1 — informe de armado (T103)")
+        lineas.append("# " + self.salida.name +
+                      " — informe de armado (T103/T112)")
         lineas.append(f"\nGenerado: {ahora}\n")
         lineas.append(f"- Entrada: `{st.get('snapshot', {}).get('origen', '—')}`"
                      f" (sha256 {st.get('snapshot', {}).get('sha256', '—')[:16]}…,"
@@ -621,6 +723,9 @@ class Tuberia:
 
         lineas.append("## Duplicados y descartes por etapa\n")
         lineas.append(f"- filtro (familia): {filtro.get('descartes', {})}")
+        lineas.append(f"- filtro fugas_qa (T112, umbral "
+                      f"{qa.UMBRAL_NGRAMAS_FUGA} n-gramas): "
+                      f"{filtro.get('fugas_qa', 0)}")
         lineas.append(f"- validate_synthetic: near_duplicates="
                      f"{validar.get('near_duplicates', 0)} · rejected="
                      f"{validar.get('rejected', 0)} · reasons="
@@ -630,7 +735,10 @@ class Tuberia:
                      f"duplicado_exacto={d.get('duplicado_exacto', 0)} · "
                      f"duplicado_prefijo={d.get('duplicado_prefijo', 0)} · "
                      f"idioma={d.get('idioma', 0)} · "
-                     f"evaluacion={d.get('evaluacion', 0)}")
+                     f"evaluacion={d.get('evaluacion', 0)} · "
+                     f"puerta_calidad={d.get('puerta_calidad', 0)} · "
+                     f"real_excluido_por_minimo="
+                     f"{d.get('real_excluido_por_minimo', 0)}")
         rev = st.get("reverificar", {})
         lineas.append(f"- reverificar: invalidas={rev.get('invalidas', 0)} · "
                      f"motivos={rev.get('motivos', {})}")
@@ -668,6 +776,27 @@ class Tuberia:
                 lineas.append(f"- {a}")
             lineas.append("")
 
+        qa_st = st.get("qa", {})
+        if qa_st:
+            lineas.append("## Puerta QA final (T112)\n")
+            lineas.append(f"- semáforo QA: **{qa_st.get('semaforo_qa', '—')}**")
+            lineas.append(f"- fugas con conjunto de evaluación: "
+                          f"{qa_st.get('fugas_eval', 0)} "
+                          f"({qa_st.get('motivos_fuga_eval', {})})")
+            lineas.append(f"- solapes exactos entre splits: prefijo="
+                          f"{qa_st.get('solape_prefijo', 0)} · completo="
+                          f"{qa_st.get('solape_completo', 0)}")
+            lineas.append(f"- casi idénticos muestreados: "
+                          f"{qa_st.get('casi_identificados', 0)} · buckets "
+                          f"misma carta+pregunta solapados: "
+                          f"{qa_st.get('buckets_solapados', 0)}")
+            lineas.append(f"- hallazgos de formato: "
+                          f"{qa_st.get('hallazgos_formato', 0)} "
+                          f"({qa_st.get('motivos_formato', {})})")
+            lineas.append(f"- fallos de sanidad por muestreo: "
+                          f"{qa_st.get('filas_con_fallo_sanidad', 0)}")
+            lineas.append("")
+
         informe = self.salida / "informe.md"
         informe.write_text("\n".join(lineas) + "\n", encoding="utf-8")
         return informe
@@ -689,6 +818,10 @@ def main(argv=None) -> int:
     ap.add_argument("--max-repetition", type=float, default=0.12)
     ap.add_argument("--train-ratio", type=float, default=0.8)
     ap.add_argument("--val-ratio", type=float, default=0.1)
+    ap.add_argument("--min-real", type=int, default=200,
+                    help="filas reales minimas para conservar el bloque real")
+    ap.add_argument("--sin-puerta-real", action="store_true",
+                    help="no aplicar la puerta de calidad al corpus real")
     args = ap.parse_args(argv)
     tub = Tuberia(
         entrada=args.entrada, salida_dir=args.salida, semilla=args.semilla,
@@ -696,6 +829,7 @@ def main(argv=None) -> int:
         min_chars=args.min_chars, max_chars=args.max_chars,
         max_repetition=args.max_repetition,
         train_ratio=args.train_ratio, val_ratio=args.val_ratio,
+        puerta_real=not args.sin_puerta_real, min_real_filas=args.min_real,
     )
     return tub.ejecutar()
 
