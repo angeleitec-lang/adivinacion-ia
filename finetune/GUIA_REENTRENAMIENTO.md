@@ -116,9 +116,10 @@ rojo. El rojo se activa con fugas de evaluación, train o val vacíos, más del
   mazo aunque el tarot esté bien cubierto.
 - **Longitudes**: la media y el p95 orientan `max_length`; no sustituyen a un
   tokenizador real.
-- **Horas**: son una estimación con supuestos fijos (QLoRA 4 bits, 2048 tokens,
-  3 épocas, 750 tok/s en 7B y 350 tok/s en 14B, 15 % de sobrecarga). **No se han
-  medido** en nodo1.
+- **Horas**: son una estimación con supuestos fijos (QLoRA 4 bits, 4096 tokens,
+  3 épocas, 400-750 tok/s en 7B y 180-350 tok/s en 14B —punto medio 550/250—,
+  15 % de sobrecarga). **No se han medido** en nodo1/nodo2. Con el train v1
+  (8,38 M de tokens por época) dan ~10-20 h para el 7B y ~23-45 h para el 14B.
 
 ### 1.2 Defectos conocidos del dataset actual
 
@@ -142,8 +143,28 @@ Ficheros:
 - `finetune/entrenamiento/qlora_14b.yaml` — modelo principal, Qwen2.5-14B-Instruct.
 
 Ambas usan `task: sft`, `format: chatml`, 4 bits NF4 con doble cuantización,
-LoRA y `max_length: 2048`. Los valores de `lr`, tamaño de batch, acumulación y
-`r`/`alpha` son puntos de partida razonables, **no resultados medidos**.
+LoRA y `max_length: 4096` (ajustado en T111 a las longitudes reales del
+dataset v1: p50 1.510, p95 3.233, p99 3.869, máx 4.166 tokens estimados;
+4096 cubre ≥99,8 % sin truncar —solo 10 filas de 5.205 por encima, <0,01 %
+de tokens— y 6144/8192 no aportan nada). Los valores de `lr`, tamaño de
+batch, acumulación y `r`/`alpha` son puntos de partida razonables, **no
+resultados medidos**.
+
+Recalculo de estas cifras con el venv del proyecto (sin red):
+
+```bash
+$PY finetune/entrenamiento/ajuste_config.py --dataset /Users/angelgonzalez/fase0/dataset_fase1_v1
+```
+
+**Pérdida solo sobre la respuesta del asistente (T111)**: la pérdida debe
+calcularse únicamente en los tokens de los turnos `assistant`/`gpt`; los
+turnos `system` y `human` van enmascarados. Es el comportamiento estándar
+del SFT en ChatML (mask sobre el prompt), pero en Soup **no está verificado**:
+antes de la tanda hay que comprobar con `soup --help` el nombre de la clave
+(`train_on_prompt: false` o equivalente) y confirmar en el log que system/user
+no contribuyen a la pérdida. Si la herramienta entrena también sobre el
+prompt, el modelo gastaría capacidad en memorizar las instrucciones y las
+consultas en lugar de las lecturas.
 
 > **Sin verificar**: el CLI de Soup no está instalado y las claves exactas del
 > YAML se contrastaron solo con la documentación del proyecto. Antes de una
