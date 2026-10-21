@@ -35,6 +35,20 @@ valor; el tiempo real variará según la carga de los nodos.
 Modos: `--simulado` usa un lector simulado determinista (sin red): los nodos
 están saturados y las pruebas de este track no consumen LLM real.
 
+Backends (T95): `--backend local` (por defecto) usa el cliente local de
+`llm_client`; `--backend mercury` usa el backend en la nube Mercury 3
+(`INCEPTION_API_KEY`, `reasoning_effort=instant`, presupuesto por familia de
+`RECOMENDACION_MAX_TOKENS`, concurrencia y tasa configurables, backoff ante
+429). Cada fila aceptada lleva `generador: "local"` o `"mercury-3"` para poder
+auditar el origen. La clave se lee solo de la variable de entorno y nunca se
+escribe en logs ni en las salidas.
+
+Seguridad de ejecución (T95): una ventana de las últimas
+`--ventana-errores` (50) tareas detiene la pasada si la proporción de errores
+de red supera `--umbral-error` (0,20); las tareas no reclamadas quedan
+`pending`. `--solo-estimar` cuenta pendientes por familia y estima tokens y
+horas para local y Mercury sin tocar la BD ni crear copias.
+
 Formato de salida (D1, T75): por defecto se escribe el registro plano
 histórico (`prompt_system`/`prompt_user`/`respuesta`). Con
 `--formato sharegpt` las aceptadas se escriben ya en ShareGPT canónico
@@ -54,6 +68,7 @@ verbosidad del prompt antes que relajar el filtro. Ejemplo:
 from __future__ import annotations
 
 import argparse
+import collections
 import datetime
 import json
 import os
@@ -76,7 +91,27 @@ from fase1_piloto import limpiar_lectura, prompt_reintento  # noqa: E402
 from llm_client import LLMClient  # noqa: E402
 
 LATENCIA_PILOTO_S = 169.9
+LATENCIA_MERCURY_S = 4.1
 PISO_MAX_TOKENS = 4096
+BACKEND_URL_MERCURY = "https://api.inceptionlabs.ai/v1"
+BACKEND_MODEL_MERCURY = "mercury-3"
+API_KEY_ENV_MERCURY = "INCEPTION_API_KEY"
+REASONING_EFFORT_MERCURY = "instant"
+TEMPERATURE_MERCURY = 0.5
+TIMEOUT_MERCURY_S = 180.0
+TASA_MAX_POR_MINUTO_MERCURY = 60
+MAX_COMPLETION_TOKENS_DEFECTO = 6144
+MAX_WORKERS_MERCURY = 3
+REINTENTOS_RED_MERCURY = 3
+ENDPOINT_LOCAL_DEFECTO = "http://10.0.0.4:8000/v1"
+GENERADOR_LOCAL = "local"
+GENERADOR_MERCURY = "mercury-3"
+UMBRAL_ERROR_DEFECTO = 0.20
+VENTANA_ERRORES_DEFECTO = 50
+TOKENS_PROMPT_MEDIA = 840
+TOKENS_COMPLETION_MEDIA = 1282
+PRECIO_MERCURY_INPUT_USD_MILLON = 0.10
+PRECIO_MERCURY_OUTPUT_USD_MILLON = 0.35
 MOTIVO_TRUNCADO = (
     "respuesta_truncada: la lectura quedó cortada antes de cerrar; entrégala "
     "completa y terminada en puntuación."
@@ -289,18 +324,77 @@ def max_tokens_efectivo(fila, piso):
     return max(int(fila.get("max_tokens") or 1024), efectivo)
 
 
+def validar_clave_mercury():
+    """Comprueba que la clave de Mercury exista en el entorno.
+
+    Nunca devuelve ni imprime el valor; solo nombra la variable que falta.
+    """
+    if not os.environ.get(API_KEY_ENV_MERCURY):
+        raise RuntimeError(
+            "Falta la variable de entorno %s para usar --backend mercury; "
+            "defínela antes de ejecutar (la clave no se lee de ficheros)."
+            % API_KEY_ENV_MERCURY)
+
+
+def crear_cliente_mercury(simulado=None, max_concurrencia=MAX_WORKERS_MERCURY,
+                          tasa_max_por_minuto=TASA_MAX_POR_MINUTO_MERCURY,
+                          timeout=TIMEOUT_MERCURY_S, model=BACKEND_MODEL_MERCURY,
+                          metricas=None):
+    """Construye el LLMClient del backend Mercury 3 (T95).
+
+    La clave se toma exclusivamente de `INCEPTION_API_KEY` (sin caer a
+    `auth.json`) y solo se comprueba aquí; con `simulado` no hace falta clave.
+    """
+    if simulado is None:
+        validar_clave_mercury()
+    return LLMClient(
+        endpoints=[{
+            "url": BACKEND_URL_MERCURY,
+            "model": model,
+            "api_key_env": API_KEY_ENV_MERCURY,
+        }],
+        timeout=timeout,
+        simulado=simulado,
+        max_concurrencia=max(int(max_concurrencia), 1),
+        tasa_max_por_minuto=tasa_max_por_minuto,
+        metricas=metricas,
+        reasoning_effort=REASONING_EFFORT_MERCURY,
+        max_completion_tokens=None,
+    )
+
+
+def max_tokens_mercury(bloque):
+    """Presupuesto de completion por familia para Mercury (tabla T89)."""
+    return int(fp.RECOMENDACION_MAX_TOKENS.get(bloque, MAX_COMPLETION_TOKENS_DEFECTO))
+
+
 def procesar_una(fila, cliente, kb, max_reintentos=2, max_tokens_piso=PISO_MAX_TOKENS,
-                temperature=0.2):
+                temperature=0.2, backend=GENERADOR_LOCAL, reintentos_red=None,
+                generador=None):
     """Una fila -> registro con lectura, veredicto e intentos.
 
     `error` distinto de None significa fallo de transporte (red/salida vacía):
-    no es un rechazo del verificador.
+    no es un rechazo del verificador. En Mercury se envía el presupuesto por
+    familia en `max_completion_tokens`; en local se mantiene el cálculo
+    histórico de `max_tokens` con piso.
     """
     payload = json.loads(fila["payload"]) if isinstance(fila["payload"], str) else fila["payload"]
     pregunta = extraer_pregunta(fila.get("prompt", ""))
     tarea = tarea_desde_job(fila["bloque"], payload, pregunta, kb)
     prompt = fp.construir_prompt(tarea, kb)
-    max_tokens = max_tokens_efectivo(fila, max_tokens_piso)
+    es_mercury = backend == GENERADOR_MERCURY
+    if es_mercury:
+        max_tokens = max_tokens_mercury(fila["bloque"])
+        tope_completion = max_tokens
+        if reintentos_red is None:
+            reintentos_red = REINTENTOS_RED_MERCURY
+    else:
+        max_tokens = max_tokens_efectivo(fila, max_tokens_piso)
+        tope_completion = None
+        if reintentos_red is None:
+            reintentos_red = 0
+    if generador is None:
+        generador = GENERADOR_MERCURY if es_mercury else GENERADOR_LOCAL
     usuario = prompt["user"]
     intentos = 0
     previos = []
@@ -312,10 +406,14 @@ def procesar_una(fila, cliente, kb, max_reintentos=2, max_tokens_piso=PISO_MAX_T
     while True:
         intentos += 1
         try:
-            raw = cliente.chat(
-                prompt["system"], usuario,
-                max_tokens=max_tokens, temperature=temperature, max_reintentos=0,
-            )
+            kwargs = {
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "max_reintentos": reintentos_red,
+            }
+            if tope_completion is not None:
+                kwargs["max_completion_tokens"] = tope_completion
+            raw = cliente.chat(prompt["system"], usuario, **kwargs)
         except Exception as exc:
             error = f"error_red:{type(exc).__name__}"
             break
@@ -346,6 +444,7 @@ def procesar_una(fila, cliente, kb, max_reintentos=2, max_tokens_piso=PISO_MAX_T
         "max_tokens": max_tokens,
         "segundos": round(time.monotonic() - t0, 3),
         "error": error,
+        "generador": generador,
         "payload": payload,
         "calculos": tarea.get("calculos") or {},
     }
@@ -359,6 +458,8 @@ def a_sharegpt(fila: dict) -> dict:
       `bloque` para la familia, y los ids numéricos no colisionan con 'eval-'.
     - conserva `calculos` si la fila los trae: `validate_synthetic` usa esa
       fuente canónica para el grounding (D7), igual que `verificar_lectura`.
+    - conserva `generador` (T95) para auditar si la lectura vino de local o
+      de Mercury.
     """
     def nfc(texto):
         return unicodedata.normalize("NFC", texto or "")
@@ -375,6 +476,8 @@ def a_sharegpt(fila: dict) -> dict:
     }
     if fila.get("calculos"):
         fila_out["calculos"] = fila["calculos"]
+    if fila.get("generador"):
+        fila_out["generador"] = fila["generador"]
     return fila_out
 
 
@@ -396,7 +499,9 @@ def _escribir_jsonl(ruta, registro):
 def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
             max_tokens_piso=PISO_MAX_TOKENS, temperature=0.2, limite=0,
             huerfano_minutos=30.0, out_dir=None, stop_event=None,
-            formato="plano"):
+            formato="plano", backend=GENERADOR_LOCAL, reintentos_red=None,
+            ventana_errores=VENTANA_ERRORES_DEFECTO,
+            umbral_error=UMBRAL_ERROR_DEFECTO):
     db_path = Path(db_path)
     if not db_path.exists():
         raise FileNotFoundError(f"no existe la BD: {db_path}")
@@ -423,7 +528,33 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
         "errores_red": 0,
         "omitidas": 0,
         "interrumpida": False,
+        "backend": backend,
+        "parada": None,
+        "no_procesadas_por_parada": 0,
     }
+    ventana_max = max(int(ventana_errores), 1)
+    ventana = collections.deque(maxlen=ventana_max)
+    parada = threading.Event()
+
+    def detenido():
+        return parada.is_set() or (stop_event is not None and stop_event.is_set())
+
+    def anotar_resultado(hubo_error):
+        """Ventana móvil de errores: detiene la pasada si supera el umbral."""
+        ventana.append(1 if hubo_error else 0)
+        if len(ventana) < ventana_max:
+            return
+        proporcion = sum(ventana) / len(ventana)
+        if proporcion > umbral_error and not parada.is_set():
+            resumen["parada"] = (
+                f"errores {sum(ventana)}/{len(ventana)} "
+                f"({proporcion:.0%}) > {umbral_error:.0%}"
+            )
+            parada.set()
+            if stop_event is not None:
+                stop_event.set()
+
+    ids = []
     try:
         with lock:
             resumen["huerfanas_recuperadas"] = recuperar_huerfanas(con, huerfano_minutos)
@@ -434,7 +565,7 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
         resumen["pendientes"] = len(ids)
 
         def uno(job_id):
-            if stop_event is not None and stop_event.is_set():
+            if detenido():
                 return
             with lock:
                 reclamado = reclamar(con, job_id, wid)
@@ -452,6 +583,10 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
                     max_reintentos=max_reintentos,
                     max_tokens_piso=max_tokens_piso,
                     temperature=temperature,
+                    backend=backend,
+                    reintentos_red=reintentos_red,
+                    generador=(GENERADOR_MERCURY if backend == GENERADOR_MERCURY
+                               else GENERADOR_LOCAL),
                 )
             except (ValueError, KeyError, TypeError) as exc:
                 with lock:
@@ -482,17 +617,33 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
                     marcar(con, job_id, "failed", "; ".join(registro["motivos"]))
                     _escribir_jsonl(rechazadas_path, registro)
                     resumen["rechazadas"] += 1
+                anotar_resultado(bool(registro.get("error")))
 
         if workers <= 1:
             for jid in ids:
-                if stop_event is not None and stop_event.is_set():
+                if detenido():
                     break
                 uno(jid)
         else:
             with ThreadPoolExecutor(max_workers=workers) as ex:
-                futuros = [ex.submit(uno, jid) for jid in ids]
-                for f in as_completed(futuros):
-                    f.result()
+                pendientes = iter(ids)
+                futuros = {}
+
+                def enviar():
+                    while len(futuros) < workers and not detenido():
+                        try:
+                            jid = next(pendientes)
+                        except StopIteration:
+                            break
+                        futuros[ex.submit(uno, jid)] = jid
+
+                enviar()
+                while futuros:
+                    for f in as_completed(list(futuros)):
+                        del futuros[f]
+                        f.result()
+                        enviar()
+                        break
     except KeyboardInterrupt:
         resumen["interrumpida"] = True
         if stop_event is not None:
@@ -501,6 +652,8 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
     finally:
         with lock:
             resumen["liberadas_al_interrumpir"] = liberar_vuelo(con, wid)
+            resumen["no_procesadas_por_parada"] = max(
+                0, len(ids) - resumen["procesadas"])
         con.close()
     return resumen
 
@@ -546,6 +699,89 @@ def estimar_dry_run(db_path, workers=4, latencia_s=LATENCIA_PILOTO_S):
         "horas_estimadas": horas,
         "horas_por_bloque": horas_por_bloque,
     }
+
+
+def estimar_backends(db_path, workers_local=4, workers_mercury=MAX_WORKERS_MERCURY,
+                     latencia_local=LATENCIA_PILOTO_S,
+                     latencia_mercury=LATENCIA_MERCURY_S):
+    """`--solo-estimar`: pendientes por familia, tokens y horas por backend.
+
+    No escribe en la BD ni crea copias: abre la BD en modo lectura. Los tokens
+    de entrada/salida son la media observada en el piloto T83 (840 / 1282 por
+    lectura) y el «techo» de salida usa el presupuesto por familia. El coste de
+    Mercury es una estimación con los precios de lanzamiento de T83.
+    """
+    uri = Path(db_path).resolve().as_uri() + "?mode=ro"
+    con = sqlite3.connect(uri, uri=True)
+    if not tabla_existe(con):
+        con.close()
+        raise ValueError(f"la BD no tiene la tabla jobs: {db_path}")
+    filas = list(con.execute(
+        "SELECT bloque, COUNT(*) FROM jobs WHERE status='pending' "
+        "GROUP BY bloque ORDER BY bloque"
+    ))
+    conteos = {r[0]: r[1] for r in con.execute(
+        "SELECT status, COUNT(*) FROM jobs GROUP BY status"
+    )}
+    con.close()
+    total = sum(c for _, c in filas)
+    por_bloque = {}
+    techo_salida = 0
+    print(f"Pendientes: {total} (por estado: {conteos})")
+    print(f"{'familia':<20} {'pendientes':>10} {'max_completion':>15} "
+          f"{'techo salida':>14}")
+    for bloque, c in filas:
+        tope = max_tokens_mercury(bloque)
+        techo = c * tope
+        techo_salida += techo
+        por_bloque[bloque] = {
+            "pendientes": c,
+            "max_completion": tope,
+            "techo_tokens_salida": techo,
+        }
+        print(f"{bloque:<20} {c:>10} {tope:>15} {techo:>14}")
+
+    entrada = total * TOKENS_PROMPT_MEDIA
+    salida_media = total * TOKENS_COMPLETION_MEDIA
+    resumen = {
+        "pendientes": total,
+        "conteos": conteos,
+        "por_bloque": por_bloque,
+        "tokens_entrada_estimados": entrada,
+        "tokens_salida_estimados": salida_media,
+        "tokens_salida_techo": techo_salida,
+    }
+    for clave, nombre, workers, latencia in (
+        ("local", GENERADOR_LOCAL, workers_local, latencia_local),
+        ("mercury", GENERADOR_MERCURY, workers_mercury, latencia_mercury),
+    ):
+        horas = total * latencia / 3600.0 / max(1, workers)
+        datos = {
+            "workers": workers,
+            "latencia_s": latencia,
+            "horas": horas,
+        }
+        if clave == "mercury":
+            datos["coste_usd"] = (
+                entrada / 1_000_000 * PRECIO_MERCURY_INPUT_USD_MILLON
+                + salida_media / 1_000_000 * PRECIO_MERCURY_OUTPUT_USD_MILLON
+            )
+        resumen[clave] = datos
+        extra = (f", coste ~${datos['coste_usd']:.2f}"
+                 if "coste_usd" in datos else "")
+        print(
+            f"{nombre}: {total} lecturas x {latencia} s / {workers} workers "
+            f"= ~{horas:.1f} h{extra}"
+        )
+    print(
+        f"Tokens estimados: entrada ~{entrada:,} + salida media ~{salida_media:,} "
+        f"(techo de salida {techo_salida:,})."
+    )
+    print(
+        "Supuestos: latencias del piloto (local 169,9 s/lectura T49; Mercury "
+        "4,1 s/lectura T83) y 840/1282 tokens por lectura (T83)."
+    )
+    return resumen
 
 
 # --------------------------------------------------------------------------- #
@@ -730,16 +966,22 @@ def main(argv=None):
     )
     ap.add_argument("--db", required=True, help="ruta a la jobs.db (copia de trabajo)")
     ap.add_argument("--out-dir", default=None,
-                    help="directorio de salida (por defecto <db>_salida)")
-    ap.add_argument("--workers", type=int, default=4)
+                    help="directorio de salida (por defecto "
+                         "<carpeta_de_la_bd>/salida_ejecutor_fase1)")
+    ap.add_argument("--backend", choices=("local", "mercury"),
+                    default="local",
+                    help="local (por defecto) o mercury (API en la nube)")
+    ap.add_argument("--workers", type=int, default=None,
+                    help="hilos concurrentes (local 4, mercury 3 por defecto)")
     ap.add_argument("--max-reintentos", type=int, default=2)
-    ap.add_argument("--timeout", type=float, default=300.0,
-                    help="timeout por petición al nodo (s)")
+    ap.add_argument("--timeout", type=float, default=None,
+                    help="timeout por petición (s); local 300, mercury 180")
     ap.add_argument("--max-tokens-piso", type=int, default=PISO_MAX_TOKENS,
                     help="piso global de max_tokens; el suelo por bloque sale de la "
                          "tabla fase1_prompts.RECOMENDACION_MAX_TOKENS (cruz_celta/"
                          "lectura_completa 6144, espanola_7 5120, etc.)")
-    ap.add_argument("--temperature", type=float, default=0.2)
+    ap.add_argument("--temperature", type=float, default=None,
+                    help="temperatura (local 0.2, mercury 0.5)")
     ap.add_argument("--limite", type=int, default=0,
                     help="máximo de tareas a procesar en esta pasada (0 = sin límite)")
     ap.add_argument("--huerfano-minutos", type=float, default=30.0,
@@ -752,43 +994,91 @@ def main(argv=None):
                          "calculos (D1, T75)")
     ap.add_argument("--dry-run", action="store_true",
                     help="solo cuenta pendientes y estima horas; no escribe nada")
+    ap.add_argument("--solo-estimar", action="store_true",
+                    help="pendientes por familia, tokens y horas de local y "
+                         "mercury; no escribe ni copia la BD")
+    ap.add_argument("--ventana-errores", type=int,
+                    default=VENTANA_ERRORES_DEFECTO,
+                    help="tamaño de la ventana móvil de errores (50)")
+    ap.add_argument("--umbral-error", type=float, default=UMBRAL_ERROR_DEFECTO,
+                    help="proporción de errores que detiene la pasada (0.20)")
+    ap.add_argument("--tasa-max-por-minuto", type=int,
+                    default=TASA_MAX_POR_MINUTO_MERCURY,
+                    help="límite de peticiones/minuto en mercury (60)")
+    ap.add_argument("--reintentos-red", type=int, default=None,
+                    help="reintentos de red por tarea (mercury 3, local 0)")
     ap.add_argument("--model", default=None)
     ap.add_argument("--endpoints", default=None,
-                    help="URLs separadas por coma (por defecto las de llm_client)")
+                    help="URLs locales separadas por coma (por defecto solo "
+                         "el nodo2: %s)" % ENDPOINT_LOCAL_DEFECTO)
     args = ap.parse_args(argv)
 
+    es_mercury = args.backend == "mercury"
+    backend = GENERADOR_MERCURY if es_mercury else GENERADOR_LOCAL
+    workers = args.workers if args.workers is not None else (
+        MAX_WORKERS_MERCURY if es_mercury else 4)
+    temperature = args.temperature if args.temperature is not None else (
+        TEMPERATURE_MERCURY if es_mercury else 0.2)
+    timeout = args.timeout if args.timeout is not None else (
+        TIMEOUT_MERCURY_S if es_mercury else 300.0)
+
+    if args.solo_estimar:
+        trabajadores_mercury = (args.workers if args.workers is not None
+                                else MAX_WORKERS_MERCURY)
+        trabajadores_local = args.workers if args.workers is not None else 4
+        estimar_backends(args.db, workers_local=trabajadores_local,
+                         workers_mercury=trabajadores_mercury)
+        return 0
     if args.dry_run:
-        estimar_dry_run(args.db, workers=args.workers)
+        estimar_dry_run(args.db, workers=workers)
         return 0
 
     kb = cargar_kb()
-    if args.simulado:
-        cliente = LLMClient(simulado=simulacion_fase1)
-    else:
-        endpoints = args.endpoints.split(",") if args.endpoints else None
-        cliente = LLMClient(endpoints=endpoints, timeout=args.timeout)
-        if args.model:
-            cliente.model = args.model
+    try:
+        if es_mercury:
+            cliente = crear_cliente_mercury(
+                simulado=simulacion_fase1 if args.simulado else None,
+                max_concurrencia=workers,
+                tasa_max_por_minuto=args.tasa_max_por_minuto,
+                timeout=timeout,
+                model=args.model or BACKEND_MODEL_MERCURY,
+            )
+        elif args.simulado:
+            cliente = LLMClient(simulado=simulacion_fase1)
+        else:
+            endpoints = (args.endpoints.split(",") if args.endpoints
+                         else [ENDPOINT_LOCAL_DEFECTO])
+            cliente = LLMClient(endpoints=endpoints, timeout=timeout)
+            if args.model:
+                cliente.model = args.model
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
 
     stop_event = threading.Event()
     try:
         resumen = ejecutar(
             args.db, cliente, kb,
-            workers=args.workers,
+            workers=workers,
             max_reintentos=args.max_reintentos,
             max_tokens_piso=args.max_tokens_piso,
-            temperature=args.temperature,
+            temperature=temperature,
             limite=args.limite,
             huerfano_minutos=args.huerfano_minutos,
             out_dir=args.out_dir,
             stop_event=stop_event,
             formato=args.formato,
+            backend=backend,
+            reintentos_red=args.reintentos_red,
+            ventana_errores=args.ventana_errores,
+            umbral_error=args.umbral_error,
         )
     except KeyboardInterrupt:
         print("Interrumpido: las tareas en vuelo de este worker han vuelto a "
               "pending (BD consistente).", flush=True)
         return 130
     print(
+        f"Backend: {resumen['backend']}\n"
         f"Copia de BD: {resumen['copia']}\n"
         f"Huérfanas recuperadas: {resumen['huerfanas_recuperadas']}\n"
         f"Pendientes al inicio: {resumen['pendientes']}\n"
@@ -796,6 +1086,13 @@ def main(argv=None):
         f"Rechazadas: {resumen['rechazadas']} | Errores de red: {resumen['errores_red']} | "
         f"Omitidas: {resumen['omitidas']}"
     )
+    if resumen["parada"]:
+        print(
+            f"PARADA DE SEGURIDAD: {resumen['parada']}. "
+            f"Quedaron {resumen['no_procesadas_por_parada']} tareas sin procesar "
+            f"(siguen pending)."
+        )
+        return 3
     return 0
 
 
