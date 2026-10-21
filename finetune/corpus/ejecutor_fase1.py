@@ -31,6 +31,22 @@ valor; el tiempo real variará según la carga de los nodos.
 
 Modos: `--simulado` usa un lector simulado determinista (sin red): los nodos
 están saturados y las pruebas de este track no consumen LLM real.
+
+Formato de salida (D1, T75): por defecto se escribe el registro plano
+histórico (`prompt_system`/`prompt_user`/`respuesta`). Con
+`--formato sharegpt` las aceptadas se escriben ya en ShareGPT canónico
+(`conversations` system/human/gpt en NFC, con `id`, `bloque` y `calculos`),
+listas para consumir directamente por `validate_synthetic` sin adaptador
+externo.
+
+Validación recomendada en producción (D2, T75): el default de
+`validate_synthetic` es `--min-chars 400`, adecuado para lecturas reales
+completas; el lector simulado de este módulo genera respuestas breves, así
+que el ensayo valida con `--min-chars 60`. En producción NO se baja el
+umbral: validar con el default y, si una familia queda corta, subir la
+verbosidad del prompt antes que relajar el filtro. Ejemplo:
+
+    python validate_synthetic.py --dir <salida> --min-chars 400
 """
 from __future__ import annotations
 
@@ -45,6 +61,7 @@ import sqlite3
 import sys
 import threading
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -292,7 +309,35 @@ def procesar_una(fila, cliente, kb, max_reintentos=2, max_tokens_piso=PISO_MAX_T
         "segundos": round(time.monotonic() - t0, 3),
         "error": error,
         "payload": payload,
+        "calculos": tarea.get("calculos") or {},
     }
+
+
+def a_sharegpt(fila: dict) -> dict:
+    """Convierte un registro plano del ejecutor a ShareGPT canónico (D1, T75).
+
+    - `conversations`: system (si existe), human y gpt, con el texto en NFC.
+    - conserva `id` y `bloque`: `merge_final` y `preparar_entrenamiento` leen
+      `bloque` para la familia, y los ids numéricos no colisionan con 'eval-'.
+    - conserva `calculos` si la fila los trae: `validate_synthetic` usa esa
+      fuente canónica para el grounding (D7), igual que `verificar_lectura`.
+    """
+    def nfc(texto):
+        return unicodedata.normalize("NFC", texto or "")
+
+    conv = []
+    if fila.get("prompt_system"):
+        conv.append({"from": "system", "value": nfc(fila["prompt_system"])})
+    conv.append({"from": "human", "value": nfc(fila.get("prompt_user", ""))})
+    conv.append({"from": "gpt", "value": nfc(fila.get("respuesta", ""))})
+    fila_out = {
+        "conversations": conv,
+        "id": fila.get("id"),
+        "bloque": fila.get("bloque"),
+    }
+    if fila.get("calculos"):
+        fila_out["calculos"] = fila["calculos"]
+    return fila_out
 
 
 # --------------------------------------------------------------------------- #
@@ -312,7 +357,8 @@ def _escribir_jsonl(ruta, registro):
 
 def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
             max_tokens_piso=PISO_MAX_TOKENS, temperature=0.2, limite=0,
-            huerfano_minutos=30.0, out_dir=None, stop_event=None):
+            huerfano_minutos=30.0, out_dir=None, stop_event=None,
+            formato="plano"):
     db_path = Path(db_path)
     if not db_path.exists():
         raise FileNotFoundError(f"no existe la BD: {db_path}")
@@ -391,7 +437,8 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
                     resumen["errores_red"] += 1
                 elif registro["ok"]:
                     marcar(con, job_id, "done")
-                    _escribir_jsonl(aceptadas_path, registro)
+                    fila_out = a_sharegpt(registro) if formato == "sharegpt" else registro
+                    _escribir_jsonl(aceptadas_path, fila_out)
                     resumen["aceptadas"] += 1
                 else:
                     marcar(con, job_id, "failed", "; ".join(registro["motivos"]))
@@ -499,6 +546,26 @@ def _sim_numeros(usuario):
     return frases
 
 
+_SIM_EJE_RE = re.compile(
+    r"^\s*-\s*(Sol|Luna|Ascendente):\s*([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)", re.M
+)
+
+
+def _sim_ejes(usuario):
+    """Ejes astrales del prompt («- Sol: Aries ...») como «Sol en Aries».
+
+    El lector simulado los menciona para que el grounding (por texto o por
+    `calculos`, D7) encuentre los signos; al copiarlos del prompt generado
+    desde la carta, nunca contradice a `_verif_sol`.
+    """
+    vistos = {}
+    for m in _SIM_EJE_RE.finditer(usuario or ""):
+        clave = (m.group(1), fp._norm(m.group(2)))
+        if clave not in vistos:
+            vistos[clave] = f"{m.group(1)} en {m.group(2)}"
+    return list(vistos.values())
+
+
 def simulacion_fase1(sistema, usuario):
     cartas = _sim_cartas(usuario)
     frases = []
@@ -516,6 +583,11 @@ def simulacion_fase1(sistema, usuario):
                     "con claridad"
                 )
         frases.append("; ".join(partes) + ".")
+    ejes = _sim_ejes(usuario)
+    if ejes:
+        frases.append(
+            "En el cielo consultado, " + ", ".join(ejes) + " dan el marco de la lectura."
+        )
     for frase in _sim_numeros(usuario):
         frases.append(f"En lo numérico, el {frase} marca el ritmo de esta etapa.")
     if not frases:
@@ -550,6 +622,10 @@ def main(argv=None):
                     help="running más antiguas que esto vuelven a pending")
     ap.add_argument("--simulado", action="store_true",
                     help="lector simulado determinista (sin red, no consume LLM)")
+    ap.add_argument("--formato", choices=("plano", "sharegpt"), default="plano",
+                    help="formato de aceptadas.jsonl: registro plano historico "
+                         "(por defecto) o ShareGPT canonico con bloque, id y "
+                         "calculos (D1, T75)")
     ap.add_argument("--dry-run", action="store_true",
                     help="solo cuenta pendientes y estima horas; no escribe nada")
     ap.add_argument("--model", default=None)
@@ -582,6 +658,7 @@ def main(argv=None):
             huerfano_minutos=args.huerfano_minutos,
             out_dir=args.out_dir,
             stop_event=stop_event,
+            formato=args.formato,
         )
     except KeyboardInterrupt:
         print("Interrumpido: las tareas en vuelo de este worker han vuelto a "
