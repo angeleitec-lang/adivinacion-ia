@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cierre de la recopilación (T85): orquestador del encadenado final.
+"""Cierre de la recopilación (T85/T90): orquestador del encadenado final.
 
 Cuando terminan las pasadas en vivo, ejecuta en orden y sin olvidos:
 
@@ -7,10 +7,15 @@ Cuando terminan las pasadas en vivo, ejecuta en orden y sin olvidos:
      conservar la ULTIMA version de cada (entidad_id, faceta); copia previa).
   2. limpieza de libros aplicada a las evidencias (aplicar_limpieza_libros.py,
      T71: generar en copia y sustituir el original con copia de seguridad).
-  3. consenso con --excluir-claves y --rehacer-celdas-con-exclusion (T78).
-  4. kb_v2.py (T66).
-  5. cobertura v3 (T82) si el script esta integrado; si no, se omite con aviso.
-  6. informe de cierre (agrega el log JSONL).
+  3. filtro de atribucion (filtro_atribucion.py, T88): retirar evidencias de
+     astrologia/numerologia mal atribuidas de evidencias_web y
+     libros/evidencias (ya limpias), con copia previa, reescritura atomica y
+     verificacion por clave COMPLETA. Idempotente.
+  4. consenso con --excluir-claves (T71 + T88) y --rehacer-celdas-con-exclusion
+     (T78). Acepta varias listas de claves unidas por clave.
+  5. kb_v2.py (T66).
+  6. cobertura v3 (T82) si el script esta integrado; si no, se omite con aviso.
+  7. informe de cierre (agrega el log JSONL).
 
 Garantias: cada paso hace copia previa con marca de tiempo, es idempotente y
 reanudable, registra comando/entrada/salida/recuentos en un log JSONL, escribe
@@ -19,10 +24,11 @@ de forma atomica y el encadenado se detiene en el primer fallo.
 --dry-run solo lee: comprueba entradas, procesos vivos que escriban esos ficheros
 (aborta con aviso), espacio en disco y que haria cada paso. No escribe nada.
 
---paso 2 --solo-verificar: re-verifica una limpieza ya aplicada sin
-reaplicarla (solo lectura; no loquean los procesos vivos).
+--paso 2|3 --solo-verificar: re-verifica una limpieza (paso 2) o un filtro de
+atribucion (paso 3) ya aplicados sin reaplicarlos (solo lectura; no loquean los
+procesos vivos).
 
-Sin LLM propio ni red (el paso 3 puede pasarse --simulado para pruebas).
+Sin LLM propio ni red (el paso de consenso puede pasarse --simulado para pruebas).
 """
 import argparse
 import hashlib
@@ -44,11 +50,15 @@ PATRON_PROCESOS = r"consenso_kb\.py|afirmaciones_(rapido|libros|es)\.py|evidenci
 NOMBRES_PASOS = {
     1: "dedupe_consenso",
     2: "limpieza_libros",
-    3: "consenso_exclusion",
-    4: "kb_v2",
-    5: "cobertura_v3",
-    6: "informe_cierre",
+    3: "filtro_atribucion",
+    4: "consenso_exclusion",
+    5: "kb_v2",
+    6: "cobertura_v3",
+    7: "informe_cierre",
 }
+
+# Pasos que admiten --solo-verificar (re-verificar sin reaplicar).
+PASOS_SOLO_VERIFICAR = (2, 3)
 
 
 class PasoFallido(Exception):
@@ -224,19 +234,115 @@ def paso2_limpieza_libros(ctx, log_comandos):
 
 
 # ---------------------------------------------------------------------------
-# Paso 3: consenso con exclusion (T78)
+# Paso 3: filtro de atribucion (T88) sobre evidencias web y de libros
 # ---------------------------------------------------------------------------
 
-def paso3_consenso_exclusion(ctx, log_comandos):
+def _ruta_filtro(ctx, nombre):
+    return os.path.join(ctx["filtro_atribucion_out"], nombre)
+
+
+def _verificacion_atribucion(ctx, estado="verificada"):
+    """Verificacion del paso 3 con la clave COMPLETA.
+
+    Las retiradas del filtro traen hash_seccion/entidad_id/faceta en la RAIZ
+    del registro (no anidados como en la limpieza de libros). Ninguna clave
+    retirada debe seguir vigente en las evidencias.
+    """
+    r_web = _ruta_filtro(ctx, "evidencias_retiradas_web.jsonl")
+    r_lib = _ruta_filtro(ctx, "evidencias_retiradas_libros.jsonl")
+    if not (os.path.exists(r_web) and os.path.exists(r_lib)):
+        raise PasoFallido(
+            "filtro_atribucion: no hay ficheros de retiradas para verificar "
+            "(esperados en %s)" % ctx["filtro_atribucion_out"])
+    claves_retiradas = set()
+    n_retiradas = 0
+    for r in (r_web, r_lib):
+        for ev in _leer_jsonl(r):
+            n_retiradas += 1
+            claves_retiradas.add((ev.get("hash_seccion"),
+                                 ev.get("entidad_id"), ev.get("faceta")))
+    vigentes = set()
+    for r in (ctx["evidencias_web"], ctx["evidencias_libros"]):
+        for e in _leer_jsonl(r):
+            vigentes.add((e.get("hash_seccion"), e.get("entidad_id"),
+                         e.get("faceta")))
+    filtradas = claves_retiradas & vigentes
+    if filtradas:
+        ejemplo = sorted(filtradas)[0]
+        raise PasoFallido(
+            "filtro_atribucion: %d claves retiradas siguen vigentes "
+            "(ejemplo: hash=%s... entidad=%s faceta=%s)"
+            % (len(filtradas), (ejemplo[0] or "")[:12], ejemplo[1], ejemplo[2]))
+    return {"estado": estado, "retiradas": n_retiradas,
+            "claves_retiradas": len(claves_retiradas), "vigentes": len(vigentes)}
+
+
+def paso3_filtro_atribucion(ctx, log_comandos):
+    if ctx.get("solo_verificar"):
+        return _verificacion_atribucion(ctx, "verificada")
+    script = os.path.join(CORPUS, "filtro_atribucion.py")
+    cmd = [sys.executable, script,
+           "--base", ctx["base_dir"],
+           "--evidencias-web", ctx["evidencias_web"],
+           "--evidencias-libros", ctx["evidencias_libros"],
+           "--secciones-dir", ctx["secciones_dir"],
+           "--procesados-web", ctx["procesados_web"],
+           "--procesados-libros", ctx["procesados_libros"],
+           "--salida", ctx["filtro_atribucion_out"]]
+    _ejecutar(cmd, log_comandos)
+    cambios = {}
+    backups = {}
+    pares = (
+        ("web", ctx["evidencias_web"],
+         _ruta_filtro(ctx, "evidencias_conservadas_web.jsonl")),
+        ("libros", ctx["evidencias_libros"],
+         _ruta_filtro(ctx, "evidencias_conservadas_libros.jsonl")),
+    )
+    for origen, ev_ruta, cons_ruta in pares:
+        if not os.path.exists(cons_ruta):
+            raise PasoFallido("filtro_atribucion: falta %s" % cons_ruta)
+        if _md5(ev_ruta) == _md5(cons_ruta):
+            cambios[origen] = "sin_cambio"
+            continue
+        backups[origen] = _copia_previa(ev_ruta, sufijo="pre-filtro-atrib")
+        tmp = ev_ruta + ".tmp-%d" % os.getpid()
+        shutil.copy2(cons_ruta, tmp)
+        os.replace(tmp, ev_ruta)
+        cambios[origen] = "aplicada"
+    verif = _verificacion_atribucion(ctx, "ok")
+    if all(v == "sin_cambio" for v in cambios.values()) and verif["retiradas"] == 0:
+        return dict(verif, estado="ya_aplicada", cambios=cambios)
+    res = dict(verif, cambios=cambios)
+    if backups:
+        res["backups"] = backups
+    return res
+
+
+# ---------------------------------------------------------------------------
+# Paso 4: consenso con exclusion (T78), aceptando T71 + T88
+# ---------------------------------------------------------------------------
+
+def _listas_claves_exclusion(ctx):
+    """Rutas de claves a excluir que existen (T71 limpieza + T88 atribucion)."""
+    rutas = []
+    for clave in ("claves_excluir", "claves_atribucion"):
+        r = ctx.get(clave)
+        if r and os.path.exists(r) and r not in rutas:
+            rutas.append(r)
+    return rutas
+
+
+def paso4_consenso_exclusion(ctx, log_comandos):
     script = os.path.join(CORPUS, "consenso_kb.py")
     cmd = [sys.executable, script,
            "--web-afirmaciones", ctx["afirmaciones_web_file"],
            "--libros-afirmaciones", ctx["afirmaciones_libros_file"],
-           "--excluir-claves", ctx["claves_excluir"],
            "--secciones-dir", ctx["secciones_dir"],
            "--rehacer-celdas-con-exclusion",
            "--out-dir", ctx["consenso_dir"],
            "--workers", str(ctx["workers"])]
+    for kf in _listas_claves_exclusion(ctx):
+        cmd += ["--excluir-claves", kf]
     if ctx.get("simulado"):
         cmd.append("--simulado")
     _ejecutar(cmd, log_comandos)
@@ -245,14 +351,15 @@ def paso3_consenso_exclusion(ctx, log_comandos):
     n_excluidas = sum(e.get("n_excluidas", 0) for e in excluidas_por_celda)
     _comprobar_retiradas_fuera_de_consenso(ctx)
     return {"estado": "ok", "celdas_afectadas": len(excluidas_por_celda),
-            "afirmaciones_excluidas": n_excluidas}
+            "afirmaciones_excluidas": n_excluidas,
+            "listas_claves": len(_listas_claves_exclusion(ctx))}
 
 
 def _comprobar_retiradas_fuera_de_consenso(ctx):
     """Las afirmaciones de secciones excluidas no deben aparecer en el consenso."""
     import cartas
     import consenso_kb as ck
-    claves = ck.cargar_claves_exclusion(ctx["claves_excluir"])
+    claves = ck.cargar_claves_exclusion(_listas_claves_exclusion(ctx))
     secciones = ck.indexar_secciones_por_libro(ctx["secciones_dir"])
     afirmaciones = _leer_jsonl(ctx["afirmaciones_libros_file"])
     conservadas, excluidas_por_celda, _ = ck.excluir_claves_por_cita(
@@ -292,10 +399,10 @@ def _comprobar_retiradas_fuera_de_consenso(ctx):
 
 
 # ---------------------------------------------------------------------------
-# Paso 4: KB v2
+# Paso 5: KB v2
 # ---------------------------------------------------------------------------
 
-def paso4_kb_v2(ctx, log_comandos):
+def paso5_kb_v2(ctx, log_comandos):
     script = os.path.join(CORPUS, "kb_v2.py")
     cmd = [sys.executable, script,
            "--consenso", ctx["consenso"],
@@ -320,10 +427,10 @@ def paso4_kb_v2(ctx, log_comandos):
 
 
 # ---------------------------------------------------------------------------
-# Paso 5: cobertura v3 (omitir con aviso si T82 no esta integrado)
+# Paso 6: cobertura v3 (omitir con aviso si T82 no esta integrado)
 # ---------------------------------------------------------------------------
 
-def paso5_cobertura_v3(ctx, log_comandos):
+def paso6_cobertura_v3(ctx, log_comandos):
     script = os.path.join(CORPUS, "cobertura_v3.py")
     if not os.path.exists(script):
         return {"estado": "omitido",
@@ -334,6 +441,9 @@ def paso5_cobertura_v3(ctx, log_comandos):
            "--libros-limpio", ctx["libros_limpio"],
            "--excluir-claves", ctx["claves_excluir"],
            "--out-dir", ctx["cobertura_out"]]
+    for kf in _listas_claves_exclusion(ctx):
+        if kf != ctx["claves_excluir"]:
+            cmd += ["--excluir-claves", kf]
     _ejecutar(cmd, log_comandos)
     salida = os.path.join(ctx["cobertura_out"], "cobertura_total_v3.json")
     doc = json.load(open(salida, encoding="utf-8"))
@@ -342,10 +452,10 @@ def paso5_cobertura_v3(ctx, log_comandos):
 
 
 # ---------------------------------------------------------------------------
-# Paso 6: informe de cierre
+# Paso 7: informe de cierre
 # ---------------------------------------------------------------------------
 
-def paso6_informe(ctx, log_comandos):
+def paso7_informe(ctx, log_comandos):
     entradas = _leer_jsonl(ctx["log"]) if os.path.exists(ctx["log"]) else []
     informe = {"ts": _ts(), "pasos": entradas}
     ruta_json = os.path.join(ctx["work_dir"], "informe_cierre.json")
@@ -377,10 +487,11 @@ def paso6_informe(ctx, log_comandos):
 PASOS = {
     1: paso1_dedupe_consenso,
     2: paso2_limpieza_libros,
-    3: paso3_consenso_exclusion,
-    4: paso4_kb_v2,
-    5: paso5_cobertura_v3,
-    6: paso6_informe,
+    3: paso3_filtro_atribucion,
+    4: paso4_consenso_exclusion,
+    5: paso5_kb_v2,
+    6: paso6_cobertura_v3,
+    7: paso7_informe,
 }
 
 
@@ -410,11 +521,13 @@ def _validar_entradas_paso(ctx, paso):
         1: [ctx["consenso"]],
         2: [ctx["evidencias_libros"], ctx["secciones_dir"],
             ctx["afirmaciones_libros_dir"], ctx["evidencias_web"]],
-        3: [ctx["afirmaciones_web_file"], ctx["afirmaciones_libros_file"],
+        3: [ctx["evidencias_web"], ctx["evidencias_libros"],
+            ctx["secciones_dir"]],
+        4: [ctx["afirmaciones_web_file"], ctx["afirmaciones_libros_file"],
             ctx["claves_excluir"], ctx["secciones_dir"], ctx["consenso"]],
-        4: [ctx["consenso"]],
-        5: [ctx["claves_excluir"], ctx["libros_limpio"]],
-        6: [],
+        5: [ctx["consenso"]],
+        6: [ctx["claves_excluir"], ctx["libros_limpio"]],
+        7: [],
     }
     return [(r, os.path.exists(r)) for r in mapa.get(paso, [])]
 
@@ -464,11 +577,16 @@ def _descripcion_paso(ctx, paso):
         return ("generar limpieza en %s y sustituir %s con backup"
                 % (ctx["libros_limpio"], ctx["evidencias_libros"]))
     if paso == 3:
-        return ("consenso --excluir-claves %s --rehacer-celdas-con-exclusion "
-                "en %s" % (ctx["claves_excluir"], ctx["consenso_dir"]))
+        return ("aplicar filtro de atribucion (T88) a %s y %s, retiradas en %s"
+                % (ctx["evidencias_web"], ctx["evidencias_libros"],
+                   ctx["filtro_atribucion_out"]))
     if paso == 4:
-        return "kb_v2 desde %s hacia %s" % (ctx["consenso"], ctx["kb_out"])
+        return ("consenso --excluir-claves %s --rehacer-celdas-con-exclusion "
+                "en %s" % (", ".join(_listas_claves_exclusion(ctx)) or
+                           ctx["claves_excluir"], ctx["consenso_dir"]))
     if paso == 5:
+        return "kb_v2 desde %s hacia %s" % (ctx["consenso"], ctx["kb_out"])
+    if paso == 6:
         if os.path.exists(os.path.join(CORPUS, "cobertura_v3.py")):
             return "cobertura v3 en %s" % ctx["cobertura_out"]
         return "OMITIDO: cobertura_v3.py no integrado (T82)"
@@ -478,6 +596,7 @@ def _descripcion_paso(ctx, paso):
 def construir_ctx(args):
     base = args.base_dir
     consenso_dir = args.consenso_dir or os.path.join(base, "consenso_kb")
+    filtro_out = args.filtro_atribucion_out or os.path.join(base, "filtro_atribucion")
     return {
         "base_dir": base,
         "consenso": args.consenso or os.path.join(consenso_dir, "consenso.jsonl"),
@@ -495,7 +614,14 @@ def construir_ctx(args):
             base, "evidencias_web", "evidencias.jsonl"),
         "claves_excluir": args.claves_excluir or os.path.join(
             base, "libros_limpio", "claves_excluir_consenso.jsonl"),
+        "claves_atribucion": args.claves_atribucion or os.path.join(
+            filtro_out, "claves_excluir_consenso.jsonl"),
+        "procesados_web": args.procesados_web or os.path.join(
+            base, "afirmaciones_full", "procesados.jsonl"),
+        "procesados_libros": args.procesados_libros or os.path.join(
+            base, "afirmaciones_libros", "procesados.jsonl"),
         "libros_limpio": args.libros_limpio or os.path.join(base, "libros_limpio"),
+        "filtro_atribucion_out": filtro_out,
         "kb_out": args.kb_out or os.path.join(base, "kb_v2"),
         "cobertura_out": args.cobertura_out or os.path.join(base, "cobertura_v3"),
         "work_dir": args.work_dir or os.path.join(base, "cierre"),
@@ -507,17 +633,19 @@ def construir_ctx(args):
 
 def main(argv=None, procesos_fn=None):
     parser = argparse.ArgumentParser(
-        description="Cierre de la recopilacion: dedupe, limpieza, consenso con "
-                    "exclusion, KB v2, cobertura v3 e informe (T85).")
+        description="Cierre de la recopilacion: dedupe, limpieza, filtro de "
+                    "atribucion, consenso con exclusion, KB v2, cobertura v3 e "
+                    "informe (T85/T90).")
     parser.add_argument("--base-dir", default=FASE0)
     parser.add_argument("--dry-run", action="store_true",
                        help="solo lectura: entradas, procesos vivos, disco y plan")
     parser.add_argument("--paso", type=int, choices=sorted(PASOS),
                        help="ejecutar un unico paso")
     parser.add_argument("--solo-verificar", action="store_true",
-                       help="solo con --paso 2: re-verificar una limpieza ya "
-                            "aplicada sin reaplicarla (solo lectura; no loquean "
-                            "los procesos vivos)")
+                       help="solo con --paso 2 o 3: re-verificar una limpieza o "
+                            "un filtro de atribucion ya aplicados sin "
+                            "reaplicarlos (solo lectura; no loquean los "
+                            "procesos vivos)")
     parser.add_argument("--todo", action="store_true",
                        help="ejecutar todos los pasos en orden")
     parser.add_argument("--simulado", action="store_true",
@@ -532,7 +660,11 @@ def main(argv=None, procesos_fn=None):
     parser.add_argument("--afirmaciones-web-file")
     parser.add_argument("--evidencias-web")
     parser.add_argument("--claves-excluir")
+    parser.add_argument("--claves-atribucion")
+    parser.add_argument("--procesados-web")
+    parser.add_argument("--procesados-libros")
     parser.add_argument("--libros-limpio")
+    parser.add_argument("--filtro-atribucion-out")
     parser.add_argument("--kb-out")
     parser.add_argument("--cobertura-out")
     parser.add_argument("--work-dir")
@@ -542,8 +674,8 @@ def main(argv=None, procesos_fn=None):
     ctx = construir_ctx(args)
     procesos_fn = procesos_fn or procesos_vivos
 
-    if args.solo_verificar and args.paso != 2:
-        parser.error("--solo-verificar solo aplica a --paso 2")
+    if args.solo_verificar and args.paso not in PASOS_SOLO_VERIFICAR:
+        parser.error("--solo-verificar solo aplica a --paso 2 o 3")
     ctx["solo_verificar"] = args.solo_verificar
 
     if args.dry_run:

@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import cierre_recopilacion as cierre
 import diagnostico_tarot_libros as diag
+import juez
 
 TEXTO_SECCION_EXCLUIDA = ("El Sol ilumina todo lo que toca y da vitalidad "
                          "al consultante.")
@@ -175,11 +176,11 @@ class TestOrdenTodo(unittest.TestCase):
                 return {"estado": "ok"}
             cierre.PASOS[n] = fn
 
-    def test_todo_ejecuta_los_seis_en_orden(self):
+    def test_todo_ejecuta_los_siete_en_orden(self):
         rc = cierre.main(["--todo", "--work-dir", self.tmp],
                         procesos_fn=lambda: [])
         self.assertEqual(rc, 0)
-        self.assertEqual(self.orden, [1, 2, 3, 4, 5, 6])
+        self.assertEqual(self.orden, [1, 2, 3, 4, 5, 6, 7])
 
     def test_paso_unico(self):
         rc = cierre.main(["--paso", "4", "--work-dir", self.tmp],
@@ -286,7 +287,7 @@ class TestConsensoExclusion(unittest.TestCase):
         }
 
     def test_afirmacion_excluida_no_llega_al_consenso(self):
-        res = cierre.paso3_consenso_exclusion(self.ctx, [])
+        res = cierre.paso4_consenso_exclusion(self.ctx, [])
         self.assertEqual(res["estado"], "ok")
         self.assertGreaterEqual(res["afirmaciones_excluidas"], 1)
         celdas = _leer_jsonl(self.consenso)
@@ -317,7 +318,7 @@ class TestKbV2SinMezcla(unittest.TestCase):
         self.kb_out = os.path.join(self.tmp, "kb")
 
     def test_familias_no_se_mezclan(self):
-        res = cierre.paso4_kb_v2(
+        res = cierre.paso5_kb_v2(
             {"consenso": self.consenso, "kb_out": self.kb_out}, [])
         self.assertEqual(res["estado"], "ok")
         tarot = json.load(open(os.path.join(self.kb_out, "tarot.json")))
@@ -422,9 +423,10 @@ class TestSoloVerificar(unittest.TestCase):
         log = _leer_jsonl(os.path.join(self.work, "cierre_log.jsonl"))
         self.assertEqual(log[-1]["estado"], "fallido")
 
-    def test_solo_verificar_requiere_paso2(self):
+    def test_solo_verificar_requiere_paso2_o_3(self):
+        # Paso 4 (consenso) no admite --solo-verificar -> SystemExit.
         with self.assertRaises(SystemExit):
-            cierre.main(["--paso", "3", "--solo-verificar",
+            cierre.main(["--paso", "4", "--solo-verificar",
                         "--work-dir", self.work], procesos_fn=lambda: [])
 
 
@@ -482,9 +484,210 @@ class TestCoberturaOmitida(unittest.TestCase):
         script = os.path.join(cierre.CORPUS, "cobertura_v3.py")
         if os.path.exists(script):
             self.skipTest("cobertura_v3 ya integrado; nada que omitir")
-        res = cierre.paso5_cobertura_v3({"cobertura_out": "/tmp"}, [])
+        res = cierre.paso6_cobertura_v3({"cobertura_out": "/tmp"}, [])
         self.assertEqual(res["estado"], "omitido")
         self.assertIn("T82", res["aviso"])
+
+
+def _montar_filtro(tmp):
+    """Fixture del paso 3: web .md 'Venus en Leo' + libro 'CAPRICORNIO'.
+
+    Devuelve (ctx, hashes). La pagina web nombra Leo (retira acuario|signo,
+    conserva leo|signo); la seccion de libro nombra Capricornio (retira
+    aries|signo, conserva capricornio|signo).
+    """
+    b = tmp
+    os.makedirs(os.path.join(b, "webpaginas"), exist_ok=True)
+    os.makedirs(os.path.join(b, "libros", "secciones"), exist_ok=True)
+    os.makedirs(os.path.join(b, "evidencias_web"), exist_ok=True)
+    os.makedirs(os.path.join(b, "libros", "evidencias"), exist_ok=True)
+    os.makedirs(os.path.join(b, "afirmaciones_full"), exist_ok=True)
+    os.makedirs(os.path.join(b, "afirmaciones_libros"), exist_ok=True)
+    os.makedirs(os.path.join(b, "filtro"), exist_ok=True)
+
+    url = "http://escuelamaia.com/venus-en-leo"
+    md = os.path.join(b, "webpaginas", "venus-leo.md")
+    with open(md, "w", encoding="utf-8") as fh:
+        fh.write("---\nurl: %s\ntitulo: Venus en Leo necesita amor visto\n"
+                 "dominio: escuelamaia.com\n---\n"
+                 "Cuerpo de la pagina sobre venus en leo.\n" % url)
+    h_web = juez.hash_seccion(juez._secciones_de_fichero(md)[0])
+
+    libro_sec = {"id_libro": "libro-x", "seccion": 1, "posicion": 1,
+                 "titulo": "CAPRICORNIO", "texto": "Texto sobre capricornio."}
+    h_lib = juez.hash_seccion(libro_sec)
+    _escribir_jsonl(os.path.join(b, "libros", "secciones", "libro-x.jsonl"),
+                    [libro_sec])
+
+    ev_web = os.path.join(b, "evidencias_web", "evidencias.jsonl")
+    _escribir_jsonl(ev_web, [
+        {"entidad_id": "acuario|signo", "faceta": "significado_general",
+         "hash_seccion": h_web, "fuente_id": url, "tipo": "web"},
+        {"entidad_id": "leo|signo", "faceta": "significado_general",
+         "hash_seccion": h_web, "fuente_id": url, "tipo": "web"},
+    ])
+    ev_lib = os.path.join(b, "libros", "evidencias", "evidencias.jsonl")
+    _escribir_jsonl(ev_lib, [
+        {"entidad_id": "aries|signo", "faceta": "significado_general",
+         "hash_seccion": h_lib, "fuente_id": "libro-x", "tipo": "libro"},
+        {"entidad_id": "capricornio|signo", "faceta": "significado_general",
+         "hash_seccion": h_lib, "fuente_id": "libro-x", "tipo": "libro"},
+    ])
+    _escribir_jsonl(os.path.join(b, "afirmaciones_full", "procesados.jsonl"),
+                    [{"hash_seccion": h_web, "entidad_id": "acuario|signo",
+                      "faceta": "significado_general", "n_afirmaciones": 2}])
+    _escribir_jsonl(os.path.join(b, "afirmaciones_libros", "procesados.jsonl"),
+                    [{"hash_seccion": h_lib, "entidad_id": "aries|signo",
+                      "faceta": "significado_general", "n_afirmaciones": 3}])
+
+    ctx = {
+        "base_dir": b,
+        "evidencias_web": ev_web,
+        "evidencias_libros": ev_lib,
+        "secciones_dir": os.path.join(b, "libros", "secciones"),
+        "procesados_web": os.path.join(b, "afirmaciones_full", "procesados.jsonl"),
+        "procesados_libros": os.path.join(b, "afirmaciones_libros", "procesados.jsonl"),
+        "filtro_atribucion_out": os.path.join(b, "filtro"),
+    }
+    return ctx, {"h_web": h_web, "h_lib": h_lib}
+
+
+class TestFiltroAtribucionPaso(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.ctx, self.h = _montar_filtro(self.tmp)
+
+    def test_aplica_retira_y_conserva_por_origen(self):
+        res = cierre.paso3_filtro_atribucion(self.ctx, [])
+        self.assertEqual(res["estado"], "ok")
+        self.assertEqual(res["retiradas"], 2)
+        self.assertEqual(res["cambios"], {"web": "aplicada", "libros": "aplicada"})
+        web = _leer_jsonl(self.ctx["evidencias_web"])
+        self.assertEqual([e["entidad_id"] for e in web], ["leo|signo"])
+        lib = _leer_jsonl(self.ctx["evidencias_libros"])
+        self.assertEqual([e["entidad_id"] for e in lib], ["capricornio|signo"])
+        self.assertIn("web", res["backups"])
+        self.assertIn("libros", res["backups"])
+        self.assertTrue(os.path.exists(res["backups"]["web"]))
+
+    def test_claves_excluir_tienen_afirmaciones(self):
+        cierre.paso3_filtro_atribucion(self.ctx, [])
+        claves = _leer_jsonl(os.path.join(self.ctx["filtro_atribucion_out"],
+                                         "claves_excluir_consenso.jsonl"))
+        por_entidad = {c["entidad_id"]: c["n_afirmaciones"] for c in claves}
+        self.assertEqual(por_entidad, {"acuario|signo": 2, "aries|signo": 3})
+
+    def test_idempotente_ya_aplicada(self):
+        cierre.paso3_filtro_atribucion(self.ctx, [])
+        antes_web = cierre._md5(self.ctx["evidencias_web"])
+        antes_lib = cierre._md5(self.ctx["evidencias_libros"])
+        res = cierre.paso3_filtro_atribucion(self.ctx, [])
+        self.assertEqual(res["estado"], "ya_aplicada")
+        self.assertEqual(cierre._md5(self.ctx["evidencias_web"]), antes_web)
+        self.assertEqual(cierre._md5(self.ctx["evidencias_libros"]), antes_lib)
+
+    def test_solo_verificar_ok_no_reaplica(self):
+        cierre.paso3_filtro_atribucion(self.ctx, [])
+        antes_web = cierre._md5(self.ctx["evidencias_web"])
+        self.llamadas = []
+        orig = cierre._ejecutar
+
+        def spy(cmd, log):
+            self.llamadas.append(cmd)
+            return orig(cmd, log)
+
+        cierre._ejecutar = spy
+        self.addCleanup(setattr, cierre, "_ejecutar", orig)
+        self.ctx["solo_verificar"] = True
+        res = cierre.paso3_filtro_atribucion(self.ctx, [])
+        self.assertEqual(res["estado"], "verificada")
+        self.assertEqual(self.llamadas, [])
+        self.assertEqual(cierre._md5(self.ctx["evidencias_web"]), antes_web)
+
+    def test_solo_verificar_detecta_retirada_vigente(self):
+        # Retirada que sigue vigente en las evidencias -> debe fallar.
+        out = self.ctx["filtro_atribucion_out"]
+        _escribir_jsonl(os.path.join(out, "evidencias_retiradas_web.jsonl"),
+                        [{"entidad_id": "leo|signo", "faceta": "significado_general",
+                          "hash_seccion": self.h["h_web"], "motivo": "x"}])
+        _escribir_jsonl(os.path.join(out, "evidencias_retiradas_libros.jsonl"), [])
+        self.ctx["solo_verificar"] = True
+        with self.assertRaises(cierre.PasoFallido):
+            cierre.paso3_filtro_atribucion(self.ctx, [])
+
+
+class TestDosListasExclusion(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def test_lista_devuelve_ambas(self):
+        f71 = os.path.join(self.tmp, "t71.jsonl")
+        f88 = os.path.join(self.tmp, "t88.jsonl")
+        _escribir_jsonl(f71, [])
+        _escribir_jsonl(f88, [])
+        ctx = {"claves_excluir": f71, "claves_atribucion": f88}
+        self.assertEqual(cierre._listas_claves_exclusion(ctx), [f71, f88])
+
+    def test_omite_la_que_no_existe(self):
+        f71 = os.path.join(self.tmp, "t71.jsonl")
+        _escribir_jsonl(f71, [])
+        ctx = {"claves_excluir": f71,
+               "claves_atribucion": os.path.join(self.tmp, "noexiste.jsonl")}
+        self.assertEqual(cierre._listas_claves_exclusion(ctx), [f71])
+
+    def test_clave_compartida_se_une_en_una_sola(self):
+        import consenso_kb as ck
+        f71 = os.path.join(self.tmp, "t71.jsonl")
+        f88 = os.path.join(self.tmp, "t88.jsonl")
+        _escribir_jsonl(f71, [{"hash_seccion": "hA", "entidad_id": "X|signo",
+                               "faceta": "amor"}])
+        _escribir_jsonl(f88, [{"hash_seccion": "hA", "entidad_id": "X|signo",
+                               "faceta": "amor"},
+                              {"hash_seccion": "hB", "entidad_id": "X|signo",
+                               "faceta": "amor"}])
+        claves = ck.cargar_claves_exclusion([f71, f88])
+        # Una sola celda (X|signo, amor) con los hashes unidos -> se rehace 1 vez.
+        self.assertEqual(list(claves.keys()), [("X|signo", "amor")])
+        self.assertEqual(claves[("X|signo", "amor")], {"hA", "hB"})
+
+    def test_paso4_pasa_ambas_listas_al_comando(self):
+        b = self.tmp
+        os.makedirs(os.path.join(b, "secciones"))
+        os.makedirs(os.path.join(b, "consenso"))
+        f71 = os.path.join(b, "t71.jsonl")
+        f88 = os.path.join(b, "t88.jsonl")
+        _escribir_jsonl(f71, [])
+        _escribir_jsonl(f88, [])
+        _escribir_jsonl(os.path.join(b, "afir_web.jsonl"), [])
+        _escribir_jsonl(os.path.join(b, "afir_lib.jsonl"), [])
+        ctx = {
+            "consenso": os.path.join(b, "consenso", "consenso.jsonl"),
+            "consenso_dir": os.path.join(b, "consenso"),
+            "afirmaciones_web_file": os.path.join(b, "afir_web.jsonl"),
+            "afirmaciones_libros_file": os.path.join(b, "afir_lib.jsonl"),
+            "claves_excluir": f71,
+            "claves_atribucion": f88,
+            "secciones_dir": os.path.join(b, "secciones"),
+            "workers": 1,
+            "simulado": True,
+        }
+        self.llamadas = []
+        orig = cierre._ejecutar
+
+        def spy(cmd, log):
+            self.llamadas.append(cmd)
+            return orig(cmd, log)
+
+        cierre._ejecutar = spy
+        self.addCleanup(setattr, cierre, "_ejecutar", orig)
+        res = cierre.paso4_consenso_exclusion(ctx, [])
+        self.assertEqual(res["estado"], "ok")
+        self.assertEqual(res["listas_claves"], 2)
+        cmd = self.llamadas[0]
+        excl = [cmd[i + 1] for i, x in enumerate(cmd) if x == "--excluir-claves"]
+        self.assertEqual(sorted(excl), sorted([f71, f88]))
 
 
 if __name__ == "__main__":
