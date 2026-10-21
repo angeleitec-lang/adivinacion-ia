@@ -45,6 +45,26 @@ class TestUtilidades(unittest.TestCase):
         self.assertEqual(df.extraer_locs(_sitemap(["http://a.com/1", "http://a.com/2"])),
                          ["http://a.com/1", "http://a.com/2"])
 
+    def test_extraer_locs_desenvuelve_cdata(self):
+        xml = ("<urlset><url><loc><![CDATA[https://a.com/x]]></loc></url>"
+               "<url><loc>  https://a.com/y  </loc></url>"
+               "<url><loc><![CDATA[https://a.com/z?u=1]]></loc></url></urlset>")
+        self.assertEqual(df.extraer_locs(xml),
+                         ["https://a.com/x", "https://a.com/y", "https://a.com/z?u=1"])
+
+    def test_indice_cdata_recurse(self):
+        idx = "https://ej.com/sitemap.xml"
+        xml_idx = ('<sitemapindex><sitemap><loc><![CDATA[https://ej.com/s-1.xml]]></loc></sitemap>'
+                   '</sitemapindex>')
+        cli = ClienteFalso({
+            idx: {"estado": "ok", "html": xml_idx},
+            "https://ej.com/s-1.xml": {"estado": "ok", "html": _sitemap([
+                "https://ej.com/natal/pag"])},
+        })
+        urls = df.descubrir_desde_sitemap(cli, idx, r"natal", limite=10,
+                                         sleep=lambda s: None)
+        self.assertEqual(urls, ["https://ej.com/natal/pag"])
+
     def test_es_sitemap_index(self):
         self.assertTrue(df.es_sitemap_index(_index(["http://a.com/s1.xml"])))
         self.assertFalse(df.es_sitemap_index(_sitemap(["http://a.com/1"])))

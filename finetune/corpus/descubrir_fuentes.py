@@ -297,8 +297,20 @@ def dominios_bloqueados() -> frozenset:
 
 
 def extraer_locs(xml_text: str) -> list:
-    """Devuelve el contenido de todas las etiquetas ``<loc>`` de un sitemap."""
-    return [u.strip() for u in _LOCS_RE.findall(xml_text or "") if u.strip()]
+    """Devuelve el contenido de todas las etiquetas ``<loc>`` de un sitemap.
+
+    Desenvuelve los envoltorios ``<![CDATA[...]]>`` que usan algunos generadores
+    (p. ej. All in One SEO de WordPress en cafeastrology.com), porque si no la
+    URL resultante no es válida y el recorrido del índice se corta.
+    """
+    salida = []
+    for u in _LOCS_RE.findall(xml_text or ""):
+        u = u.strip()
+        if u.startswith("<![CDATA[") and u.endswith("]]>"):
+            u = u[len("<![CDATA["):-len("]]>")].strip()
+        if u:
+            salida.append(u)
+    return salida
 
 
 def es_sitemap_index(xml_text: str) -> bool:
