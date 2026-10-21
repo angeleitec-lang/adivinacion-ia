@@ -165,7 +165,8 @@ _PREPOS = {"de", "del", "a", "al", "en", "con", "y", "e", "u"}
 _LETRAS = "A-Za-zÁÉÍÓÚÜÑáéíóúüñ"
 
 _VERIF_NUM = [
-    ("año personal", r"año\s*personal\s*(\d+)", "anio_personal"),
+    ("año personal", r"año\s*personal\s*(?:(?:\d{4})\s*[:\-–]\s*)?(\d+)",
+     "anio_personal"),
     ("camino de vida", r"camino\s*de\s*vida\s*(\d+)", "camino_de_vida"),
     ("expresión", r"expresi[oó]n\s*(\d+)", "expresion"),
     ("alma", r"alma\s*(\d+)", "alma"),
@@ -711,6 +712,10 @@ def _verif_numeros(calc, texto, motivos):
             continue
         for m in re.finditer(pat, texto, re.IGNORECASE):
             val = int(m.group(1))
+            if key == "anio_personal" and 1000 <= val <= 2999:
+                # Un año de cuatro cifras es la etiqueta («Año personal 2026»),
+                # no el valor del año personal.
+                continue
             if val != esperado:
                 motivos.append(
                     f"Contradice el {etiqueta} calculado ({esperado}): el texto dice {val}"

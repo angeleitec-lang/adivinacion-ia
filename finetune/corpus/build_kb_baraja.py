@@ -122,7 +122,7 @@ NAIPES = {
         "Desavenencia pasajera o promesa incumplida por una parte.",
         ["vínculo", "acuerdo", "encuentro"],
         "La carta del pareja: entendimiento y atracción mutua.",
-        "Sociadad afectuosa con la que se puede contar.",
+        "Sociedad afectuosa con la que se puede contar.",
     ),
     "Tres de Copas": (
         "Celebración compartida: amistad, festejo, logro que se brinda juntos.",
@@ -170,7 +170,7 @@ NAIPES = {
         "Deseo cumplido: satisfacción emocional y buena estrella.",
         "Contentarse de menos o prometer lo que no se puede dar.",
         ["deseo", "satisfacción", "abundancia"],
-        "Plenitud afectiva; disfrutar sin volvverse caprichoso.",
+        "Plenitud afectiva; disfrutar sin volverse caprichoso.",
         "Lo que se quería se consigue; agradecerlo.",
     ),
     "Diez de Copas": (
@@ -348,13 +348,6 @@ NAIPES = {
         "Intensidad y prisas; hablar claro.",
         "Racha de actividad; organizarse.",
     ),
-    "Siete de Bastos": (
-        "Defender la posición: resistencia activa ante quien cuestiona.",
-        "Dejar la defensa cuando ya estaba ganada.",
-        ["defensa", "perseverancia", "terreno"],
-        "Poner límites sin agresividad.",
-        "Sostener lo logrado contra competidores.",
-    ),
     "Nueve de Bastos": (
         "Experiencia que ya superó la prueba: fuerza con cicatrices y recelo prudente.",
         "Bajar la guardia demasiado pronto o no pedir refuerzos.",
@@ -421,6 +414,7 @@ def construir():
                 "elemento": info["elemento"],
                 "tema": info["tema"],
                 "palabras_clave": claves,
+                "sinonimos": sinonimos,
                 "significado": significado,
                 "invertida": invertida,
                 "contextos": {"amor": amor, "trabajo": trabajo},

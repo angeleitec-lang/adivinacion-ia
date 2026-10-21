@@ -131,6 +131,13 @@ def universo_baraja(kb):
     return cache
 
 
+def _campo_payload(payload, clave, bloque):
+    """Campo obligatorio del payload con error claro si falta."""
+    if clave not in payload or payload[clave] in (None, ""):
+        raise ValueError(f"payload incompleto para bloque {bloque}: falta '{clave}'")
+    return payload[clave]
+
+
 def tarea_desde_job(bloque, payload, pregunta, kb):
     """Convierte (bloque, payload, pregunta) en la `tarea` de fase1_prompts."""
     tarea = {"familia": bloque, "pregunta": pregunta}
@@ -164,7 +171,10 @@ def tarea_desde_job(bloque, payload, pregunta, kb):
         }
     elif bloque == "numerologia":
         tarea["calculos"] = {
-            "numerologia": num_desde_payload(payload["fecha"], payload["nombre"])
+            "numerologia": num_desde_payload(
+                _campo_payload(payload, "fecha", bloque),
+                _campo_payload(payload, "nombre", bloque),
+            )
         }
     elif bloque == "lectura_completa":
         tarea["cartas"] = [dict(c) for c in payload.get("cartas", [])]
@@ -174,7 +184,10 @@ def tarea_desde_job(bloque, payload, pregunta, kb):
         tarea["ciudad"] = payload.get("ciudad", "")
         tarea["calculos"] = {
             "carta_natal": payload.get("carta") or {},
-            "numerologia": num_desde_payload(payload["fecha"], payload["nombre"]),
+            "numerologia": num_desde_payload(
+                _campo_payload(payload, "fecha", bloque),
+                _campo_payload(payload, "nombre", bloque),
+            ),
         }
     elif bloque == "etica":
         tarea["calculos"] = {}
@@ -440,7 +453,7 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
                     max_tokens_piso=max_tokens_piso,
                     temperature=temperature,
                 )
-            except ValueError as exc:
+            except (ValueError, KeyError, TypeError) as exc:
                 with lock:
                     marcar(con, job_id, "failed", f"bloque_invalido: {exc}")
                     _escribir_jsonl(rechazadas_path, {

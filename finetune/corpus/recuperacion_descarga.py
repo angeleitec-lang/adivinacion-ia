@@ -67,19 +67,31 @@ _SHA_FRONT_RE = re.compile(r"^sha256:\s*([0-9a-f]{64})\s*$", re.MULTILINE)
 # ---------------------------------------------------------------------------
 
 def cargar_plan(ruta: str) -> list:
-    """Lee el plan JSONL de recuperación (una entrada por entidad)."""
+    """Lee el plan JSONL de recuperación (una entrada por entidad).
+
+    Las líneas corruptas o truncadas se saltan para no tumbar el run por una
+    escritura interrumpida.
+    """
     plan = []
     with open(ruta, encoding="utf-8") as fh:
         for linea in fh:
             linea = linea.strip()
             if not linea:
                 continue
-            plan.append(json.loads(linea))
+            try:
+                plan.append(json.loads(linea))
+            except json.JSONDecodeError:
+                continue
     return plan
 
 
 def _norm_dominio(netloc: str) -> str:
     return netloc[4:] if netloc.startswith("www.") else netloc
+
+
+def esta_bloqueado(dominio: str, bloqueados=DOMINIOS_BLOQUEADOS) -> bool:
+    """True si el dominio (o un subdominio suyo) está en la lista bloqueada."""
+    return any(dominio == b or dominio.endswith("." + b) for b in bloqueados)
 
 
 def candidatas_por_familia(plan: list) -> dict:
@@ -100,7 +112,7 @@ def candidatas_por_familia(plan: list) -> dict:
 def orden_familias(familias, prioritarias=PRIORIDAD_FAMILIAS) -> list:
     """Familias prioritarias primero; el resto, ordenadas alfabéticamente."""
     prim = [f for f in prioritarias if f in familias]
-    resto = sorted(f for f in familias if f not in prioritarias)
+    resto = sorted(f for f in familias if f is not None and f not in prioritarias)
     return prim + resto
 
 
@@ -128,7 +140,7 @@ def construir_sitios(candidatas: dict, configs: dict,
     for familia in orden_familias(candidatas.keys(), prioritarias):
         for url in candidatas[familia]:
             dominio = _norm_dominio(urlparse(url).netloc)
-            if dominio in bloqueados:
+            if esta_bloqueado(dominio, bloqueados):
                 continue
             cfg = configs.get(dominio)
             if cfg is None:
@@ -170,7 +182,7 @@ def construir_tareas(candidatas: dict, configs: dict,
         directas: list = []
         for url in candidatas[familia]:
             dominio = _norm_dominio(urlparse(url).netloc)
-            if dominio in bloqueados:
+            if esta_bloqueado(dominio, bloqueados):
                 continue
             cfg = configs.get(dominio)
             if cfg is not None:
