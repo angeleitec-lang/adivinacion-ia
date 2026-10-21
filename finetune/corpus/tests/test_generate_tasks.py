@@ -6,6 +6,7 @@ import random
 import unittest
 
 import generate_tasks as gt
+import fase1_prompts as fp
 
 
 def kb_tarot_minima():
@@ -53,11 +54,13 @@ class TestOrtografia(unittest.TestCase):
 
     def _todos_los_textos(self):
         kb_tarot, kb_astro, kb_num = kbs_para_test()
-        b = gt.Builder(random.Random(1), kb_tarot, kb_astro, kb_num)
+        b = gt.Builder(random.Random(1), kb_tarot, kb_astro, kb_num,
+                       gt.load_kb("baraja_espanola.json"))
         lotes = [
             b.tarot_1(), b.tarot_2(5), b.tarot_3(5), b.cruz_celta(2),
             b.tarot_pregunta(5), b.astro_natal(5), b.sinastria(3),
             b.numerologia(5), b.lectura_completa(3), b.multiturno(5), b.etica(20),
+            b.espanola_1(5), b.espanola_3(5), b.espanola_5(2), b.espanola_7(2),
         ]
         for lote in lotes:
             for _bloque, system, prompt, _payload, _mt in lote:
@@ -277,7 +280,13 @@ class TestMultiturno(unittest.TestCase):
 
     def test_targets_multiturno(self):
         self.assertEqual(gt.TARGETS["multiturno"], 800)
-        self.assertEqual(sum(gt.TARGETS.values()), 10636)
+        self.assertEqual(sum(gt.TARGETS.values()), 12536)
+
+    def test_targets_baraja_espanola(self):
+        self.assertEqual(gt.TARGETS["espanola_1"], 400)
+        self.assertEqual(gt.TARGETS["espanola_3"], 900)
+        self.assertEqual(gt.TARGETS["espanola_5"], 400)
+        self.assertEqual(gt.TARGETS["espanola_7"], 200)
 
 
 class TestEtica(unittest.TestCase):
@@ -316,9 +325,10 @@ class TestReferenciaSinDoblePunto(unittest.TestCase):
                 elif linea.startswith("- "):
                     yield linea
 
-    def test_ninguna_linea_de_referencia_con_doble_punto_en_los_11_bloques(self):
+    def test_ninguna_linea_de_referencia_con_doble_punto_en_los_15_bloques(self):
         kb_tarot, kb_astro, kb_num = kbs_para_test()
-        b = gt.Builder(random.Random(12), kb_tarot, kb_astro, kb_num)
+        b = gt.Builder(random.Random(12), kb_tarot, kb_astro, kb_num,
+                       gt.load_kb("baraja_espanola.json"))
         lotes = [
             ("tarot_1", lambda: b.tarot_1()[:20]),
             ("tarot_2", lambda: b.tarot_2(20)),
@@ -331,6 +341,10 @@ class TestReferenciaSinDoblePunto(unittest.TestCase):
             ("lectura_completa", lambda: b.lectura_completa(20)),
             ("multiturno", lambda: b.multiturno(20)),
             ("etica", lambda: b.etica(20)),
+            ("espanola_1", lambda: b.espanola_1(20)),
+            ("espanola_3", lambda: b.espanola_3(20)),
+            ("espanola_5", lambda: b.espanola_5(20)),
+            ("espanola_7", lambda: b.espanola_7(20)),
         ]
         bloques = set()
         total = 0
@@ -346,6 +360,7 @@ class TestReferenciaSinDoblePunto(unittest.TestCase):
             "tarot_1", "tarot_2", "tarot_3", "cruz_celta", "tarot_pregunta",
             "astro_natal", "sinastria", "numerologia", "lectura_completa",
             "multiturno", "etica",
+            "espanola_1", "espanola_3", "espanola_5", "espanola_7",
         })
         self.assertGreaterEqual(total, 200)
 
@@ -427,6 +442,172 @@ class TestProyeccion(unittest.TestCase):
             self.assertNotIn("Revolución solar", prompt)
             self.assertNotIn("transitos", payload)
             self.assertNotIn("revolucion_solar", payload)
+
+
+def _builder_baraja(seed):
+    kb_tarot, kb_astro, kb_num = kbs_para_test()
+    return gt.Builder(random.Random(seed), kb_tarot, kb_astro, kb_num,
+                      gt.load_kb("baraja_espanola.json"))
+
+
+NOMBRES_NAIPE = {c["nombre"] for c in gt.NAIPES_ESPANOLES}
+
+
+class TestBarajaEspanola(unittest.TestCase):
+    def test_solo_40_naipes_y_sin_repetir(self):
+        b = _builder_baraja(21)
+        for fn, n in ((b.espanola_1, 1), (b.espanola_3, 3), (b.espanola_5, 5), (b.espanola_7, 7)):
+            for _ in range(30):
+                job = fn(1)[0]
+                cartas = json.loads(job[3])["cartas"]
+                nombres = [c["nombre"] for c in cartas]
+                self.assertEqual(len(nombres), len(set(nombres)), "carta repetida en la tirada")
+                self.assertEqual(len(nombres), n)
+                for nombre in nombres:
+                    self.assertIn(nombre, NOMBRES_NAIPE, "naipe fuera de la baraja de 40")
+
+    def test_payload_y_frase_obligatoria(self):
+        b = _builder_baraja(22)
+        for job in b.espanola_3(10):
+            bloque, _system, prompt, payload, mt = job
+            self.assertEqual(bloque, "espanola_3")
+            pl = json.loads(payload)
+            self.assertEqual(pl["mazo"], "espanol")
+            self.assertIn("contexto", pl)
+            self.assertIn('Pregunta del consultante: "', prompt)
+            self.assertIn("Baraja española de 40 naipes: no es tarot ni baraja francesa", prompt)
+            self.assertIn("española", prompt)
+            self.assertNotIn("espanol", prompt.replace("española", ""))
+            self.assertEqual(mt, fp.RECOMENDACION_MAX_TOKENS["espanola_3"])
+
+    def test_posiciones_y_esquema(self):
+        b = _builder_baraja(23)
+        pl3 = json.loads(b.espanola_3(1)[0][3])
+        self.assertEqual(pl3["posiciones"], ["pasado", "presente", "futuro"])
+        self.assertNotIn("posiciones", json.loads(b.espanola_1(1)[0][3]))
+        job5 = b.espanola_5(1)[0]
+        pl5 = json.loads(job5[3])
+        self.assertEqual(pl5["posiciones"],
+                         ["situación", "obstáculo", "pasado", "futuro", "resultado"])
+        for cab in ("## 1. situación —", "## 5. resultado —", "## Síntesis",
+                    "ESQUEMA OBLIGATORIO"):
+            self.assertIn(cab, job5[2])
+        job7 = b.espanola_7(1)[0]
+        self.assertEqual(len(json.loads(job7[3])["posiciones"]), 7)
+        self.assertIn("## 7. resultado —", job7[2])
+
+    def test_referencia_baraja_en_prompt(self):
+        b = _builder_baraja(24)
+        for job in b.espanola_5(5):
+            prompt = job[2]
+            self.assertIn("Referencia (", prompt)
+            for c in json.loads(job[3])["cartas"]:
+                self.assertIn(c["nombre"], prompt)
+
+    def test_max_tokens_por_familia(self):
+        b = _builder_baraja(25)
+        esperados = {
+            "espanola_1": 1536, "espanola_3": 2560,
+            "espanola_5": 4096, "espanola_7": 5120,
+        }
+        for familia, mt in esperados.items():
+            job = getattr(b, familia)(1)[0]
+            self.assertEqual(job[0], familia)
+            self.assertEqual(job[4], mt)
+
+
+class TestTiradasLargasDelegadas(unittest.TestCase):
+    def test_cruz_celta_esquema_y_presupuesto(self):
+        b = _builder_baraja(31)
+        for job in b.cruz_celta(5):
+            bloque, _system, prompt, payload, mt = job
+            self.assertEqual(bloque, "cruz_celta")
+            self.assertEqual(mt, 6144)
+            self.assertIn("ESQUEMA OBLIGATORIO", prompt)
+            self.assertIn("## 1. situación —", prompt)
+            self.assertIn("## 10. resultado —", prompt)
+            self.assertIn("## Síntesis", prompt)
+            self.assertIn('Pregunta del consultante: "', prompt)
+            pl = json.loads(payload)
+            self.assertEqual(pl["posiciones"][0], "situación")
+            self.assertEqual(len(pl["cartas"]), 10)
+
+    def test_lectura_completa_secciones_y_presupuesto(self):
+        b = _builder_baraja(32)
+        for job in b.lectura_completa(3):
+            _bloque, _system, prompt, payload, mt = job
+            self.assertEqual(mt, 6144)
+            for cab in ("## Carta natal", "## Tirada de tres cartas",
+                        "## Numerología", "## Síntesis"):
+                self.assertIn(cab, prompt)
+            pl = json.loads(payload)
+            self.assertEqual(
+                sorted(pl),
+                ["carta", "cartas", "ciudad", "contexto", "fecha", "nombre"],
+            )
+            self.assertIn('Pregunta del consultante: "', prompt)
+
+    def test_lectura_completa_prompt_igual_que_ejecutor(self):
+        import ejecutor_fase1 as ex
+        import fase1_prompts as fp
+        kb = ex.cargar_kb()
+        b = gt.Builder(random.Random(33), kb["tarot"], kb["astrologia"], kb["numerologia"],
+                       gt.load_kb("baraja_espanola.json"))
+        for job in b.lectura_completa(2):
+            _b, _s, prompt, payload, _mt = job
+            pl = json.loads(payload)
+            t = ex.tarea_desde_job("lectura_completa", pl, ex.extraer_pregunta(prompt), kb)
+            self.assertEqual(fp.construir_prompt(t, kb)["user"], prompt)
+
+    def test_compatibilidad_tarot_sin_esquema(self):
+        b = _builder_baraja(34)
+        for job in b.tarot_1()[:10] + b.tarot_2(5) + b.tarot_3(5) + b.multiturno(5):
+            self.assertNotIn("ESQUEMA", job[2])
+        for job in b.tarot_1()[:5]:
+            self.assertEqual(job[4], 1024)
+
+
+class TestIdempotenciaBaraja(unittest.TestCase):
+    def _db_tmp(self):
+        import sqlite3
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        return tmp.name, sqlite3.connect(tmp.name)
+
+    def test_replace_pending_solo_toca_pendientes(self):
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        db, con = self._db_tmp()
+        try:
+            gt.crear_tabla(con)
+            b = gt.Builder(random.Random(41), kb_tarot, kb_astro, kb_num,
+                           gt.load_kb("baraja_espanola.json"))
+            filas = b.espanola_1(10) + b.cruz_celta(5)
+            gt.insertar_jobs(con, filas)
+            con.execute("UPDATE jobs SET status='done' WHERE bloque='espanola_1' AND id<=3")
+            con.commit()
+            filas2 = b.espanola_1(10) + b.cruz_celta(5)
+            gt.insertar_jobs(con, filas2, replace_pending=True)
+            done = con.execute("SELECT COUNT(*) FROM jobs WHERE status='done'").fetchone()[0]
+            total1 = con.execute("SELECT COUNT(*) FROM jobs WHERE bloque='espanola_1'").fetchone()[0]
+            total2 = con.execute("SELECT COUNT(*) FROM jobs WHERE bloque='cruz_celta'").fetchone()[0]
+            self.assertEqual(done, 3)
+            self.assertEqual(total1, 13)  # 3 done conservados + 10 nuevos pending
+            self.assertEqual(total2, 5)
+        finally:
+            con.close()
+            os.remove(db)
+
+    def test_bloques_nuevos_se_insertan(self):
+        db, con = self._db_tmp()
+        try:
+            gt.crear_tabla(con)
+            gt.main(["--db", db, "--seed", "42", "--only", "espanola_5", "--scale", "0.01"])
+            n = con.execute("SELECT COUNT(*) FROM jobs WHERE bloque='espanola_5'").fetchone()[0]
+            self.assertGreaterEqual(n, 1)
+        finally:
+            con.close()
+            os.remove(db)
 
 
 if __name__ == "__main__":

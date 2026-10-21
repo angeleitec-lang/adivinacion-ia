@@ -12,6 +12,9 @@ from pathlib import Path
 from calculos import numerologia as calc_num
 from calculos.astro import carta_natal, revolucion_solar, transitos
 
+import fase1_prompts as fp
+from cartas import NAIPES_ESPANOLES
+
 ROOT = Path(__file__).resolve().parent.parent
 KB_DIR = ROOT / "corpus" / "kb"
 
@@ -508,11 +511,37 @@ CASOS_ETICA = [
 
 
 class Builder:
-    def __init__(self, rng, kb_tarot, kb_astro, kb_num):
+    def __init__(self, rng, kb_tarot, kb_astro, kb_num, kb_baraja=None):
         self.rng = rng
+        self.kb_tarot = kb_tarot
         self.cartas = kb_tarot["mayores"] + kb_tarot["menores"]
         self.astro = kb_astro
         self.num = kb_num
+        self._baraja = kb_baraja
+        self._kb_fp = None
+        self._universo_esp = None
+
+    @property
+    def baraja(self):
+        if self._baraja is None:
+            self._baraja = load_kb("baraja_espanola.json")
+        return self._baraja
+
+    def kb_fp(self):
+        """Base de conocimiento con el formato que espera fase1_prompts."""
+        if self._kb_fp is None:
+            self._kb_fp = {
+                "tarot": self.kb_tarot,
+                "astrologia": self.astro,
+                "numerologia": self.num,
+                "baraja": self.baraja,
+            }
+        return self._kb_fp
+
+    def universo_esp(self):
+        if self._universo_esp is None:
+            self._universo_esp = fp.universo_baraja(self.baraja, self.kb_tarot)
+        return self._universo_esp
 
     def nacimiento(self):
         ciudad, pais, lat, lon, tz = self.rng.choice(CIUDADES)
@@ -526,6 +555,18 @@ class Builder:
     def tirada(self, n, unicas=True):
         elegidas = self.rng.sample(self.cartas, n) if unicas else self.rng.choices(self.cartas, k=n)
         return [{"nombre": c["nombre"], "invertida": self.rng.random() < 0.35} for c in elegidas]
+
+    def tirada_baraja(self, n):
+        """Tirada sin reemplazo de la baraja española (40 naipes)."""
+        elegidas = self.rng.sample(NAIPES_ESPANOLES, n)
+        return [
+            {
+                "nombre": c["nombre"],
+                "invertida": self.rng.random() < 0.35,
+                "sinonimos": list(c.get("sinonimos", [])),
+            }
+            for c in elegidas
+        ]
 
     def job(self, bloque, prompt, payload, max_tokens=1024):
         return (bloque, SYSTEM, prompt, json.dumps(payload, ensure_ascii=False), max_tokens)
@@ -582,20 +623,24 @@ class Builder:
 
     def cruz_celta(self, n=500):
         out = []
-        pos = ["situacion", "obstaculo", "raiz", "pasado", "meta", "futuro cercano",
+        pos = ["situación", "obstáculo", "raíz", "pasado", "meta", "futuro cercano",
                "actitud", "entorno", "esperanzas y miedos", "resultado"]
         for _ in range(n):
             ctx = self.rng.choice(CONTEXTOS)
             cartas = self.tirada(10)
             preg = self.rng.choice(PREGUNTAS[ctx])
-            lineas = "\n".join(f"- {p}: {carta_txt(c)}" for p, c in zip(pos, cartas))
-            prompt = unir_con_referencia(
-                f"Tirada de la Cruz Celta (diez cartas).\n\n{lineas}\n"
-                f"Contexto: {ctx}.\nPregunta del consultante: \"{preg}\"",
-                referencia_tarot(cartas, self.cartas, ctx),
-                "Interpreta la tirada completa.",
-            )
-            out.append(self.job("cruz_celta", prompt, {"cartas": cartas, "contexto": ctx}, 1600))
+            tarea = {
+                "familia": "cruz_celta", "contexto": ctx, "pregunta": preg,
+                "cartas": cartas, "posiciones": pos,
+                "universo_cartas": [c["nombre"] for c in self.cartas],
+                "calculos": {},
+            }
+            prompt = fp.construir_prompt(tarea, self.kb_fp())["user"]
+            out.append(self.job(
+                "cruz_celta", prompt,
+                {"cartas": cartas, "contexto": ctx, "posiciones": pos},
+                fp.RECOMENDACION_MAX_TOKENS["cruz_celta"],
+            ))
         return out
 
     def tarot_pregunta(self, n=800):
@@ -689,27 +734,24 @@ class Builder:
             nombre = self.rng.choice(NOMBRES)
             ctx = self.rng.choice(CONTEXTOS)
             preg = self.rng.choice(PREGUNTAS[ctx])
-            lineas = "\n".join(
-                f"- {p}: {carta_txt(card)}" for p, card in zip(["pasado", "presente", "futuro"], cartas)
-            )
-            refs = [r for r in (
-                referencia_astro(c, self.astro),
-                referencia_tarot(cartas, self.cartas, ctx),
-                referencia_numerologia(fecha, nombre, self.num),
-            ) if r]
-            prompt = unir_con_referencia(
-                f"Lectura completa: carta natal, tarot y numerología.\n\n"
-                f"Consultante: {nombre}.\n{fmt_carta(c, ciudad, pais)}\n\n"
-                f"Tirada de tres cartas:\n{lineas}\n\n"
-                f"{fmt_numerologia(fecha, nombre)}\n\n"
-                f'Pregunta del consultante: "{preg}"',
-                "\n\n".join(refs),
-                "Integra las tres técnicas en una lectura coherente y personalizada.",
-            )
+            num = {
+                "camino_de_vida": calc_num.camino_de_vida(fecha),
+                "expresion": calc_num.expresion(nombre),
+                "alma": calc_num.reducir(calc_num.alma(nombre)),
+                "personalidad": calc_num.reducir(calc_num.personalidad(nombre)),
+                "anio_personal": calc_num.anio_personal(fecha, 2026),
+            }
+            tarea = {
+                "familia": "lectura_completa", "pregunta": preg, "contexto": ctx,
+                "cartas": cartas, "nombre": nombre, "ciudad": ciudad,
+                "universo_cartas": [c2["nombre"] for c2 in self.cartas],
+            }
+            calc = {"carta_natal": c, "numerologia": num}
+            prompt = fp.construir_prompt(tarea, self.kb_fp(), calc)["user"]
             out.append(self.job("lectura_completa", prompt, {
                 "carta": c, "cartas": cartas, "fecha": fecha, "nombre": nombre,
                 "contexto": ctx, "ciudad": ciudad,
-            }, 1800))
+            }, fp.RECOMENDACION_MAX_TOKENS["lectura_completa"]))
         return out
 
     def multiturno(self, n=800):
@@ -754,10 +796,42 @@ class Builder:
         return out
 
 
+    def _job_baraja(self, familia, n):
+        ctx = self.rng.choice(CONTEXTOS)
+        cartas = self.tirada_baraja(n)
+        preg = self.rng.choice(PREGUNTAS[ctx])
+        posiciones = list(fp.POSICIONES_ESPAÑOLA.get(familia, []))
+        tarea = {
+            "familia": familia, "mazo": "espanol", "contexto": ctx, "pregunta": preg,
+            "cartas": cartas, "universo_cartas": self.universo_esp(),
+            "calculos": {},
+        }
+        if posiciones:
+            tarea["posiciones"] = posiciones
+        prompt = fp.construir_prompt(tarea, self.kb_fp())["user"]
+        payload = {"cartas": cartas, "contexto": ctx, "mazo": "espanol"}
+        if posiciones:
+            payload["posiciones"] = posiciones
+        return self.job(familia, prompt, payload, fp.RECOMENDACION_MAX_TOKENS[familia])
+
+    def espanola_1(self, n=400):
+        return [self._job_baraja("espanola_1", 1) for _ in range(n)]
+
+    def espanola_3(self, n=900):
+        return [self._job_baraja("espanola_3", 3) for _ in range(n)]
+
+    def espanola_5(self, n=400):
+        return [self._job_baraja("espanola_5", 5) for _ in range(n)]
+
+    def espanola_7(self, n=200):
+        return [self._job_baraja("espanola_7", 7) for _ in range(n)]
+
+
 TARGETS = {
     "tarot_1": 936, "tarot_2": 400, "tarot_3": 1400, "cruz_celta": 500,
     "tarot_pregunta": 800, "astro_natal": 1500, "sinastria": 600,
     "numerologia": 400, "lectura_completa": 3000, "multiturno": 800, "etica": 300,
+    "espanola_1": 400, "espanola_3": 900, "espanola_5": 400, "espanola_7": 200,
 }
 
 
@@ -774,6 +848,10 @@ def build_all(builder, only=None, scale=1.0):
         "lectura_completa": lambda: builder.lectura_completa(TARGETS["lectura_completa"]),
         "multiturno": lambda: builder.multiturno(TARGETS["multiturno"]),
         "etica": lambda: builder.etica(TARGETS["etica"]),
+        "espanola_1": lambda: builder.espanola_1(TARGETS["espanola_1"]),
+        "espanola_3": lambda: builder.espanola_3(TARGETS["espanola_3"]),
+        "espanola_5": lambda: builder.espanola_5(TARGETS["espanola_5"]),
+        "espanola_7": lambda: builder.espanola_7(TARGETS["espanola_7"]),
     }
     filas = []
     for nombre, fn in metodos.items():
@@ -854,7 +932,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     rng = random.Random(args.seed)
-    builder = Builder(rng, load_kb("tarot.json"), load_kb("astrologia.json"), load_kb("numerologia.json"))
+    builder = Builder(rng, load_kb("tarot.json"), load_kb("astrologia.json"),
+                      load_kb("numerologia.json"), load_kb("baraja_espanola.json"))
     filas = build_all(builder, args.only, args.scale)
     print(f"TOTAL jobs: {len(filas)}")
     if args.dry_run:
