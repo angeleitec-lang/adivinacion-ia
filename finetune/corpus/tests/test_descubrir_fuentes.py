@@ -3,6 +3,7 @@
 
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -215,6 +216,163 @@ class TestEscribirPlan(unittest.TestCase):
             self.assertEqual(total, 0)
             with open(ruta, encoding="utf-8") as fh:
                 self.assertEqual(fh.read(), "")
+
+    def test_prefijo_t79_en_entidad_id(self):
+        with tempfile.TemporaryDirectory() as d:
+            ruta = os.path.join(d, "plan.jsonl")
+            df.escribir_plan({"tarot": ["https://a.com/1"]}, ruta, prefijo="t79")
+            with open(ruta, encoding="utf-8") as fh:
+                entrada = json.loads(fh.readline())
+            self.assertEqual(entrada["entidad_id"], "t79_tarot")
+            self.assertIn("T79", entrada["nombre"])
+
+    def test_prefijo_por_defecto_es_t74(self):
+        with tempfile.TemporaryDirectory() as d:
+            ruta = os.path.join(d, "plan.jsonl")
+            df.escribir_plan({"tarot": ["https://a.com/1"]}, ruta)
+            with open(ruta, encoding="utf-8") as fh:
+                entrada = json.loads(fh.readline())
+            self.assertEqual(entrada["entidad_id"], "t74_tarot")
+
+
+class TestNormUrl(unittest.TestCase):
+    def test_quita_query_y_fragmento(self):
+        self.assertEqual(df.norm_url("https://a.com/x?v=1#frag"), "https://a.com/x")
+        self.assertEqual(df.norm_url("https://a.com/x#f"), "https://a.com/x")
+        self.assertEqual(df.norm_url("https://a.com/x"), "https://a.com/x")
+
+
+class TestExcluir(unittest.TestCase):
+    def test_excluir_salta_urls_ya_descargadas(self):
+        sm = "https://ej.com/sitemap.xml"
+        cli = ClienteFalso({sm: {"estado": "ok", "html": _sitemap([
+            "https://ej.com/numerologia/1",
+            "https://ej.com/numerologia/2",
+        ])}})
+        urls = df.descubrir_desde_sitemap(
+            cli, sm, r"numerolog", limite=50, sleep=lambda s: None,
+            excluir={"https://ej.com/numerologia/1"},
+        )
+        self.assertEqual(urls, ["https://ej.com/numerologia/2"])
+
+    def test_excluir_compara_normalizada(self):
+        sm = "https://ej.com/sitemap.xml"
+        cli = ClienteFalso({sm: {"estado": "ok", "html": _sitemap([
+            "https://ej.com/numerologia/1?utm=x#top",
+            "https://ej.com/numerologia/2",
+        ])}})
+        urls = df.descubrir_desde_sitemap(
+            cli, sm, r"numerolog", limite=50, sleep=lambda s: None,
+            excluir={"https://ej.com/numerologia/1"},
+        )
+        self.assertEqual(urls, ["https://ej.com/numerologia/2"])
+
+    def test_construir_plan_pasa_excluir(self):
+        sm = "https://ej.com/sitemap.xml"
+        fuentes = [{
+            "dominio": "ej.com", "sitemap": sm,
+            "patron": r"numerolog", "familia": "numerologia",
+        }]
+        cli = ClienteFalso({sm: {"estado": "ok", "html": _sitemap([
+            "https://ej.com/numerologia/1",
+            "https://ej.com/numerologia/2",
+        ])}})
+        por = df.construir_plan(fuentes, cli, sleep=lambda s: None,
+                               excluir={"https://ej.com/numerologia/2"})
+        self.assertEqual(por["numerologia"], ["https://ej.com/numerologia/1"])
+
+
+class TestCargarExclusiones(unittest.TestCase):
+    def test_lee_manifest_jsonl(self):
+        with tempfile.TemporaryDirectory() as d:
+            ruta = os.path.join(d, "manifest.jsonl")
+            with open(ruta, "w", encoding="utf-8") as fh:
+                fh.write(json.dumps({"url": "https://a.com/x?u=1"}) + "\n")
+                fh.write(json.dumps({"url": "https://b.com/y#f"}) + "\n")
+                fh.write(json.dumps({"otra": "cosa"}) + "\n")
+                fh.write("\n")
+            ex = df.cargar_exclusiones_de_manifest(ruta)
+            self.assertEqual(ex, {"https://a.com/x", "https://b.com/y"})
+
+    def test_manifest_inexistente_devuelve_vacio(self):
+        ex = df.cargar_exclusiones_de_manifest("/nonexistent/manifest.jsonl")
+        self.assertEqual(ex, set())
+
+
+class TestFuentesT79(unittest.TestCase):
+    def test_shape_valido(self):
+        self.assertGreaterEqual(len(df.FUENTES_T79), 8)
+        for f in df.FUENTES_T79:
+            for clave in ("dominio", "sitemap", "patron", "familia"):
+                self.assertIn(clave, f)
+            re.compile(f["patron"])
+
+    def test_sin_dominios_bloqueados(self):
+        bloqueados = df.dominios_bloqueados()
+        for f in df.FUENTES_T79:
+            self.assertNotIn(df.norm_dominio(f["dominio"]), bloqueados)
+
+    def test_familias_conocidas(self):
+        conocidas = {"baraja_espanola", "numerologia", "astrologia", "tarot"}
+        for f in df.FUENTES_T79:
+            self.assertIn(f["familia"], conocidas)
+
+    def test_cubre_familias_exigidas(self):
+        familias = {f["familia"] for f in df.FUENTES_T79}
+        for exigida in ("baraja_espanola", "numerologia", "astrologia"):
+            self.assertIn(exigida, familias)
+
+    def test_patrones_coinciden_con_slugs_reales(self):
+        esperadas = {
+            "https://astralsagehub.com/es-es/sol-ascendente/ascendente-en-aries": "astralsagehub.com",
+            "https://biddytarot.com/tarot-card-meanings/major-arcana/fool/": "biddytarot.com",
+            "https://annacasas.es/tres-de-oros-baraja-espanola/": "annacasas.es",
+            "https://annacasas.es/el-3-de-copas-en-una-lectura/": "annacasas.es",
+            "https://annacasas.es/la-sota-de-espadas-en-el-tarot/": "annacasas.es",
+            "https://annacasas.es/tirada-de-cartas-gratis-baraja-espanola-significado-40-y-48-cartas/": "annacasas.es",
+            "https://campus-astrologia.es/urano-en-libra-en-casa-7/": "campus-astrologia.es",
+            "https://campus-astrologia.es/luna-oposicion-neptuno/": "campus-astrologia.es",
+            "https://campus-astrologia.es/nodo-norte-en-capricornio-en-casa-10/": "campus-astrologia.es",
+            "https://campus-astrologia.es/quiron-en-aries-significado/": "campus-astrologia.es",
+            "https://elreydecopas.com/baraja-espanola/as-de-copas/": "elreydecopas.com",
+            "https://astrologuias.com/baraja-espanola/7-de-copas/": "astrologuias.com",
+            "https://astro-cours.com/es/planetas/marte/": "astro-cours.com",
+            "https://www.numerologist.com/numerology/master-numbers/master-number-11": "numerologist.com",
+            "https://www.numerologist.com/numerology/chaldean-numerology": "numerologist.com",
+            "https://labyrinthos.co/blogs/learn-tarot-with-labyrinthos-academy/ace-of-cups-meaning": "labyrinthos.co",
+            "https://tiradadetarot.com/tirada-del-tiempo/": "tiradadetarot.com",
+            "https://tiradadetarot.com/lectura-de-vida/": "tiradadetarot.com",
+        }
+        for url, dominio in esperadas.items():
+            regexes = [re.compile(f["patron"]) for f in df.FUENTES_T79
+                      if df.norm_dominio(f["dominio"]) == dominio]
+            self.assertTrue(regexes, f"sin fuente para {dominio}")
+            self.assertTrue(any(r.search(url) for r in regexes),
+                          f"ningún patrón de {dominio} casa con {url}")
+
+    def test_patrones_annacasas_no_casan_ruido(self):
+        ruido = [
+            "https://annacasas.es/que-significa-sonar-con-monedas-de-oro/",
+            "https://annacasas.es/colgantes-de-oro/",
+            "https://annacasas.es/caballo-de-troya/",
+        ]
+        regexes = [re.compile(f["patron"]) for f in df.FUENTES_T79
+                   if df.norm_dominio(f["dominio"]) == "annacasas.es"]
+        for url in ruido:
+            self.assertFalse(any(r.search(url) for r in regexes),
+                           f"patrón casa con ruido: {url}")
+
+
+class TestConjunto(unittest.TestCase):
+    def test_t74_es_la_defecto(self):
+        self.assertIs(df.obtener_conjunto("t74"), df.FUENTES_DEF)
+
+    def test_t79_devuelve_nueva(self):
+        self.assertIs(df.obtener_conjunto("t79"), df.FUENTES_T79)
+
+    def test_conjunto_desconocido_error(self):
+        with self.assertRaises(ValueError):
+            df.obtener_conjunto("t99")
 
 
 if __name__ == "__main__":
