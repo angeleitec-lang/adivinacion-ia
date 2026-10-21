@@ -11,6 +11,7 @@ import unittest
 from unittest import mock
 
 import clasicos_pd_a_evidencias as mod
+import libros_pipeline
 
 
 class ClienteFalso:
@@ -242,6 +243,59 @@ class TestProceso(unittest.TestCase):
         for ev in evidencias:
             self.assertEqual(ev["periodo"], "clasica")
             self.assertEqual(ev["tipo"], "libro")
+
+
+class TestConstruirClienteEndpoints(unittest.TestCase):
+    """Ajuste T92: forzar el juez a un nodo y rechazar el nodo1 reservado."""
+
+    def test_rechaza_nodo1_reservado(self):
+        with self.assertRaises(ValueError):
+            mod.construir_cliente_endpoints("http://10.0.0.3:8000/v1")
+
+    def test_rechaza_nodo1_entre_varios(self):
+        with self.assertRaises(ValueError):
+            mod.construir_cliente_endpoints(
+                "http://10.0.0.4:8000/v1,http://10.0.0.3:8000/v1")
+
+    def test_vacio_rechazado(self):
+        with self.assertRaises(ValueError):
+            mod.construir_cliente_endpoints("")
+
+    def test_acepta_nodo2_y_envuelve_acotado(self):
+        cli = mod.construir_cliente_endpoints("http://10.0.0.4:8000/v1")
+        self.assertIsInstance(cli, libros_pipeline._ClienteAcotado)
+        self.assertEqual(cli._cliente.endpoints, ["http://10.0.0.4:8000/v1"])
+
+
+class TestFichaTetrabiblosAshmand(unittest.TestCase):
+    """Ficha 70850 en el inventario y reconocida por la tupla CLASICOS."""
+
+    def setUp(self):
+        self.ruta_inv = os.path.join(
+            os.path.dirname(__file__), "..", "..", "knowledge",
+            "fuentes_clasicas_pd.jsonl")
+        self.fichas = {}
+        with open(self.ruta_inv, encoding="utf-8") as fh:
+            for linea in fh:
+                linea = linea.strip()
+                if linea:
+                    f = json.loads(linea)
+                    self.fichas[f["id"]] = f
+
+    def test_ficha_presente_y_verificada(self):
+        f = self.fichas.get("tetrabiblos_ashmand_1900")
+        self.assertIsNotNone(f)
+        self.assertTrue(f.get("verificada"))
+        self.assertIn("70850", f.get("url_texto", ""))
+        self.assertIn("gutenberg.org", f.get("url_texto", ""))
+
+    def test_clasicos_la_conoce(self):
+        ids = {c["id"] for c in mod.CLASICOS}
+        self.assertIn("tetrabiblos_ashmand_1900", ids)
+
+    def test_familia_astrologia(self):
+        f = self.fichas["tetrabiblos_ashmand_1900"]
+        self.assertEqual(f.get("familia"), "astrologia")
 
 
 if __name__ == "__main__":
