@@ -107,31 +107,24 @@ def _seleccion_por_bloque(db_path, seleccion):
 
 
 def adaptar_a_sharegpt(fila):
-    """Adaptador DESAJUSTE #1: registro del ejecutor → fila ShareGPT.
+    """Adaptador DESAJUSTE D1: registro del ejecutor → fila ShareGPT.
 
-    El ejecutor (T62) escribe registros planos con claves ``prompt_system``,
-    ``prompt_user`` y ``respuesta``; validate_synthetic, merge_final y
-    preparar_entrenamiento esperan ``conversations`` con roles system/human/gpt.
-
-    Se conservan como claves extra ``bloque`` e ``id``: merge_final pasa las filas
-    tal cual y preparar_entrenamiento lee ``bloque`` para ``_familia``. Se aplica
-    normalización NFC (DESAJUSTE #4) para que el texto que recibe preparar ya esté
-    en la forma normal que él mismo usa.
+    En T75 la lógica canónica se movió a ``ejecutor_fase1.a_sharegpt``: el
+    ejecutor ya puede emitir ShareGPT con ``--formato sharegpt`` (con
+    ``bloque``, ``id``, ``calculos`` y texto NFC). Esta función queda como
+    delegación delgada por compatibilidad con llamadores y tests del ensayo T70.
     """
-    conv = []
-    sistema = fila.get("prompt_system") or ""
-    if sistema:
-        conv.append({"from": "system", "value": unicodedata.normalize("NFC", sistema)})
-    conv.append({"from": "human",
-                "value": unicodedata.normalize("NFC", fila.get("prompt_user") or "")})
-    conv.append({"from": "gpt",
-                "value": unicodedata.normalize("NFC", fila.get("respuesta") or "")})
-    fila_out = {"conversations": conv}
-    if fila.get("bloque") is not None:
-        fila_out["bloque"] = fila["bloque"]
-    if fila.get("id") is not None:
-        fila_out["id"] = fila["id"]
-    return fila_out
+    return ef.a_sharegpt(fila)
+
+
+def _texto_gpt(fila):
+    """Texto de la última respuesta gpt (ShareGPT o registro plano del ejecutor)."""
+    if fila.get("respuesta") is not None:
+        return fila.get("respuesta") or ""
+    for c in reversed(fila.get("conversations") or []):
+        if c.get("from") == "gpt":
+            return c.get("value") or ""
+    return ""
 
 
 def escribir_validacion(adaptadas, dir_validacion):
@@ -318,15 +311,19 @@ def _leer_jsonl(ruta):
     return filas
 
 
-def _contar_nfd(filas_ejecutor):
-    """Filas cuyo texto viene en NFD (descompuesto) y necesita NFC."""
+def _contar_nfd(filas):
+    """Filas cuyo texto viene en NFD (descompuesto) y necesita NFC.
+
+    Cubre el registro plano del ejecutor (T70) y las filas ShareGPT con
+    ``conversations`` que el ejecutor ya normaliza a NFC en T75.
+    """
     n = 0
-    for fila in filas_ejecutor:
-        for clave in ("prompt_system", "prompt_user", "respuesta"):
-            texto = fila.get(clave) or ""
-            if unicodedata.normalize("NFC", texto) != texto:
-                n += 1
-                break
+    for fila in filas:
+        textos = [fila.get(clave) or "" for clave in
+                  ("prompt_system", "prompt_user", "respuesta")]
+        textos += [c.get("value") or "" for c in fila.get("conversations") or []]
+        if any(unicodedata.normalize("NFC", t) != t for t in textos):
+            n += 1
     return n
 
 
@@ -350,6 +347,7 @@ def ejecutar_ensayo(base_dir, db_src=None, n_tareas=200, lector=None,
     resumen_ejec = ef.ejecutar(
         copia_db, cliente, kb,
         workers=2, limite=n_tareas, out_dir=base_dir / "ejecutor",
+        formato="sharegpt",
     )
     aceptadas = _leer_jsonl(base_dir / "ejecutor" / "aceptadas.jsonl")
     rechazadas = _leer_jsonl(base_dir / "ejecutor" / "rechazadas.jsonl")
@@ -363,9 +361,9 @@ def ejecutar_ensayo(base_dir, db_src=None, n_tareas=200, lector=None,
             f"(rechazadas={len(rechazadas)}, motivos={dict(motivos_rechazo)})"
         )
 
-    # --- Etapa 2: adaptación a ShareGPT ---------------------------------------
-    adaptadas = [adaptar_a_sharegpt(f) for f in aceptadas]
-    n_nfd = _contar_nfd(aceptadas)
+    # --- Etapa 2: adaptación a ShareGPT (T75: identidad, ya viene en ShareGPT) --
+    adaptadas = list(aceptadas)
+    n_nfd = _contar_nfd(adaptadas)
     cuenta_validacion = escribir_validacion(adaptadas, base_dir / "validacion")
 
     # --- Etapa 3: validate_synthetic ------------------------------------------
@@ -478,24 +476,28 @@ def construir_desajustes(aceptadas, rechazadas, adaptadas, n_nfd, val_informe,
         ejemplo = aceptadas[0]
         des.append({
             "id": "D1",
-            "titulo": "La salida del ejecutor no es ShareGPT",
+            "titulo": "La salida del ejecutor no era ShareGPT (CORREGIDO EN T75)",
             "descripcion": (
-                "ejecutor_fase1 escribe registros planos con prompt_system/"
-                "prompt_user/respuesta; validate_synthetic y preparar_entrenamiento "
-                "esperan conversations con roles system/human/gpt."
+                "T70: ejecutor_fase1 escribia registros planos con prompt_system/"
+                "prompt_user/respuesta y validate_synthetic no los entendia. "
+                "T75: el ejecutor acepta --formato sharegpt y emite "
+                "conversations [system,human,gpt] con 'bloque', 'id' y 'calculos' "
+                "en NFC. Este ensayo usa ese formato; adaptar_a_sharegpt queda "
+                "como delegacion delgada hacia ejecutor_fase1.a_sharegpt."
             ),
             "reproduccion": (
-                "validate_synthetic.human_of(registro_ejecutor) devuelve cadena "
-                "vacia porque no existe 'conversations'."
+                "T70: validate_synthetic.human_of(registro_plano) -> ''. "
+                "T75: a_sharegpt(registro)['conversations'] tiene roles "
+                "system/human/gpt y el validador lo consume directamente."
             ),
             "parche": (
-                "Adaptador implementar en el ensayo: adaptar_a_sharegpt() "
-                "(convierte a conversations y conserva 'bloque' e 'id')."
+                "Aplicado en ejecutor_fase1.a_sharegpt + --formato sharegpt "
+                "(commit 8d43541)."
             ),
             "ejemplo_claves": sorted(ejemplo.keys()),
         })
 
-    cortas_400 = sum(1 for f in aceptadas if len(f.get("respuesta") or "") < 400)
+    cortas_400 = sum(1 for f in aceptadas if len(_texto_gpt(f)) < 400)
     des.append({
         "id": "D2",
         "titulo": "min-chars=400 de validate_synthetic vs lector simulado breve",
@@ -539,36 +541,39 @@ def construir_desajustes(aceptadas, rechazadas, adaptadas, n_nfd, val_informe,
         })
 
     sin_datos = (val_informe.get("reasons") or {}).get("sin_datos_del_prompt", 0)
-    if sin_datos:
-        per_block = val_informe.get("per_block") or {}
-        caida_total = sorted(
-            b for b, s in per_block.items()
-            if s.get("total", 0) > 0 and s.get("bad", 0) == s.get("total", 0)
-        )
-        des.append({
-            "id": "D7",
-            "titulo": "El grounding de validate_synthetic es mas estricto que el "
-                      "verificador del ejecutor",
-            "descripcion": (
-                f"validate_synthetic rechazo {sin_datos} filas por "
-                "'sin_datos_del_prompt': exige que la respuesta mencione signos y "
-                "numeros extraidos del TEXTO del prompt, un conjunto distinto del "
-                "que comprueba fase1_prompts.verificar_lectura (que usa "
-                "'calculos'). El lector simulado pasa el verificador del ejecutor "
-                "pero no el grounding del validador; en los bloques "
-                f"{caida_total} cayo el 100% de las filas."
-            ),
-            "reproduccion": (
-                "validate_synthetic.grounding(prompt_astro_natal, "
-                "simulacion_fase1(system, user)) -> False."
-            ),
-            "parche": (
-                "Alinear el grounding del validador con los calculos de la tarea "
-                "(la misma fuente que verificar_lectura) o enriquecer el lector "
-                "simulado para que recite los datos del prompt. No se modifica el "
-                "modulo ajeno desde el ensayo."
-            ),
-        })
+    per_block = val_informe.get("per_block") or {}
+    caida_total = sorted(
+        b for b, s in per_block.items()
+        if s.get("total", 0) > 0 and s.get("bad", 0) == s.get("total", 0)
+    )
+    des.append({
+        "id": "D7",
+        "titulo": "Grounding del validador vs calculos del ejecutor "
+                  "(CORREGIDO EN T75)",
+        "descripcion": (
+            "T70: validate_synthetic extraia signos y numeros del TEXTO del "
+            "prompt, un conjunto distinto del que comprueba "
+            "fase1_prompts.verificar_lectura (usa 'calculos'); los bloques "
+            "astrales caian casi al 100%. T75: grounding() usa "
+            "signos_de_calculos/numeros_de_calculos cuando la fila trae "
+            "'calculos' (commits c46d98f y 31eb144; el Ascendente se lee "
+            "tambien de la clave 'ascendente' de la carta) y el lector "
+            "simulado menciona los ejes Sol/Luna/Ascendente. Residual: "
+            f"{sin_datos} filas 'sin_datos_del_prompt'"
+            + (f"; caida total residual en {caida_total}" if caida_total else "")
+            + "."
+        ),
+        "reproduccion": (
+            "T70: grounding(prompt_astro, lectura_breve) -> False. T75: "
+            "grounding(prompt, ans, calculos=CALCULOS_ASTRO) -> True si ans "
+            "menciona 2/3 de los signos de los calculos."
+        ),
+        "parche": (
+            "Aplicado en validate_synthetic.grounding con calculos de la fila "
+            "(fuente canonica identica a verificar_lectura) + ejes astrales en "
+            "el lector simulado; tests TestGroundingConCalculos."
+        ),
+    })
 
     junk_por_bloque = Counter()
     for fila in adaptadas:
@@ -576,20 +581,22 @@ def construir_desajustes(aceptadas, rechazadas, adaptadas, n_nfd, val_informe,
             junk_por_bloque[str(fila.get("bloque"))] += 1
     des.append({
         "id": "D3",
-        "titulo": "Filtro de términos de dominio de merge_final vs filas de etica",
+        "titulo": "Filtro de términos de dominio de merge_final vs filas de "
+                  "etica (CORREGIDO EN T75)",
         "descripcion": (
-            "merge_final descarta como junk las filas con domain_hits < 2. Las "
-            "filas del bloque etica hablan de límites y contención, no de "
-            "arcanos ni signos, y pueden perderse pese a pasar validate_synthetic."
+            "T70: merge_final descartaba como junk las filas con domain_hits < 2; "
+            "las de etica hablan de límites y contención, no de arcanos ni "
+            "signos, y podian perderse pese a pasar validate_synthetic. T75: "
+            "is_junk_pair exime las filas con 'bloque'=='etica'. Residual en "
+            f"este ensayo: {dict(junk_por_bloque) if junk_por_bloque else '0 filas junk'}."
         ),
         "reproduccion": (
-            "merge_final.is_junk_pair(adaptar_a_sharegpt(fila_etica)) -> True "
-            "en las filas marcadas abajo."
+            "merge_final.is_junk_pair({'bloque': 'etica', 'conversations': "
+            "[pobres en terminos de dominio]}) -> False (antes True)."
         ),
         "parche": (
-            "Propuesta: eximir en merge_final las filas cuyo 'bloque'=='etica' "
-            "del filtro de dominio (el adaptador ya conserva 'bloque'). No se "
-            "modifica el módulo ajeno desde el ensayo."
+            "Aplicado en merge_final.is_junk_pair: min_terms=0 para "
+            "bloque=='etica' (commit fa43684); test TestExencionEtica."
         ),
         "bloques_afectados": dict(junk_por_bloque),
     })
@@ -607,8 +614,8 @@ def construir_desajustes(aceptadas, rechazadas, adaptadas, n_nfd, val_informe,
             "unicodedata.normalize('NFC', texto) != texto en las filas NFD."
         ),
         "parche": (
-            "El adaptador adaptar_a_sharegpt aplica NFC en system/human/gpt, "
-            "de modo que lo que entra a validación ya está normalizado."
+            "Aplicado en T75: ejecutor_fase1.a_sharegpt normaliza a NFC "
+            f"system/human/gpt; residual NFD en este ensayo: {n_nfd} filas."
         ),
     })
 
@@ -657,10 +664,9 @@ def escribir_informe(resumen, ruta):
         "## Cadena y formatos intercambiados",
         "",
         "```",
-        "jobs.db (copiar) ──> ejecutor_fase1.simulacion_fase1",
-        "        registro plano: {id, bloque, prompt_system, prompt_user, respuesta, ok, ...}",
-        "   ── adaptar_a_sharegpt (DESAJUSTE D1/D4) ──>",
-        "        ShareGPT: {conversations:[system,human,gpt], bloque, id}",
+        "jobs.db (copiar) ──> ejecutor_fase1.simulacion_fase1 (--formato sharegpt, T75)",
+        "        ShareGPT: {conversations:[system,human,gpt], bloque, id, calculos} (NFC)",
+        "   ── adaptar_a_sharegpt: delegacion a a_sharegpt (identidad en T75) ──>",
         "   ── validate_synthetic (--dir por bloque) ──>",
         "        synth_clean.jsonl + synth_clean.meta.jsonl {i, block} + report",
         "   ── build_dataset (mini-corpus .md sintético = 'real') ──>",
