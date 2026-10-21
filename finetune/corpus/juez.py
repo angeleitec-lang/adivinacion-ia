@@ -65,14 +65,26 @@ _MAYORES_EN = {
     "judgement": 21, "the resurrection": 21, "the world": 22,
 }
 
-# Títulos muy genéricos: estas palabras sueltas son nombres de carta ambiguos
-# («Death», «Justice») y solo cuentan si aparecen en el título de la sección
-# o con artículo/contexto tarot cerca (a cargo de `cartas.extraer_cartas`).
+# En el título todos los nombres ingleses valen. En el cuerpo, los nombres
+# que son palabras cotidianas («the sun», «death», «justice», «strength»,
+# «the world»…) solo cuentan si hay una palabra de contexto tarot cerca;
+# si no, son prosa normal y no deben generar evidencia de carta.
 _MAYORES_EN_TITULO = dict(_MAYORES_EN)
-_MAYORES_EN_CUERPO = {
-    k: v for k, v in _MAYORES_EN.items()
-    if k.startswith("the ") or k in ("wheel of fortune", "temperance",
-                                     "strength", "judgement")}
+
+# Nombres ingleses cuyo núcleo es una palabra de uso diario: ambiguos en cuerpo.
+_MAYORES_EN_AMBIGUOS = {
+    "the fool", "the magician", "the priestess", "the empress",
+    "the emperor", "the pope", "the lovers", "the chariot",
+    "strength", "the hermit", "the wheel", "justice", "death",
+    "temperance", "the devil", "the tower", "the star", "the moon",
+    "the sun", "judgement", "the world",
+}
+
+# Palabras que delatan que un nombre ambiguo se usa como carta de tarot.
+_CONTEXTO_TAROT_EN = {
+    "card", "cards", "tarot", "trump", "trumps", "arcanum", "arcana",
+    "major", "minor", "deck",
+}
 
 
 def _mayor_en_ids(texto_norm):
@@ -82,6 +94,29 @@ def _mayor_en_ids(texto_norm):
         if re.search(r"(?<![a-z])" + re.escape(nombre) + r"(?![a-z])",
                      texto_norm):
             ids.add("tarot-mayor-%02d" % numero)
+    return ids
+
+
+def _mayores_en_cuerpo_ids(texto_norm):
+    """Ids de arcanos mayores ingleses que cuentan en el cuerpo de una sección.
+
+    Un nombre no ambiguo (p. ej. «the hanged man», «wheel of fortune») vale
+    siempre. Uno ambiguo (palabra cotidiana) solo si aparece una palabra de
+    contexto tarot a menos de 8 palabras de distancia."""
+    ids = set()
+    palabras = texto_norm.split()
+    for nombre, numero in _MAYORES_EN.items():
+        for m in re.finditer(r"(?<![a-z])" + re.escape(nombre) + r"(?![a-z])",
+                            texto_norm):
+            if nombre not in _MAYORES_EN_AMBIGUOS:
+                ids.add("tarot-mayor-%02d" % numero)
+                break
+            ini = len(texto_norm[:m.start()].split())
+            fin = len(texto_norm[:m.end()].split())
+            ventana = set(palabras[max(0, ini - 8):fin + 8])
+            if ventana & _CONTEXTO_TAROT_EN:
+                ids.add("tarot-mayor-%02d" % numero)
+                break
     return ids
 
 
@@ -178,14 +213,12 @@ def candidatos_seccion(seccion):
             _alta(entrada["id"], familia, entrada["nombre"])
 
     # Arcanos mayores por nombre inglés: todos valen en el título; en el
-    # cuerpo solo los inequívocos (con «the» o formas poco comunes).
+    # cuerpo solo los inequívocos, o los ambiguos acompañados de contexto
+    # tarot («the card of the Sun», «trump XIX»), no en prosa cotidiana.
     for entidad_id in _mayor_en_ids(titulo):
         _alta(entidad_id, "tarot", catalogo[entidad_id]["nombre"])
-    numerados_cuerpo = {"tarot-mayor-%02d" % n
-                        for n in _MAYORES_EN_CUERPO.values()}
-    for entidad_id in _mayor_en_ids(texto):
-        if entidad_id in numerados_cuerpo:
-            _alta(entidad_id, "tarot", catalogo[entidad_id]["nombre"])
+    for entidad_id in _mayores_en_cuerpo_ids(texto):
+        _alta(entidad_id, "tarot", catalogo[entidad_id]["nombre"])
 
     # Astrología: signos, planetas en signo, planetas en casa y aspectos.
     hallazgos = cobertura_dataset._menciones_astro(seccion.get("texto") or "")

@@ -78,6 +78,34 @@ _RANGOS_TAROT = [
     ("Rey", 14, []),
 ]
 
+# Equivalencias inglesas de palo y rango para el tarot (los libros en inglés
+# nombran las menores como «<Rank> of <Suit>»: King of Wands, Page of Cups).
+# Solo se aplican al mazo tarot; los naipes franceses (hearts, diamonds,
+# clubs, spades) NO son cartas de tarot y quedan fuera a propósito.
+_EN_PALO = {
+    "Bastos": ["wands"],
+    "Copas": ["cups"],
+    "Espadas": ["swords"],
+    "Oros": ["pentacles", "coins", "disks", "discs"],
+}
+
+_EN_RANGO = {
+    1: ["ace"],
+    2: ["two"],
+    3: ["three"],
+    4: ["four"],
+    5: ["five"],
+    6: ["six"],
+    7: ["seven"],
+    8: ["eight"],
+    9: ["nine"],
+    10: ["ten"],
+    11: ["page"],
+    12: ["knight"],
+    13: ["queen"],
+    14: ["king"],
+}
+
 # Baraja española: 10 cartas por palo (As, 2-7, Sota, Caballo, Rey)
 _RANGOS_NAIPE = [
     ("As", 1, ["uno"]),
@@ -107,9 +135,12 @@ def _mayores():
     return entradas
 
 
-def _menores(rangos, prefijo_id, etiqueta):
+def _menores(rangos, prefijo_id, etiqueta, en_palo=None, en_rango=None):
     """Construye las cartas menores: «<Rango> de <Palo>» con sinónimos
-    composicionales (rangos × palos) y numerales («2 de oros»)."""
+    composicionales (rangos × palos) y numerales («2 de oros»).
+
+    Si se pasan `en_palo` y `en_rango` (solo el tarot), añade además las
+    formas inglesas «<rank> of <suit>» que usan los libros en inglés."""
     entradas = []
     for palo in _PALOS:
         for rango, numero, extras_rango in rangos:
@@ -123,6 +154,10 @@ def _menores(rangos, prefijo_id, etiqueta):
                         sinonimos.append(forma)
             if numero >= 2 and numero <= 10:
                 sinonimos.append(f"{numero} de {palo}")
+            if en_palo is not None and en_rango is not None:
+                for er in en_rango.get(numero, []):
+                    for ep in en_palo[palo]:
+                        sinonimos.append(f"{er} of {ep}")
             entradas.append({
                 "id": f"{prefijo_id}-{palo.lower()}-{numero:02d}",
                 "nombre": f"{rango} de {palo}",
@@ -134,7 +169,8 @@ def _menores(rangos, prefijo_id, etiqueta):
     return entradas
 
 
-CARTAS_TAROT = _mayores() + _menores(_RANGOS_TAROT, "tarot", "menor")
+CARTAS_TAROT = _mayores() + _menores(
+    _RANGOS_TAROT, "tarot", "menor", en_palo=_EN_PALO, en_rango=_EN_RANGO)
 NAIPES_ESPANOLES = _menores(_RANGOS_NAIPE, "naipe", "menor")
 
 _MAZOS = {
