@@ -141,7 +141,8 @@ def _confianza(celda):
         return "alta"
     if nucleo:
         return "media"
-    if len(unica) >= 2:
+    fuentes = {u.get("fuente_id") or u.get("dominio") or "" for u in unica}
+    if len(fuentes - {""}) >= 2:
         return "media"
     return "baja"
 
@@ -253,9 +254,10 @@ def construir_kb_v2(ruta_consenso, dir_salida, kb_v1_dir=None,
                         for f in FAMILIAS},
         "celdas_nuevas": [],
         "contradicciones_v1": [],
+        "celdas_duplicadas": 0,
         "v1_con_nucleo": set(),
     }
-    vistas = set()
+    vistas = {}
 
     with open(ruta_consenso, "r", encoding="utf-8") as f:
         for linea in f:
@@ -279,49 +281,51 @@ def construir_kb_v2(ruta_consenso, dir_salida, kb_v1_dir=None,
                 continue
             clave = (eid, faceta)
             if clave in vistas:
-                continue
-            vistas.add(clave)
+                stats["celdas_duplicadas"] += 1
+            # Last-wins: una correccion añadida al final del consenso manda.
+            vistas[clave] = (familia, reg)
 
-            celda = _celda_v2(reg)
-            celda["confianza"] = _confianza(celda)
-            familias_datos[familia].setdefault(eid, {})[faceta] = celda
-            stats["celdas"] += 1
-            pf = stats["por_familia"][familia]
-            pf["celdas"] += 1
-            pf["confianza"][celda["confianza"]] += 1
-            if celda["nucleo"]:
-                pf["con_nucleo"] += 1
+    for (eid, faceta), (familia, reg) in vistas.items():
+        celda = _celda_v2(reg)
+        celda["confianza"] = _confianza(celda)
+        familias_datos[familia].setdefault(eid, {})[faceta] = celda
+        stats["celdas"] += 1
+        pf = stats["por_familia"][familia]
+        pf["celdas"] += 1
+        pf["confianza"][celda["confianza"]] += 1
+        if celda["nucleo"]:
+            pf["con_nucleo"] += 1
 
-            cv1 = clave_v1(eid)
-            if cv1 is not None and celda["nucleo"]:
-                stats["v1_con_nucleo"].add(cv1)
-            if cv1 is None or cv1 not in claves_v1:
-                stats["celdas_nuevas"].append({
-                    "familia": familia,
-                    "entidad_id": eid,
-                    "faceta": faceta,
-                })
+        cv1 = clave_v1(eid)
+        if cv1 is not None and celda["nucleo"]:
+            stats["v1_con_nucleo"].add(cv1)
+        if cv1 is None or cv1 not in claves_v1:
+            stats["celdas_nuevas"].append({
+                "familia": familia,
+                "entidad_id": eid,
+                "faceta": faceta,
+            })
 
-            for texto, fuente in _afirmaciones_de_celda(reg):
-                contradice, motivo = contradiccion_kb(texto, eid, corr)
-                if contradice:
-                    stats["contradicciones_v1"].append({
-                        "familia": familia,
-                        "entidad_id": eid,
-                        "faceta": faceta,
-                        "afirmacion": texto,
-                        "fuente": fuente,
-                        "motivo": motivo,
-                    })
-            for a in reg.get("alertas_factuales") or []:
+        for texto, fuente in _afirmaciones_de_celda(reg):
+            contradice, motivo = contradiccion_kb(texto, eid, corr)
+            if contradice:
                 stats["contradicciones_v1"].append({
                     "familia": familia,
                     "entidad_id": eid,
                     "faceta": faceta,
-                    "afirmacion": a.get("afirmacion"),
-                    "fuente": a.get("fuente_id"),
-                    "motivo": a.get("motivo"),
+                    "afirmacion": texto,
+                    "fuente": fuente,
+                    "motivo": motivo,
                 })
+        for a in reg.get("alertas_factuales") or []:
+            stats["contradicciones_v1"].append({
+                "familia": familia,
+                "entidad_id": eid,
+                "faceta": faceta,
+                "afirmacion": a.get("afirmacion"),
+                "fuente": a.get("fuente_id"),
+                "motivo": a.get("motivo"),
+            })
 
     # Deduplicar contradicciones por (entidad, faceta, afirmacion)
     unicas = {}
@@ -359,6 +363,7 @@ def construir_kb_v2(ruta_consenso, dir_salida, kb_v1_dir=None,
 
     if informe_diff:
         _escribir_informe_diff(informe_diff, stats)
+    stats["v1_con_nucleo"] = sorted(stats["v1_con_nucleo"])
     return stats
 
 
@@ -430,8 +435,10 @@ def _escribir_informe_diff(ruta, stats):
         lineas.append("| %s | %d | %d | %.1f%% |" % (
             familia, total, nucleo, pct))
     lineas.append("")
-    with open(ruta, "w", encoding="utf-8") as f:
+    tmp = ruta + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         f.write("\n".join(lineas) + "\n")
+    os.replace(tmp, ruta)
 
 
 def main(argv=None):
