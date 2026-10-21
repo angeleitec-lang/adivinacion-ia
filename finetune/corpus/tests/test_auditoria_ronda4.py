@@ -28,8 +28,8 @@ import salud_datos
 class TestEvaluarNumerologia(unittest.TestCase):
     """evaluar_modelo: mínima de 3 etiquetas numerales."""
 
-    @unittest.expectedFailure
     def test_doble_cuenta_ano_personal(self):
+        """B1 (T63) arreglado en T67: cada etiqueta distintiva cuenta una vez."""
         import evaluar_modelo
         fallos = []
         evaluar_modelo._check_numerologia(

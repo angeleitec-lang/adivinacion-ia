@@ -293,7 +293,9 @@ def _check_numerologia(caso: dict, texto: str, fallos: list[dict]) -> None:
     n = _norm(texto)
     etiquetas = ["camino de vida", "expresion", "destino", "alma", "personalidad",
                  "ano personal", "año personal"]
-    presentes = sum(1 for e in etiquetas if _norm(e) in n)
+    # T67 (B1): «ano personal» y «año personal» colapsan al normalizar;
+    # se cuenta cada etiqueta distintiva una sola vez.
+    presentes = len({e for e in (_norm(x) for x in etiquetas) if e in n})
     if presentes < 3:
         fallos.append({"check": "datos",
                        "motivo": "Menciona menos de tres números calculados"})
