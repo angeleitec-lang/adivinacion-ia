@@ -111,6 +111,55 @@ class TestLimpiarEvidenciasTitulosES(unittest.TestCase):
             "neutro")
 
 
+class TestCachJuezEvaluacion(unittest.TestCase):
+    """evaluar_modelo: la clave de caché del juez debe depender del caso."""
+
+    class _Cliente:
+        def __init__(self):
+            self.llamadas = 0
+
+        def chat(self, system, user, **kwargs):
+            self.llamadas += 1
+            return "4"
+
+    def setUp(self):
+        import evaluar_modelo
+        self.mod = evaluar_modelo
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.ruta_cache = os.path.join(self.dir, "cache.jsonl")
+
+    def _caso(self, user="pregunta original"):
+        return {"id": "ev-tarot-01", "system": "situa", "user": user,
+                "familia": "tarot"}
+
+    def _resultado(self):
+        return {"id": "ev-tarot-01", "respuesta": "la respuesta del modelo"}
+
+    def test_segunda_pasada_usa_cache(self):
+        cliente = self._Cliente()
+        self.mod.aplicar_juez([self._caso()], [self._resultado()],
+                              cliente=cliente, cache_path=self.ruta_cache)
+        self.assertEqual(cliente.llamadas, 1)
+        cliente2 = self._Cliente()
+        self.mod.aplicar_juez([self._caso()], [self._resultado()],
+                              cliente=cliente2, cache_path=self.ruta_cache)
+        self.assertEqual(cliente2.llamadas, 0)
+
+    def test_misma_respuesta_otro_caso_no_reutiliza_cache(self):
+        cliente = self._Cliente()
+        self.mod.aplicar_juez([self._caso()], [self._resultado()],
+                              cliente=cliente, cache_path=self.ruta_cache)
+        cliente2 = self._Cliente()
+        res2 = self._resultado()
+        self.mod.aplicar_juez([self._caso(user="otra pregunta"), ], [res2],
+                              cliente=cliente2, cache_path=self.ruta_cache)
+        self.assertEqual(
+            cliente2.llamadas, 1,
+            "A4 (T63): cambiar el caso sin cambiar la respuesta no debe "
+            "revalidar la puntuacion cacheada")
+
+
 class TestJuezValidadores(unittest.TestCase):
     """juez.parsear_respuesta: validación blanda de `calidad`."""
 

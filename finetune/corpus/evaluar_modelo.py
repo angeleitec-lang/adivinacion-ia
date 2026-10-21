@@ -758,8 +758,18 @@ def aplicar_juez(casos: list[dict], resultados: list[dict],
         for resultado in resultados:
             caso = por_id[resultado["id"]]
             respuesta = resultado.get("respuesta", "")
+            # T67 (A4): la clave incluye el contenido del caso y la rubrica;
+            # asi una entrada de caché nunca puede revalidarse contra otro
+            # prompt o otra rubrica. Las entradas antiguas (id+respuesta)
+            # simplemente dejan de casar y el caso se reevalua.
             clave = hashlib.sha256(
-                (resultado["id"] + "\n" + respuesta).encode("utf-8")
+                "\n".join([
+                    resultado["id"],
+                    respuesta,
+                    caso.get("system", ""),
+                    caso.get("user", ""),
+                    RUBRICA,
+                ]).encode("utf-8")
             ).hexdigest()
             if clave in cache:
                 resultado["juez"] = cache[clave]["puntuacion"]
