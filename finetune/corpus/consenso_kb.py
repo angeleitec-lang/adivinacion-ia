@@ -23,7 +23,9 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import cartas
@@ -221,6 +223,66 @@ def tradicion_de_fuente(fuente_id, periodo=None):
     return "sin_periodo"
 
 
+EXTRACTOR_BASE = "base"
+
+
+def _clave_fuente(reg):
+    """Identidad de la fuente de una afirmacin: fuente_id o dominio como respaldo."""
+    return reg.get("fuente_id") or reg.get("dominio") or ""
+
+
+def _extractor_de(reg):
+    """Extractor que produjo la afirmacin (campo ``origen``); la tubera base
+    no lo trae y se etiqueta como ``base``."""
+    return reg.get("origen") or EXTRACTOR_BASE
+
+
+def deduplicar_por_fuente(regs):
+    """Deduplica afirmaciones por (fuente, texto normalizado) antes de agrupar.
+
+    La independencia se cuenta por FUENTE, nunca por extractor: dos
+    afirmaciones equivalentes de la misma fuente extradas por modelos
+    distintos son UNA sola y no forman «mayora». El registro fusionado
+    conserva en ``extractores`` qu extractores la produjeron.
+
+    Devuelve (registros nicos, nmero de duplicados fusionados).
+    """
+    por_clave = {}
+    orden = []
+    fusionadas = 0
+    for r in regs:
+        texto = r.get("afirmacion")
+        if not texto:
+            continue
+        clave = (_clave_fuente(r), cartas.norm(texto))
+        if clave not in por_clave:
+            nuevo = dict(r)
+            nuevo["extractores"] = [_extractor_de(r)]
+            por_clave[clave] = nuevo
+            orden.append(clave)
+            continue
+        fusionadas += 1
+        existente = por_clave[clave]
+        existente["extractores"] = sorted(
+            set(existente["extractores"]) | {_extractor_de(r)})
+        for k, v in r.items():
+            if k != "extractores" and k not in existente and v is not None:
+                existente[k] = v
+    return [por_clave[c] for c in orden], fusionadas
+
+
+def _extractores_de(miembros):
+    """Extractores que produjeron los miembros de un grupo de equivalencia."""
+    out = set()
+    for m in miembros:
+        ex = m.get("extractores")
+        if ex:
+            out.update(ex)
+        else:
+            out.add(_extractor_de(m))
+    return sorted(out)
+
+
 class CacheEquivalencia:
     """Cach en disco (JSONL) de las respuestas de agrupamiento."""
 
@@ -381,6 +443,7 @@ def _lado_discrepancia(miembros):
             tradicion_de_fuente(m.get("fuente_id"), m.get("periodo"))
             for m in miembros
         }),
+        "extractores": _extractores_de(miembros),
     }
 
 
@@ -426,6 +489,7 @@ def construir_consensos(cliente, celdas, cache=None):
                         tradicion_de_fuente(m.get("fuente_id"), m.get("periodo"))
                         for m in miembros
                     }),
+                    "extractores": _extractores_de(miembros),
                 })
             elif gi not in en_discrepancia:
                 unica_fuente.append({
@@ -433,6 +497,7 @@ def construir_consensos(cliente, celdas, cache=None):
                     "fuente_id": rep.get("fuente_id"),
                     "tradicion": tradicion_de_fuente(
                         rep.get("fuente_id"), rep.get("periodo")),
+                    "extractores": _extractores_de(miembros),
                 })
 
         discrepancias = [
@@ -518,6 +583,53 @@ def _cargar_celdas_procesadas(ruta):
     return procesadas
 
 
+def _cargar_consenso_existente(ruta):
+    """Registros de consenso ya escritos, indexados por (entidad_id, faceta)."""
+    existentes = {}
+    if ruta and os.path.exists(ruta):
+        with open(ruta, "r", encoding="utf-8") as f:
+            for linea in f:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    reg = json.loads(linea)
+                    existentes[(reg["entidad_id"], reg["faceta"])] = reg
+                except (json.JSONDecodeError, KeyError):
+                    continue
+    return existentes
+
+
+def _reescribir_consenso_sin(ruta, excluir):
+    """Deja copia previa de consenso.jsonl y lo reescribe sin las celdas
+    excluidas (las que se van a reprocesar con extras).
+
+    Devuelve la ruta de la copia previa, o None si no haba fichero.
+    """
+    if not os.path.exists(ruta):
+        return None
+    ruta_backup = "%s.pre-extra-%s" % (ruta, time.strftime("%Y%m%d_%H%M%S"))
+    shutil.copy2(ruta, ruta_backup)
+    tmp = ruta + ".tmp"
+    with open(ruta, "r", encoding="utf-8") as fin, \
+            open(tmp, "w", encoding="utf-8") as fout:
+        for linea in fin:
+            s = linea.strip()
+            if not s:
+                continue
+            try:
+                reg = json.loads(s)
+                clave = (reg["entidad_id"], reg["faceta"])
+            except (json.JSONDecodeError, KeyError):
+                fout.write(s + "\n")
+                continue
+            if clave in excluir:
+                continue
+            fout.write(json.dumps(reg, ensure_ascii=False) + "\n")
+    os.replace(tmp, ruta)
+    return ruta_backup
+
+
 def _simulado_consenso(sistema, usuario):
     n = len(re.findall(r"^\[\d+\] ", usuario, flags=re.MULTILINE))
     return json.dumps({
@@ -544,6 +656,14 @@ def escribir_informe(ruta, stats):
     if stats.get("no_utiles"):
         lineas.append("- Descartadas por filtro de utilidad (T34): %d"
                       % stats["no_utiles"])
+    if stats.get("extra_entrada"):
+        lineas.append("- Afirmaciones extra de otros extractores: %d"
+                      % stats["extra_entrada"])
+        lineas.append("- Fusionadas por misma fuente y texto: %d"
+                      % stats.get("duplicadas_por_fuente", 0))
+    if stats.get("rehacer_afectadas"):
+        lineas.append("- Celdas rehechas por ganar afirmaciones con extra: %d"
+                      % stats["rehacer_afectadas"])
     if stats.get("motivos_alertas"):
         lineas.append("")
         lineas.append("## Alertas por motivo")
@@ -575,6 +695,15 @@ def main(argv=None, cliente=None):
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--simulado", action="store_true",
                       help="Modo simulado (sin LLM): un grupo por afirmacin")
+    parser.add_argument(
+        "--extra-afirmaciones", nargs="+", default=[],
+        help="JSONL adicionales de afirmaciones (pasada rpida, otros "
+             "extractores). La independencia se cuenta por fuente, nunca "
+             "por extractor: duplicados de la misma fuente se fusionan.")
+    parser.add_argument(
+        "--rehacer-celdas-con-extra", action="store_true",
+        help="Reprocesa solo las celdas ya procesadas que ganan afirmaciones "
+             "con los extras; deja copia previa de consenso.jsonl")
     args = parser.parse_args(argv)
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -603,10 +732,48 @@ def main(argv=None, cliente=None):
                 except json.JSONDecodeError:
                     continue
 
+    extra_regs = []
+    for ruta in args.extra_afirmaciones:
+        if not ruta or not os.path.exists(ruta):
+            print("Sin entrada extra en %s (se omite)" % ruta)
+            continue
+        with open(ruta, "r", encoding="utf-8") as f:
+            for linea in f:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    extra_regs.append(json.loads(linea))
+                except json.JSONDecodeError:
+                    continue
+
+    # La base va primero: al fusionar duplicados el registro base conserva sus
+    # campos y el extra aporta los extractores que faltaran.
+    regs, fusionadas = deduplicar_por_fuente(regs + extra_regs)
+
     regs, no_utiles = normalizar_afirmaciones(regs, corr)
     celdas = agrupar_en_celdas(regs)
     procesadas = _cargar_celdas_procesadas(ruta_salida)
-    pendientes = {k: v for k, v in celdas.items() if k not in procesadas}
+
+    rehacer = set()
+    if args.rehacer_celdas_con_extra:
+        if not extra_regs:
+            print("Aviso: --rehacer-celdas-con-extra sin --extra-afirmaciones "
+                  "no reprocesa nada")
+        else:
+            existentes = _cargar_consenso_existente(ruta_salida)
+            for clave, regs_celda in celdas.items():
+                prev = existentes.get(clave)
+                if prev is not None and len(regs_celda) > int(
+                        prev.get("n_afirmaciones") or 0):
+                    rehacer.add(clave)
+            if rehacer:
+                ruta_backup = _reescribir_consenso_sin(ruta_salida, rehacer)
+                print("Celdas a rehacer por extra: %d (copia previa en %s)"
+                      % (len(rehacer), ruta_backup))
+
+    pendientes = {k: v for k, v in celdas.items()
+                 if k not in procesadas or k in rehacer}
     omitidas = len(celdas) - len(pendientes)
 
     print("Celdas totales: %d | pendientes: %d | ya procesadas: %d"
@@ -624,6 +791,9 @@ def main(argv=None, cliente=None):
         "motivos_alertas": {},
         "no_utiles": no_utiles,
         "omitidas_existentes": omitidas,
+        "extra_entrada": len(extra_regs),
+        "duplicadas_por_fuente": fusionadas,
+        "rehacer_afectadas": len(rehacer),
     }
     lock = threading.Lock()
 
