@@ -311,13 +311,14 @@ def parsear_respuesta(texto, candidatos):
     if tipo not in TIPOS_VALIDOS:
         raise ValueError("Campo «tipo» ausente o inválido: %r" % (tipo,))
     calidad = datos.get("calidad")
-    try:
-        if isinstance(calidad, bool):
-            raise TypeError
-        numero = float(calidad)
-    except (TypeError, ValueError):
+    # T67 (B2): `calidad` debe ser un entero 1-5; cadenas y flotantes no
+    # enteros se rechazan en lugar de aceptarse/truncarse silenciosamente.
+    if isinstance(calidad, bool) or not isinstance(calidad, (int, float)):
         raise ValueError("Campo «calidad» fuera de 1-5: %r" % (calidad,))
-    if not math.isfinite(numero) or not 1 <= numero <= 5:
+    numero = float(calidad)
+    if not math.isfinite(numero) or not numero.is_integer():
+        raise ValueError("Campo «calidad» fuera de 1-5: %r" % (calidad,))
+    if not 1 <= numero <= 5:
         raise ValueError("Campo «calidad» fuera de 1-5: %r" % (calidad,))
     calidad = int(numero)
     idioma = datos.get("idioma")

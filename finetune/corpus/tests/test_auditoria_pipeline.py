@@ -198,10 +198,13 @@ class TestJuezAdversa(unittest.TestCase):
         datos = juez.parsear_respuesta(texto, CANDIDATOS)
         self.assertEqual(datos["calidad"], 4)
 
-    def test_calidad_como_cadena_numerica(self):
+    def test_calidad_como_cadena_numerica_se_rechaza(self):
+        # T67 (B2): antes se aceptaba y convertía; ahora «calidad» debe ser
+        # numérica entera 1-5, no cadena.
         texto = ('{"tipo": "conocimiento", "calidad": "4", '
                  '"entidades": []}')
-        self.assertEqual(juez.parsear_respuesta(texto, CANDIDATOS)["calidad"], 4)
+        with self.assertRaises(ValueError):
+            juez.parsear_respuesta(texto, CANDIDATOS)
 
     def test_idioma_en_mayusculas(self):
         texto = ('{"tipo": "conocimiento", "calidad": 3, "idioma": "ES", '

@@ -161,7 +161,10 @@ class TestCachJuezEvaluacion(unittest.TestCase):
 
 
 class TestJuezValidadores(unittest.TestCase):
-    """juez.parsear_respuesta: validación blanda de `calidad`."""
+    """juez.parsear_respuesta: `calidad` entera 1-5 obligatoria.
+
+    B2 (T63) arreglado en T67: cadenas y flotantes no enteros se rechazan.
+    """
 
     def setUp(self):
         self.familia = "tarot"
@@ -184,17 +187,20 @@ class TestJuezValidadores(unittest.TestCase):
         juicio = salida["juicio"] if isinstance(salida, dict) and "juicio" in salida else salida
         return juicio["calidad"]
 
-    @unittest.expectedFailure
-    def test_calidad_cadena_debe_rechazarse(self):
+    def test_calidad_cadena_se_rechaza(self):
         self.assertRaises(ValueError, self._responder, "4")
 
-    @unittest.expectedFailure
-    def test_calidad_flotante_debe_rechazarse(self):
+    def test_calidad_flotante_no_entera_se_rechaza(self):
         self.assertRaises(ValueError, self._responder, 3.7)
 
-    def test_calidad_actualmente_trunca_y_acepta(self):
-        self.assertEqual(self._calidad(self._responder(3.7)), 3)
-        self.assertEqual(self._calidad(self._responder("4")), 4)
+    def test_calidad_entera_valida_se_acepta(self):
+        self.assertEqual(self._calidad(self._responder(4)), 4)
+
+    def test_calidad_flotante_entero_4_0_se_acepta(self):
+        self.assertEqual(self._calidad(self._responder(4.0)), 4)
+
+    def test_calidad_bool_se_rechaza(self):
+        self.assertRaises(ValueError, self._responder, True)
 
     def test_fuera_de_rango_si_rechaza(self):
         self.assertRaises(ValueError, self._responder, 7)
