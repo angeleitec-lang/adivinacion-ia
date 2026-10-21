@@ -17,8 +17,10 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from translate_dataset import detect_language
-from validate_synthetic import answer_of, human_of, sha, turnos_de
+from validate_synthetic import (answer_of, human_of, repetition_ratio, sha,
+                                turnos_de)
 from build_dataset import BAD_TOPIC_RE, domain_hits
+import qa_dataset as qa
 
 
 def extraer_tema(human: str) -> str:
@@ -171,6 +173,77 @@ def split_block(rows: list[dict], block: str, seed: int, r_train: float, r_val: 
     return train, val, test
 
 
+def fallos_puerta_calidad(fila: dict, max_repetition: float = 0.12) -> list[str]:
+    """Motivos por los que una fila real suspende la puerta de calidad (T112).
+
+    Reaprovecha los criterios de qa_dataset (formato y sanidad de restos web)
+    y el ratio de repetición del validador sintético.
+    """
+    pares = _pares_o_fallback(fila)
+    respuestas = [g for _, g in pares if g]
+    if not respuestas:
+        return ["respuesta_vacia"]
+    fallos: list[str] = []
+    for g in respuestas:
+        if len(g) < qa.LARGO_GPT_MIN:
+            fallos.append("longitud_extrema")
+            continue
+        if not g.rstrip().endswith(qa.FIN_PUNTUACION):
+            fallos.append("respuesta_truncada")
+        if len(g) >= 160 and not qa.TILDE_RE.search(g):
+            fallos.append("sin_tildes")
+        restos = [p for p in qa.PLANTILLA_PATRONES if p in g]
+        if restos:
+            fallos.append("restos_plantilla:" + restos[0])
+        marcas = [p for p in qa.MARCAS_WEB if p in g.lower()]
+        if marcas:
+            fallos.append("resto_web:" + marcas[0])
+    if repetition_ratio("\n".join(respuestas), 12) > max_repetition:
+        fallos.append("repetitivo")
+    return fallos
+
+
+def split_agrupado(items: list[tuple], seed: int, r_train: float, r_val: float):
+    """Reparte (fila, bloque) por GRUPOS de situación (T112), determinista con semilla.
+
+    Una misma situación (qa.clave_situacion: cartas+orientación, fecha de
+    nacimiento y pregunta, sin importar el bloque) va entera al mismo split,
+    con cuotas globales ~ratios y de bloque, eligiendo el split menos saturado.
+    """
+    grupos: dict[str, list[tuple]] = defaultdict(list)
+    for it in items:
+        grupos[qa.clave_situacion(it[0])].append(it)
+    n = len(items)
+    n_train, n_val = int(n * r_train), int(n * r_val)
+    q = {"train": n_train, "val": n_val, "test": max(n - n_train - n_val, 0)}
+    tot_bl: Counter = Counter(b for _, b in items)
+    qbl: dict[str, dict[str, int]] = {}
+    for b, t in tot_bl.items():
+        a, v = int(t * r_train), int(t * r_val)
+        qbl[b] = {"train": a, "val": v, "test": max(t - a - v, 0)}
+    splits = ("train", "val", "test")
+    uso: Counter = Counter()
+    uso_b: dict[str, Counter] = {b: Counter() for b in qbl}
+    out: dict[str, list[tuple]] = {s: [] for s in splits}
+    orden = sorted(grupos, key=lambda k: qa.md5_texto(f"{seed}:{k}"))
+    for k in orden:
+        g = grupos[k]
+        conteo_bl = Counter(b for _, b in g)
+        mejor: str = splits[0]
+        mejor_score = None
+        for s in splits:
+            score = (uso[s] + len(g)) / (q[s] + 1)
+            for b, c in conteo_bl.items():
+                score = max(score, (uso_b[b][s] + c) / (qbl[b][s] + 1))
+            if mejor_score is None or score < mejor_score:
+                mejor, mejor_score = s, score
+        uso[mejor] += len(g)
+        for b, c in conteo_bl.items():
+            uso_b[b][mejor] += c
+        out[mejor].extend(g)
+    return out["train"], out["val"], out["test"]
+
+
 def lang_counts(rows: list[dict]) -> dict[str, int]:
     """Cuenta TODAS las respuestas gpt de cada fila, no solo la primera."""
     c = Counter()
@@ -225,7 +298,8 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
     r_val = cfg.get("val_ratio", 0.1)
     include_en = cfg.get("include_en", False)
     descartes = {"junk": 0, "duplicado_exacto": 0, "duplicado_prefijo": 0,
-                 "idioma": 0}
+                 "idioma": 0, "evaluacion": 0, "puerta_calidad": 0,
+                 "real_excluido_por_minimo": 0}
 
     humanos_eval = {_norm(h) for h in (cfg.get("eval_humanos") or ())}
     for r in list(real_train) + list(real_val) + list(synth):
@@ -245,7 +319,17 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
                     detect_language(g) != "es" for _, g in _pares_o_fallback(r)):
                 descartes["idioma"] += 1
                 continue
+            if cfg.get("puerta_real") and fallos_puerta_calidad(
+                    r, cfg.get("max_repetition", 0.12)):
+                descartes["puerta_calidad"] += 1
+                continue
             dst.append(r)
+
+    if cfg.get("puerta_real"):
+        minimo = int(cfg.get("min_real_filas", 200))
+        if len(rt) + len(rv) < minimo:
+            descartes["real_excluido_por_minimo"] += len(rt) + len(rv)
+            rt, rv = [], []
 
     seen_real: set[str] = set()
     train_real, val_cands = [], []
@@ -290,12 +374,9 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
         seen_synth.add(h)
         by_block[m.get("block", "sintetico")].append(r)
 
-    st, sv, ste = [], [], []
-    for block, rows in sorted(by_block.items()):
-        a, b, c = split_block(rows, block, seed, r_train, r_val)
-        st += [(r, block) for r in a]
-        sv += [(r, block) for r in b]
-        ste += [(r, block) for r in c]
+    items_synth = [(r, block) for block, rows in sorted(by_block.items())
+                   for r in rows]
+    st, sv, ste = split_agrupado(items_synth, seed, r_train, r_val)
 
     val_real, test_real = [], []
     for r in val_cands:
@@ -359,6 +440,7 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
         "blocks": {k: len(v) for k, v in sorted(by_block.items())},
         "blocks_por_split": {k: dict(sorted(v.items())) for k, v in bps.items()},
         "descartes": descartes,
+        "puerta_real": bool(cfg.get("puerta_real", False)),
         "langs": {
             "train": lang_counts(train),
             "val": lang_counts(val),
@@ -382,6 +464,13 @@ def main(argv=None) -> int:
                     help="conserva respuestas no españolas en los datos reales")
     ap.add_argument("--eval-casos", default=None,
                     help="JSONL del conjunto de evaluación (T56) a excluir por contenido")
+    ap.add_argument("--puerta-real", action="store_true",
+                    help="aplica la puerta de calidad T112 a las filas reales")
+    ap.add_argument("--min-real", type=int, default=200,
+                    help="mínimo de reales admisibles tras la puerta; si no se alcanza, "
+                         "se excluye el bloque real entero")
+    ap.add_argument("--max-repetition", type=float, default=0.12,
+                    help="ratio máximo de n-gramas repetidos para la puerta real")
     ap.add_argument("--strict", action="store_true",
                     help="aborta si alguna línea JSONL es inválida")
     args = ap.parse_args(argv)
@@ -404,6 +493,9 @@ def main(argv=None) -> int:
         "val_ratio": args.val_ratio,
         "include_en": args.include_en,
         "eval_humanos": cargar_humanos_evaluacion(args.eval_casos),
+        "puerta_real": args.puerta_real,
+        "min_real_filas": args.min_real,
+        "max_repetition": args.max_repetition,
     }
     res = fusionar(real_train, real_val, synth, meta, cfg)
     train, val, test, report = res["train"], res["val"], res["test"], res["report"]
@@ -421,7 +513,9 @@ def main(argv=None) -> int:
     print(f"[merge] sintético {report['synth_in']} · dup con real {report['synth_dups_vs_real']} · "
           f"útil {report['synth_kept']}")
     print(f"[merge] descartes: junk={d['junk']} exacto={d['duplicado_exacto']} "
-          f"prefijo={d['duplicado_prefijo']} idioma={d['idioma']}")
+          f"prefijo={d['duplicado_prefijo']} idioma={d['idioma']} "
+          f"puerta={d['puerta_calidad']} "
+          f"real_excluido={d['real_excluido_por_minimo']}")
     print(f"[merge] split train={len(train)} val={len(val)} test={len(test)}")
     for k, v in sorted(report["blocks"].items()):
         print(f"  {k:18s} {v}")
