@@ -99,7 +99,8 @@ class TestFusionar(unittest.TestCase):
         res = fusionar([], [], [], [], self.cfg)
         self.assertEqual(
             set(res["report"]["descartes"]),
-            {"junk", "duplicado_exacto", "duplicado_prefijo", "idioma"})
+            {"junk", "duplicado_exacto", "duplicado_prefijo", "idioma",
+             "evaluacion", "puerta_calidad", "real_excluido_por_minimo"})
 
     def test_report_conserva_claves_antiguas(self):
         res = fusionar([], [], [], [], self.cfg)

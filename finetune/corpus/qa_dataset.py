@@ -76,10 +76,13 @@ PLANTILLA_PATRONES = (
 EN_PALABRAS = ("the", "you", "your", "with", "that", "this", "have", "will",
                "what", "when", "there", "about")
 TILDE_RE = re.compile(r"[áéíóúüñ¿¡]", re.IGNORECASE)
+MARCAS_WEB = ("http", "explorar", "lugar correcto", "página", "visita", "suscr")
 LARGO_GPT_MIN, LARGO_GPT_MAX = 80, 12000
 LARGO_HUM_MIN, LARGO_HUM_MAX = 15, 30000
 N_GRAM = 12
 BOILERPLATE_DF = 20  # un n-gramas presente en >= este numero de filas es plantilla
+UMBRAL_NGRAMAS_FUGA = 5  # T112: compartir >= este numero de n-gramas propios con
+# un caso de evaluacion se considera fuga (el resto es plantilla del banco comun)
 
 
 def nfc(texto: str) -> str:
@@ -238,14 +241,62 @@ def cargar_eval(dir_eval: Path) -> dict:
     return casos
 
 
-def fugas_eval(filas: list, casos_eval: dict) -> dict:
+def humano_de(fila: dict) -> str:
+    """Prompt humano de la fila, aceptando ShareGPT y formatos planos."""
+    conv = turnos(fila)
+    if conv:
+        return " ".join(valores_de(fila, "human"))
+    for campo in ("user", "prompt_user"):
+        if fila.get(campo):
+            return str(fila[campo])
+    return ""
+
+
+def propio_normalizado(fila: dict) -> str:
+    return normalizar(sin_plantilla(humano_de(fila)))
+
+
+def clave_situacion(fila: dict) -> str:
+    """T112: clave de SITUACION para el split agrupado, sin contar el bloque:
+    dos filas de distintas tareas con las mismas cartas+pregunta (o mismos
+    datos numerologicos) comparten situacion y deben ir al mismo split."""
+    humanos = valores_de(fila, "human")
+    humano = humanos[0] if humanos else humano_de(fila)
+    m = RE_PREGUNTA.search(humano)
+    pregunta = normalizar(m.group(1))[:120] if m else ""
+    cartas = tuple(sorted(f"{n}|{o}" for n, o in _cartas_de(humano)))
+    md = re.search(r"Datos de nacimiento:\s*([^\n]+)", humano)
+    fecha = normalizar(md.group(1))[:60] if md else ""
+    if not pregunta:
+        pregunta = normalizar(sin_plantilla(humano))[:120]
+    return "|".join(("C" + ",".join(cartas), "F" + fecha, "P" + pregunta))
+
+
+def ngramas_boilerplate(filas: list, df_min: int = BOILERPLATE_DF) -> set:
+    """T112: md5 de los n-gramas de 12 palabras presentes en >= df_min filas.
+
+    La decision de plantilla se fija una vez (sobre las validas en etapa_filtro)
+    y se reutiliza en la puerta QA final, para que el cambio de base de filas
+    entre etapas no reactive n-gramas ya juzgados como plantilla.
+    """
+    df = collections.Counter()
+    for fila in filas:
+        if not isinstance(fila, dict) or "__error_json__" in fila:
+            continue
+        df.update(set(gramaturcas(propio_normalizado(fila))))
+    return {g for g, c in df.items() if c >= df_min}
+
+
+def fugas_eval(filas: list, casos_eval: dict,
+               min_compartidos: int = 1,
+               boiler_extra=frozenset()) -> dict:
     hallazgos = []
     df = collections.Counter()
     grams_fila = {}
     for key, (split, ln, fila) in enumerate(filas):
         if "__error_json__" in fila:
             continue
-        propio = sin_plantilla(" ".join(valores_de(fila, "human")))
+        propio = propio_normalizado(fila)
         gs = set(gramaturcas(propio))
         grams_fila[key] = gs
         df.update(gs)
@@ -257,7 +308,7 @@ def fugas_eval(filas: list, casos_eval: dict) -> dict:
         propio = sin_plantilla(user)
         norm_eval[cid] = normalizar(propio)
         for g in set(gramaturcas(propio)):
-            if df[g] < BOILERPLATE_DF:
+            if df[g] < BOILERPLATE_DF and g not in boiler_extra:
                 gram_eval.setdefault(g, []).append(cid)
     ids_filas = collections.defaultdict(set)
     for key, gs in grams_fila.items():
@@ -269,6 +320,8 @@ def fugas_eval(filas: list, casos_eval: dict) -> dict:
     for key, cids in ids_filas.items():
         split, ln, fila = filas[key]
         compartido = grams_fila[key] & set(gram_eval)
+        if len(compartido) < min_compartidos:
+            continue
         ejemplo = ""
         toks = RE_TOKENS.findall(normalizar(sin_plantilla(
             " ".join(valores_de(fila, "human")))))
@@ -291,7 +344,7 @@ def fugas_eval(filas: list, casos_eval: dict) -> dict:
             hallazgos.append({"split": split, "fila": ln, "id": fila.get("id"),
                               "bloque": fila.get("bloque") or "sin_bloque",
                               "chequeo": "fuga_eval_id", "detalle": "mismo id que caso de eval"})
-        propio = normalizar(sin_plantilla(" ".join(valores_de(fila, "human"))))
+        propio = propio_normalizado(fila)
         if len(propio) >= 40:
             for cid, ne in norm_eval.items():
                 if propio == ne:
@@ -443,8 +496,7 @@ def _sanidad_fila(fila: dict) -> list:
             fallos.append("numeros_no_citados:" + ",".join(sorted(set(nums))[:4]))
     if bloque == "sin_bloque":
         bajo = respuestas.lower()
-        marcas = [p for p in ("http", "explorar", "lugar correcto",
-                              "página", "visita", "suscr") if p in bajo]
+        marcas = [p for p in MARCAS_WEB if p in bajo]
         if marcas:
             fallos.append("resto_web:" + ",".join(marcas[:3]))
     return fallos
@@ -486,7 +538,8 @@ def contar_filas(filas: list) -> dict:
 
 
 def run_qa(dataset_dir: Path, out_dir=None, eval_dir=None,
-           semilla: int = 42, muestras: int = 15) -> dict:
+           semilla: int = 42, muestras: int = 15,
+           min_compartidos: int = 1, boiler_extra=frozenset()) -> dict:
     dataset_dir = Path(dataset_dir)
     eval_dir = Path(eval_dir) if eval_dir else dataset_dir / "_etapas" / "eval"
     filas = []
@@ -495,7 +548,9 @@ def run_qa(dataset_dir: Path, out_dir=None, eval_dir=None,
             filas.append((split, ln, fila))
     formato = chequear_formato(filas)
     casos_eval = cargar_eval(eval_dir)
-    leaks_eval = fugas_eval(filas, casos_eval)
+    leaks_eval = fugas_eval(filas, casos_eval,
+                          min_compartidos=min_compartidos,
+                          boiler_extra=boiler_extra)
     leaks_splits = fugas_splits(filas)
     sanidad = sanidad_muestreo(filas, semilla, muestras)
     report = {
