@@ -331,5 +331,143 @@ class TestCLI(unittest.TestCase):
         self.assertIn("supera", informe)
 
 
+class TestConsensoYCanalesRapidos(unittest.TestCase):
+    """Celdas de consenso/KB v2 y canales rápido (mercury-3) — T93."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = self.tmp.name
+        for d in ("consenso_kb", "kb_v2", "afirmaciones_rapido/web",
+                  "afirmaciones_rapido/libros"):
+            os.makedirs(os.path.join(self.base, d), exist_ok=True)
+        self.celda = {
+            "entidad_id": "tarot-copas-02", "faceta": "significado_general",
+            "n_afirmaciones": 4,
+            "mayoritarias": [{"afirmacion": "El cuatro de copas invita al "
+                               "recogimiento.", "n_fuentes": 2,
+                               "fuentes": ["fuente-a", "fuente-b"],
+                               "tradiciones": ["RWS"]}],
+            "discrepancias": [{"a": {"afirmacion": "Trae suerte",
+                                     "fuentes": ["fuente-a"]},
+                               "b": {"afirmacion": "Aporta calma",
+                                     "fuentes": ["fuente-b"]}}],
+            "unica_fuente": [{"afirmacion": "Aportación única de repaso.",
+                              "fuente_id": "fuente-c",
+                              "tradicion": "Marsella"}],
+            "alertas_factuales": [{"afirmacion": "Atribuye fuego a copas.",
+                                   "fuente_id": "fuente-c",
+                                   "motivo": "elemento"}],
+        }
+        with open(os.path.join(self.base, "consenso_kb", "consenso.jsonl"),
+                  "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(self.celda, ensure_ascii=False) + "\n")
+        kb = {"version": 2, "familia": "tarot",
+              "entidades": {"tarot-copas-02": {
+                  "significado_general": {"confianza": "alta"}}}}
+        with open(os.path.join(self.base, "kb_v2", "tarot.json"), "w",
+                  encoding="utf-8") as fh:
+            json.dump(kb, fh, ensure_ascii=False)
+        rapida = {"entidad_id": "tarot-copas-02",
+                  "faceta": "significado_general",
+                  "fuente_id": "https://rapido.example/x",
+                  "dominio": "rapido.example", "periodo": "moderna",
+                  "calidad": 5, "origen": "mercury-3",
+                  "afirmacion": "El cuatro de copas sugiere una pausa breve."}
+        for rel in ("afirmaciones_rapido/web/afirmaciones.jsonl",):
+            with open(os.path.join(self.base, rel), "w",
+                      encoding="utf-8") as fh:
+                fh.write(json.dumps(rapida, ensure_ascii=False) + "\n")
+        rapida_l = dict(rapida)
+        rapida_l["fuente_id"] = "waite1909"
+        rapida_l["cita_original"] = "The Four of Cups..."
+        with open(os.path.join(self.base,
+                               "afirmaciones_rapido/libros/"
+                               "afirmaciones_libros.jsonl"),
+                  "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(rapida_l, ensure_ascii=False) + "\n")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_forma_celda(self):
+        self.assertEqual("M+D+U", muestras.forma_celda(self.celda))
+        self.assertEqual("M", muestras.forma_celda(
+            {"mayoritarias": [{"afirmacion": "a"}]}))
+        self.assertEqual("D+U", muestras.forma_celda(
+            {"discrepancias": [{"a": {"afirmacion": "x"},
+                                "b": {"afirmacion": "y"}}],
+             "unica_fuente": [{"afirmacion": "u", "fuente_id": "f"}]}))
+        self.assertEqual("vacia", muestras.forma_celda({}))
+
+    def test_rutas_consensso_y_canal_rapido(self):
+        rutas = muestras.rutas_entradas(self.base, "consenso")
+        self.assertEqual(1, len(rutas))
+        self.assertEqual("consenso", rutas[0][1])
+        origenes = [origen for _, origen in
+                    muestras.rutas_entradas(self.base, "afirmaciones")]
+        self.assertEqual(["rapido-web", "rapido-libros"], origenes)
+
+    def test_indice_confianza(self):
+        indice = muestras.indice_confianza(self.base)
+        self.assertEqual(("tarot", "alta"),
+                         indice[("tarot-copas-02", "significado_general")])
+
+    def test_cargar_registros_anota_consenso(self):
+        regs = list(muestras.cargar_registros(self.base, "consenso"))
+        self.assertEqual(1, len(regs))
+        fila = regs[0]
+        self.assertEqual("M+D+U", fila["forma"])
+        self.assertEqual("tarot", fila["familia_kb"])
+        self.assertEqual("alta", fila["confianza"])
+        self.assertEqual("alta", fila["calidad"])
+        self.assertEqual("tarot", fila["sistema"])
+        self.assertEqual(("tarot", "alta", "M+D+U"), fila["estrato"])
+
+    def test_resolvedor_texto_y_procedencia_consenso(self):
+        fila = next(iter(muestras.cargar_registros(self.base, "consenso")))
+        resolvedor = muestras.Resolvedor(self.base)
+        texto = resolvedor.texto("consenso", fila)
+        self.assertIn("Afirmaciones mayoritarias:", texto)
+        self.assertIn("(2 fuentes; fuentes: fuente-a, fuente-b; "
+                      "tradiciones: RWS)", texto)
+        self.assertIn("Discrepancias:", texto)
+        self.assertIn("1) A: Trae suerte [fuente-a] — B: Aporta calma "
+                      "[fuente-b]", texto)
+        self.assertIn("Aportaciones de una sola fuente:", texto)
+        self.assertIn("(fuente: fuente-c; tradición: Marsella)", texto)
+        self.assertIn("Alertas fácticas:", texto)
+        self.assertIn("! Atribuye fuego a copas. (motivo: elemento; "
+                      "fuente: fuente-c)", texto)
+        proc = muestras.procedencia_de("consenso", fila, resolvedor)
+        self.assertIn("consenso_kb/consenso.jsonl", proc)
+        self.assertIn("kb_v2 · tarot", proc)
+        self.assertIn("confianza alta", proc)
+        self.assertIn("4 afirmaciones", proc)
+
+    def test_ficha_consenso_muestra_n_afirmaciones(self):
+        fila = next(iter(muestras.cargar_registros(self.base, "consenso")))
+        resolvedor = muestras.Resolvedor(self.base)
+        ficha = muestras.ficha_markdown("consenso", fila, resolvedor)
+        self.assertIn("4 afirmaciones en la celda", ficha)
+        self.assertIn("forma M+D+U", ficha)
+
+    def test_escribir_muestras_consenso_y_rapido(self):
+        out = os.path.join(self.base, "salida")
+        resumen = muestras.escribir_muestras(
+            self.base, ("afirmaciones", "consenso"), 1.0, 42, out)
+        self.assertEqual(resumen["niveles"]["afirmaciones"]["total"], 2)
+        self.assertEqual(resumen["niveles"]["consenso"]["total"], 1)
+        jl = [json.loads(l) for l in open(os.path.join(out, "muestras.jsonl"),
+                                          encoding="utf-8")]
+        por_origen = {fila["origen"]: fila for fila in jl}
+        self.assertEqual("alta", por_origen["consenso"]["calidad"])
+        self.assertEqual(["tarot", "alta", "M+D+U"],
+                         por_origen["consenso"]["estrato"])
+        self.assertIn("rapido-web", por_origen)
+        self.assertIn("rapido-libros", por_origen)
+        md = open(os.path.join(out, "muestras.md"), encoding="utf-8").read()
+        self.assertIn("rapido-web", md)
+
+
 if __name__ == "__main__":
     unittest.main()

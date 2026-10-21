@@ -65,6 +65,7 @@ UMBRAL_TEXTO = {
     "web": 80,
     "libros": 80,
     "lecturas": 80,
+    "consenso": 40,
 }
 
 PESOS = {
@@ -529,7 +530,7 @@ def analizar_registro(
     anadir("ruido_comercial", bandera_ruido_comercial(texto))
     anadir("no_espanol", bandera_no_espanol(texto))
     anadir("mojibake", bandera_mojibake(texto))
-    if nivel == "afirmaciones":
+    if nivel in ("afirmaciones", "consenso"):
         anadir("otra_carta", bandera_otra_entidad(registro, texto))
         anadir("promesa_vedada", bandera_promesa_vedada(texto))
     anadir("contradiccion_kb", bandera_contradiccion_kb(registro, texto, elementos))
@@ -715,9 +716,11 @@ def escribir_md(
             "## Criterios y límites",
             "",
             "- Umbral de texto corto: 80 caracteres en web, libros y lecturas;",
-            "  20 en afirmaciones. Las afirmaciones son unidades atómicas de una frase",
-            "  (máximo 40 palabras): aplicar 80 caracteres marcaría más de la mitad de",
-            "  la muestra sin que eso indique un problema real.",
+            "  20 en afirmaciones y 40 en celdas de consenso. Las afirmaciones son",
+            "  unidades atómicas de una frase (máximo 40 palabras) y las celdas de",
+            "  consenso son listas de esas afirmaciones: aplicar 80 caracteres marcaría",
+            "  más de la mitad de la muestra sin que eso indique un problema real;",
+            "  el umbral bajo en consenso solo detecta celdas vacías o apenas esbozadas.",
             "- El idioma se estima con la proporción de palabras funcionales españolas",
             "  (conjunto ampliado sobre `es_score`), exigiendo al menos 15 palabras para",
             "  evitar falsos positivos en afirmaciones breves. Además se detectan marcas",
@@ -726,7 +729,8 @@ def escribir_md(
             "  explícitamente a la entidad o a su palo; las menciones a otros palos y",
             "  los usos metafóricos («proviene de la tierra») quedan fuera.",
             "- Las banderas de otra carta y de promesas vedadas solo se aplican a",
-            "  afirmaciones. En prosa de web o libros es legítimo mencionar muchas",
+            "  afirmaciones y a celdas de consenso (listas de afirmaciones atómicas).",
+            "  En prosa de web o libros es legítimo mencionar muchas",
             "  cartas y explicar que una promesa es falsa («no garantiza la lotería»);",
             "  marcarlas allí produciría mucho ruido.",
             "- En lecturas solo se reconstruyen tiradas en español de tarot o baraja",

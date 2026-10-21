@@ -99,7 +99,7 @@ class TestGeneracion(unittest.TestCase):
         self.assertNotIn("http://", html)
         self.assertNotIn("https://", html)
         datos = _datos(html)
-        self.assertEqual(datos["version"], 1)
+        self.assertEqual(datos["version"], 2)
         self.assertEqual([f["id"] for f in datos["fichas"]], ["a1", "a2"])
         a1 = datos["fichas"][0]
         self.assertEqual(a1["texto"], "texto de a1")
@@ -346,6 +346,53 @@ class TestCLI(unittest.TestCase):
         with open(salida, encoding="utf-8") as fh:
             datos = _datos(fh.read())
         self.assertEqual(datos["total"], 0)
+
+
+class TestEtiquetaOrigenT93(unittest.TestCase):
+    def _resolver(self, fila):
+        return ("texto de %s" % fila["id"], "proc de %s" % fila["id"])
+
+    def test_mapeo_etiqueta_origen(self):
+        casos = [
+            (("afirmaciones", "rapido-web"), "rápido (mercury-3) · web"),
+            (("afirmaciones", "rapido-libros"), "rápido (mercury-3) · libros"),
+            (("consenso", "consenso"), "consenso · kb_v2"),
+            (("web", "web"), "web (evidencia)"),
+            (("libros", "libros"), "libro (evidencia)"),
+            (("afirmaciones", "web"), "nodo local · web"),
+            (("afirmaciones", "libros"), "nodo local · libros"),
+            (("lecturas", "libros"), "libro · lectura"),
+        ]
+        for (nivel, origen), esperada in casos:
+            self.assertEqual(esperada, revisor_local.etiqueta_origen(nivel, origen))
+
+    def test_etiqueta_origen_por_defecto(self):
+        self.assertEqual("x", revisor_local.etiqueta_origen("y", "x"))
+        self.assertEqual("y", revisor_local.etiqueta_origen("y", ""))
+        self.assertEqual("sin origen", revisor_local.etiqueta_origen("", ""))
+
+    def test_fichas_llevan_origen_etiqueta(self):
+        filas = [
+            _fila("r1", nivel="afirmaciones", origen="rapido-web"),
+            _fila("r2", nivel="consenso", origen="consenso"),
+        ]
+        fichas = revisor_local.construir_fichas(filas, [], resolver=self._resolver)
+        self.assertEqual("rápido (mercury-3) · web", fichas[0]["origen_etiqueta"])
+        self.assertEqual("consenso · kb_v2", fichas[1]["origen_etiqueta"])
+
+    def test_html_con_filtro_origen_y_clave_nueva(self):
+        fichas = revisor_local.construir_fichas(
+            [_fila("c1", nivel="consenso", origen="consenso")],
+            [],
+            resolver=self._resolver,
+        )
+        html = revisor_local.generar_html(fichas)
+        self.assertIn('id="filtro-origen"', html)
+        self.assertIn('var CLAVE = "revisor-muestras-v2";', html)
+        self.assertIn(".pill.origen", html)
+        datos = _datos(html)
+        self.assertEqual(2, datos["version"])
+        self.assertEqual("consenso · kb_v2", datos["fichas"][0]["origen_etiqueta"])
 
 
 if __name__ == "__main__":
