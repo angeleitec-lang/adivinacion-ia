@@ -159,8 +159,15 @@ def motivo(ev, idx):
     return None
 
 
-def construir_indice(base=BASE):
-    """Mapa hash_seccion -> {titulo, url, familia} para toda la fase0."""
+def construir_indice(base=BASE, secciones_dir=None):
+    """Mapa hash_seccion -> {titulo, url, familia} para toda la fase0.
+
+    Las paginas web se indexan por glob de ``*.md`` bajo ``base``; las
+    secciones de libro por ``secciones_dir`` (por defecto el directorio de
+    secciones de libro de la fase0).
+    """
+    if secciones_dir is None:
+        secciones_dir = DIR_SECCIONES_LIBROS
     idx = {}
     for ruta in glob.glob(os.path.join(base, "**", "*.md"), recursive=True):
         try:
@@ -173,8 +180,8 @@ def construir_indice(base=BASE):
                 idx[h] = {"titulo": s.get("titulo", ""),
                          "url": s.get("url", ""),
                          "familia": s.get("familia")}
-    if os.path.isdir(DIR_SECCIONES_LIBROS):
-        for s in juez.leer_secciones(DIR_SECCIONES_LIBROS):
+    if os.path.isdir(secciones_dir):
+        for s in juez.leer_secciones(secciones_dir):
             h = juez.hash_seccion(s)
             if h not in idx:
                 idx[h] = {"titulo": s.get("titulo", ""),
@@ -267,17 +274,34 @@ def muestra_revision(retiradas, n=TAM_MUESTRA, semilla=SEMILLA_MUESTRA):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--base", default=BASE)
-    ap.add_argument("--salida", default=DIR_SALIDA)
+    ap.add_argument("--salida", default=None)
+    ap.add_argument("--evidencias-web", default=None)
+    ap.add_argument("--evidencias-libros", default=None)
+    ap.add_argument("--secciones-dir", default=None)
+    ap.add_argument("--procesados-web", default=None)
+    ap.add_argument("--procesados-libros", default=None)
     args = ap.parse_args(argv)
 
-    idx = construir_indice(args.base)
-    web = _leer_jsonl(RUTA_EVIDENCIAS_WEB)
-    libros = _leer_jsonl(RUTA_EVIDENCIAS_LIBROS)
+    base = args.base
+    salida = args.salida or os.path.join(base, "filtro_atribucion")
+    r_web = args.evidencias_web or os.path.join(
+        base, "evidencias_web", "evidencias.jsonl")
+    r_lib = args.evidencias_libros or os.path.join(
+        base, "libros", "evidencias", "evidencias.jsonl")
+    sec_dir = args.secciones_dir or os.path.join(base, "libros", "secciones")
+    proc_web_r = args.procesados_web or os.path.join(
+        base, "afirmaciones_full", "procesados.jsonl")
+    proc_lib_r = args.procesados_libros or os.path.join(
+        base, "afirmaciones_libros", "procesados.jsonl")
+
+    idx = construir_indice(base, secciones_dir=sec_dir)
+    web = _leer_jsonl(r_web)
+    libros = _leer_jsonl(r_lib)
 
     conservadas, retiradas, recuento = aplicar_filtro(web, libros, idx)
 
-    proc_web = _leer_jsonl(os.path.join(DIR_PROCESADOS_WEB, "procesados.jsonl"))
-    proc_lib = _leer_jsonl(os.path.join(DIR_PROCESADOS_LIBROS, "procesados.jsonl"))
+    proc_web = _leer_jsonl(proc_web_r)
+    proc_lib = _leer_jsonl(proc_lib_r)
     todas_retiradas = retiradas["web"] + retiradas["libros"]
     claves = claves_excluir_consenso(todas_retiradas, proc_web + proc_lib)
     afirm_afectadas = sum(c["n_afirmaciones"] for c in claves)
@@ -285,12 +309,20 @@ def main(argv=None):
     antes = medir_cobertura(web + libros)
     despues = medir_cobertura(conservadas["web"] + conservadas["libros"])
 
-    os.makedirs(args.salida, exist_ok=True)
-    _escribir_jsonl(os.path.join(args.salida, "evidencias_retiradas.jsonl"),
+    os.makedirs(salida, exist_ok=True)
+    _escribir_jsonl(os.path.join(salida, "evidencias_retiradas.jsonl"),
                     todas_retiradas)
-    _escribir_jsonl(os.path.join(args.salida, "claves_excluir_consenso.jsonl"),
+    _escribir_jsonl(os.path.join(salida, "evidencias_retiradas_web.jsonl"),
+                    retiradas["web"])
+    _escribir_jsonl(os.path.join(salida, "evidencias_retiradas_libros.jsonl"),
+                    retiradas["libros"])
+    _escribir_jsonl(os.path.join(salida, "evidencias_conservadas_web.jsonl"),
+                    conservadas["web"])
+    _escribir_jsonl(os.path.join(salida, "evidencias_conservadas_libros.jsonl"),
+                    conservadas["libros"])
+    _escribir_jsonl(os.path.join(salida, "claves_excluir_consenso.jsonl"),
                     claves)
-    _escribir_jsonl(os.path.join(args.salida, "muestra_revision.jsonl"),
+    _escribir_jsonl(os.path.join(salida, "muestra_revision.jsonl"),
                     muestra_revision(retiradas))
 
     informe = {
@@ -299,6 +331,8 @@ def main(argv=None):
         "retiradas_web": len(retiradas["web"]),
         "retiradas_libros": len(retiradas["libros"]),
         "retiradas_total": len(todas_retiradas),
+        "conservadas_web": len(conservadas["web"]),
+        "conservadas_libros": len(conservadas["libros"]),
         "recuento_por_motivo": {},
         "recuento_detalle": {},
         "claves_excluir": len(claves),
@@ -310,7 +344,7 @@ def main(argv=None):
         informe["recuento_detalle"]["%s|%s|%s" % (etiqueta, fam, m)] = c
         informe["recuento_por_motivo"][m] = \
             informe["recuento_por_motivo"].get(m, 0) + c
-    with open(os.path.join(args.salida, "informe_filtro.json"), "w",
+    with open(os.path.join(salida, "informe_filtro.json"), "w",
              encoding="utf-8") as fh:
         json.dump(informe, fh, ensure_ascii=False, indent=2)
 

@@ -602,26 +602,33 @@ def _cargar_consenso_existente(ruta):
     return existentes
 
 
-def cargar_claves_exclusion(ruta):
-    """Claves de exclusin (T71) indexadas por (entidad_id, faceta).
+def cargar_claves_exclusion(rutas):
+    """Claves de exclusin (T71/T88) indexadas por (entidad_id, faceta).
 
+    ``rutas`` puede ser una ruta o una lista de rutas (p. ej. la de limpieza
+    de libros T71 y la del filtro de atribucin T88). Se unen todas: una
+    misma clave (entidad_id, faceta) que aparezca en varias listas se fusiona
+    en un nico set de hashes, de modo que la celda se rehace una sola vez.
     Cada lnea del JSONL debe traer hash_seccion, entidad_id y faceta.
     Devuelve dict (entidad_id, faceta) -> set(hash_seccion).
     """
+    if isinstance(rutas, str) or rutas is None:
+        rutas = [rutas] if rutas else []
     claves = {}
-    if not ruta or not os.path.exists(ruta):
-        return claves
-    with open(ruta, "r", encoding="utf-8") as f:
-        for linea in f:
-            linea = linea.strip()
-            if not linea:
-                continue
-            try:
-                reg = json.loads(linea)
-                claves.setdefault((reg["entidad_id"], reg["faceta"]), set()).add(
-                    reg["hash_seccion"])
-            except (json.JSONDecodeError, KeyError):
-                continue
+    for ruta in rutas:
+        if not ruta or not os.path.exists(ruta):
+            continue
+        with open(ruta, "r", encoding="utf-8") as f:
+            for linea in f:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    reg = json.loads(linea)
+                    claves.setdefault((reg["entidad_id"], reg["faceta"]),
+                                     set()).add(reg["hash_seccion"])
+                except (json.JSONDecodeError, KeyError):
+                    continue
     return claves
 
 
@@ -815,10 +822,13 @@ def main(argv=None, cliente=None):
         help="Reprocesa solo las celdas ya procesadas que ganan afirmaciones "
              "con los extras; deja copia previa de consenso.jsonl")
     parser.add_argument(
-        "--excluir-claves", default=None,
-        help="JSONL de claves a excluir (T71: hash_seccion, entidad_id, "
-             "faceta). Descarta antes de agrupar las afirmaciones de libros "
-             "cuyo origen (seccion) este excluido para esa celda.")
+        "--excluir-claves", action="append", default=[],
+        help="JSONL de claves a excluir (T71/T88: hash_seccion, entidad_id, "
+             "faceta). Repetible: se admiten varias listas (p. ej. limpieza de "
+             "libros T71 y filtro de atribucion T88) y se unen por clave, de "
+             "modo que una celda afectada por varias se rehace una sola vez. "
+             "Descarta antes de agrupar las afirmaciones de libros cuyo origen "
+             "(seccion) este excluido para esa celda.")
     parser.add_argument(
         "--secciones-dir",
         default="/Users/angelgonzalez/fase0/libros/secciones",

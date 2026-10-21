@@ -121,6 +121,33 @@ Para aplicar la exclusión al consenso, añadir las claves de
 `libros_limpio/claves_excluir_consenso.jsonl` en la fase de fusión
 **después** de la revisión. Este track **no** ejecuta esa fusión.
 
+## Aplicación encadenada (T90)
+
+La pista T90 (`track/t90-aplicar-atribucion`) encadena este filtro en el cierre
+de la recopilación (`cierre_recopilacion.py`):
+
+- **Paso 3 `filtro_atribucion`**: aplica el filtro a `evidencias_web` y
+  `libros/evidencias` (ya limpias) con copia previa por origen
+  (`pre-filtro-atrib`), reescritura atómica y verificación por **clave COMPLETA**
+  `(hash_seccion, entidad_id, faceta)`. Idempotente (`ya_aplicada`) y con
+  `--solo-verificar`. Escribe retiradas y conservadas **por origen**.
+- **Paso 4 `consenso_exclusion`**: pasa **dos listas** de claves al consenso
+  (T71 + T88). `consenso_kb.py --excluir-claves` es ahora repetible y
+  `cargar_claves_exclusion` acepta una lista; las claves se unen por
+  `(entidad_id, faceta)`, de modo que una celda afectada por ambas se rehace
+  **una sola vez**.
+- **Pasos 5-6**: `kb_v2` y `cobertura_v3` se regeneran después, en el orden
+  correcto (`1 → 2 → 3 → 4 → 5 → 6 → 7`).
+
+Comando de producción (revisar antes `--dry-run`; NO ejecutar con procesos en vivo):
+
+```bash
+/Users/angelgonzalez/adivinacion-ia/finetune/.venv/bin/python \
+  /Users/angelgonzalez/adivinacion-ia/.worktrees/t90-aplicar-atribucion/finetune/corpus/cierre_recopilacion.py --todo
+```
+
+Solo el filtro: `--paso 3`. Detalle en `docs/CIERRE_RECOPILACION.md`.
+
 ## Tests
 
 `finetune/corpus/tests/test_filtro_atribucion.py` (23 tests, `unittest`):
