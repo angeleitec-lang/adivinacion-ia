@@ -606,6 +606,22 @@ _GENERICOS_CARTA = {
     "sintesis", "consultante", "posicion", "posiciones", "signo", "signos",
     "planeta", "planetas", "casa", "casas", "ascendente", "descendente",
     "medio", "cielo", "fondo", "nodo", "nodos", "pregunta", "contexto",
+    # Nombres narrativos que no son cartas (lecturas reales de fase 1).
+    "tarot", "mensaje", "hilo", "tema", "historia", "respuesta", "combinacion",
+    "panorama", "aprendizaje", "referencia", "orientacion", "interpretacion",
+    "cuidado", "invitacion", "miedo", "energia", "fuego", "niebla", "riesgo",
+    "cierre", "semilla", "espiritu", "duelo", "expansion", "puente", "ancla",
+    "mascara", "descanso", "claridad", "gestion", "viaje", "bloqueo",
+    "comunicacion", "retiro", "autosuficiencia", "estructura", "reconstruccion",
+    "campo", "batalla", "artesano", "labrador", "maestra", "conexion",
+    "universo",
+}
+
+# Posiciones de las tiradas (tarot y baraja): nunca son cartas.
+_POSICIONES_CARTA = {
+    "pasado", "presente", "futuro", "situacion", "obstaculo", "raiz", "meta",
+    "actitud", "entorno", "esperanzas", "miedos", "resultado", "base",
+    "consejo", "cercano", "posicion", "posiciones",
 }
 
 
@@ -614,31 +630,56 @@ def _sin_articulo(texto):
                   str(texto).strip(), flags=re.IGNORECASE)
 
 
+def _formas_de(elemento):
+    """Nombre y sinónimos de una carta del universo (dict o cadena)."""
+    if isinstance(elemento, dict):
+        nombre = elemento.get("nombre")
+        return [x for x in [nombre] + list(elemento.get("sinonimos") or []) if x]
+    return [elemento] if elemento else []
+
+
 def _nombres_conocidos(universo, drawn_todo):
     """Formas normalizadas (con y sin artículo) de las cartas del sistema."""
     conocidos = set(drawn_todo)
     for elemento in universo:
-        nombre = elemento.get("nombre") if isinstance(elemento, dict) else elemento
-        if not nombre:
-            continue
-        formas = [nombre]
-        if isinstance(elemento, dict):
-            formas += list(elemento.get("sinonimos") or [])
-        for forma in formas:
+        for forma in _formas_de(elemento):
             conocidos.add(_norm(forma))
             conocidos.add(_norm(_sin_articulo(forma)))
     return conocidos
 
 
+def _es_posicion(base):
+    tokens = [t for t in base.split()
+              if t not in _ARTICULOS and t not in _PREPOS]
+    return bool(tokens) and all(t in _POSICIONES_CARTA for t in tokens)
+
+
 def _cartas_inventadas(texto, conocidos):
-    """Nombres propios con artículo que no pertenecen al universo del sistema."""
+    """Nombres propios con artículo que no pertenecen al universo del sistema.
+
+    Se aceptan las posiciones de la tirada («El Pasado», «El Futuro»), las
+    formas cortas y cargos de la corte («La Rueda» → La Rueda de la Fortuna,
+    «La Sota», «El Rey») y los nombres narrativos («El Mensaje»). Un nombre
+    con palo que no exista («El Ocho de Estrellas») sigue rechazándose.
+    """
+    tokens_conocidos = {
+        t for nombre in conocidos for t in nombre.split()
+        if t not in _ARTICULOS and t not in _PREPOS
+    }
     inventadas = []
     for m in _CARTA_NOMBRE_RE.finditer(texto or ""):
         nombre = m.group(1)
         base = _norm(_sin_articulo(nombre))
-        if not base or not base.split()[0:1] or base.split()[0] in _GENERICOS_CARTA:
+        if not base:
             continue
         if base in conocidos:
+            continue
+        if base.split()[0] in _GENERICOS_CARTA or _es_posicion(base):
+            continue
+        # Forma corta de una carta conocida: «La Rueda», «La Sota», «El Rey».
+        if len(base.split()) == 1 and base in tokens_conocidos:
+            continue
+        if any(k.startswith(base + " ") for k in conocidos):
             continue
         if nombre not in inventadas:
             inventadas.append(nombre)
@@ -731,46 +772,104 @@ def _mascara_astros(texto):
     return _RE_ASTRO_LUMINAR.sub(lambda m: " " * len(m.group(0)), texto)
 
 
-def _afirma_inversion(texto):
-    """True si hay una marca de inversión no negada dentro del fragmento."""
-    for m in re.finditer(r"invertid\w*|al\s+rev[eé]s", texto, re.IGNORECASE):
-        if not _negado(texto, m.start()):
-            return True
-    return False
+def _inversiones_afirmadas(texto):
+    """Marcas de inversión no negadas («invertida», «al revés»)."""
+    return [m for m in re.finditer(r"invertid\w*|al\s+rev[eé]s", texto,
+                                   re.IGNORECASE)
+            if not _negado(texto, m.start())]
 
 
-def _ventanas_carta(carta, texto):
-    """Fragmentos (frases) donde aparece la carta o sus sinónimos."""
-    if isinstance(carta, dict):
-        candidatos = [carta.get("nombre")] + list(carta.get("sinonimos") or [])
-    else:
-        candidatos = [carta]
+def _tokens_distintivos(nombre):
+    return [t for t in str(nombre).split()
+            if _norm(t) not in _ARTICULOS and _norm(t) not in _PREPOS
+            and len(_norm(t)) >= 2]
+
+
+def _marca_es_orientacion(texto, marca):
+    """Descarta participios verbales y metáforas que no describen la carta."""
+    antes = texto[max(0, marca.start() - 30):marca.start()]
+    if re.search(
+            r"\b(?:he|has|ha|hemos|hab[eé]is|han|haya|hayas|hayan|"
+            r"hab[ií]a|hab[ií]as|hab[ií]amos|hab[ií]an|haber|habr[ií]a)"
+            r"\s+(?:\w+\s+){0,2}$", antes, re.IGNORECASE):
+        return False
+    # Sustantivos comunes en minúscula («perspectiva invertida»); «El Mundo»
+    # con mayúscula es la carta y no debe caer en esta lista.
+    if re.search(
+            r"\b(?:perspectiva|mirada|visi[oó]n|mundo|papel|rol|orden|"
+            r"valores|situaci[oó]n|energ[ií]a|esfuerzo|tiempo|dinero|"
+            r"recursos)\s+$", antes):
+        return False
+    return True
+
+
+def _marcas_orientacion(cartas, texto):
+    """Asigna cada marca de inversión a la última carta mencionada antes de ella.
+
+    - Las formas cortas («la Reina», «Mundo», «el caballero») solo cuentan si no
+      forman parte del nombre completo de otra carta.
+    - La marca debe ir pegada a la carta («La Torre invertida», «El Sol
+      (invertida)», «X en posición invertida»). Así no cuentan usos verbales
+      («has invertido energía») ni metáforas («perspectiva invertida»).
+    - Las anáforas («la carta invertida») no se asignan a ninguna carta.
+    Devuelve {nombre_normalizado: marcada_invertida}.
+    """
     solo_mayus = not any(ch.islower() for ch in texto if ch.isalpha())
-    ventanas = []
-    for cand in candidatos:
-        if not cand:
-            continue
-        pat = re.compile(
-            r"(?<![" + _LETRAS + r"])" + re.escape(str(cand))
-            + r"(?![" + _LETRAS + r"])", re.IGNORECASE)
-        for m in pat.finditer(texto):
-            if not solo_mayus:
-                props = [t for t in m.group(0).split()
-                         if _norm(t) not in _ARTICULOS and _norm(t) not in _PREPOS]
-                if not any(t[:1].isupper() for t in props):
+    spans_full = []
+    menciones = []
+    for carta in cartas:
+        nn = _norm(carta.get("nombre"))
+        for forma in _formas_de(carta):
+            pat = re.compile(
+                r"(?<![" + _LETRAS + r"])" + re.escape(str(forma))
+                + r"(?![" + _LETRAS + r"])", re.IGNORECASE)
+            for m in pat.finditer(texto):
+                if not solo_mayus:
+                    props = [t for t in m.group(0).split()
+                             if _norm(t) not in _ARTICULOS
+                             and _norm(t) not in _PREPOS]
+                    if not any(t[:1].isupper() for t in props):
+                        continue
+                spans_full.append((m.start(), m.end()))
+                menciones.append((m.start(), m.end(), nn))
+    for carta in cartas:
+        nn = _norm(carta.get("nombre"))
+        for token in _tokens_distintivos(carta.get("nombre")):
+            pat = re.compile(
+                r"(?<![" + _LETRAS + r"])" + re.escape(token)
+                + r"(?![" + _LETRAS + r"])", re.IGNORECASE)
+            for m in pat.finditer(texto):
+                if any(a <= m.start() < b for a, b in spans_full):
                     continue
-            ini = max(texto.rfind(".", 0, m.start()),
-                      texto.rfind("\n", 0, m.start()),
-                      texto.rfind(";", 0, m.start()))
-            ini = 0 if ini == -1 else ini + 1
-            fines = [p for p in (texto.find(".", m.end()),
-                                 texto.find("\n", m.end()),
-                                 texto.find(";", m.end())) if p != -1]
-            fin = min(fines) if fines else len(texto)
-            fragmento = texto[ini:fin]
-            if fragmento not in ventanas:
-                ventanas.append(fragmento)
-    return ventanas
+                previo = texto[max(0, m.start() - 8):m.start()]
+                if (solo_mayus or m.group(0)[:1].isupper()
+                        or re.search(r"(?:^|\W)(?:el|la|los|las)\s+$",
+                                     previo, re.IGNORECASE)):
+                    menciones.append((m.start(), m.end(), nn))
+    menciones.sort(key=lambda x: x[0])
+    marcas = {_norm(c.get("nombre")): False for c in cartas}
+    for marca in _inversiones_afirmadas(texto):
+        if not _marca_es_orientacion(texto, marca):
+            continue
+        if len(cartas) == 1:
+            marcas[_norm(cartas[0].get("nombre"))] = True
+            continue
+        previas = [x for x in menciones if x[0] < marca.start()]
+        if not previas:
+            continue
+        _ini, fin_previo, nn = previas[-1]
+        entre = texto[fin_previo:marca.start()]
+        pegado = bool(re.fullmatch(
+            r"\s*(?:\*\*|__)?\s*"
+            r"(?:(?:aparece|aparecen|aparezca|aparezcan|sale|salen|salir|"
+            r"sali[oó]|est[aá]|est[aá]n|queda|quedan|incluso|tambi[eé]n|"
+            r"a[uú]n|como|cuando|ahora)\s+){0,3}"
+            r"(?:en\s+posici[oó]n\s+)?(?:,|:)?\s*",
+            entre, re.IGNORECASE))
+        parentesis = bool(re.search(r"\(\s*$", entre))
+        if pegado or parentesis:
+            marcas[nn] = True
+    return marcas
 
 
 def _verif_cartas(cartas, universo, texto, motivos, texto_ajenas=None):
@@ -815,14 +914,14 @@ def _verif_cartas(cartas, universo, texto, motivos, texto_ajenas=None):
     for nombre in _cartas_inventadas(for_ajenas, conocidos):
         motivos.append(f"Menciona una carta inexistente en el sistema: {nombre}")
     hay_inv = any(c.get("invertida") for c in validas)
-    inv = _tiene_inversion(texto)
+    marcas = _marcas_orientacion(validas, texto)
+    inv = any(marcas.values())
     if (not hay_inv) and inv:
         motivos.append(
             "Menciona una orientación invertida sin que haya cartas invertidas en la tirada"
         )
     for c in validas:
-        ventanas = _ventanas_carta(c, texto)
-        marcada = any(_afirma_inversion(v) for v in ventanas)
+        marcada = marcas.get(_norm(c.get("nombre")), False)
         if c.get("invertida") and not marcada:
             motivos.append(
                 f"No indica la orientación invertida de: {c.get('nombre')}")
