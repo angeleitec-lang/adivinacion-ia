@@ -413,7 +413,7 @@ def max_tokens_mercury(bloque):
 
 def procesar_una(fila, cliente, kb, max_reintentos=2, max_tokens_piso=PISO_MAX_TOKENS,
                 temperature=0.2, backend=GENERADOR_LOCAL, reintentos_red=None,
-                generador=None):
+                generador=None, estilo=None, estilo_reintento=False):
     """Una fila -> registro con lectura, veredicto e intentos.
 
     `error` distinto de None significa fallo de transporte (red/salida vacía):
@@ -424,7 +424,8 @@ def procesar_una(fila, cliente, kb, max_reintentos=2, max_tokens_piso=PISO_MAX_T
     payload = json.loads(fila["payload"]) if isinstance(fila["payload"], str) else fila["payload"]
     pregunta = extraer_pregunta(fila.get("prompt", ""))
     tarea = tarea_desde_job(fila["bloque"], payload, pregunta, kb)
-    prompt = fp.construir_prompt(tarea, kb)
+    tarea["id"] = fila.get("id")
+    prompt = fp.construir_prompt(tarea, kb, estilo=estilo)
     es_mercury = backend == GENERADOR_MERCURY
     if es_mercury:
         max_tokens = max_tokens_mercury(fila["bloque"])
@@ -469,6 +470,9 @@ def procesar_una(fila, cliente, kb, max_reintentos=2, max_tokens_piso=PISO_MAX_T
             motivos.append(MOTIVO_TRUNCADO)
         ver_ok, ver_motivos = fp.verificar_lectura(tarea, lectura)
         motivos.extend(ver_motivos)
+        if estilo_reintento and not motivos:
+            if fp.puntuar_estilo(lectura, fila["bloque"])["apertura_vetada"]:
+                motivos.append("estilo:apertura_vetada")
         ok = not motivos
         if ok or intentos > max_reintentos:
             break
@@ -545,7 +549,8 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
             huerfano_minutos=30.0, out_dir=None, stop_event=None,
             formato="plano", backend=GENERADOR_LOCAL, reintentos_red=None,
             ventana_errores=VENTANA_ERRORES_DEFECTO,
-            umbral_error=UMBRAL_ERROR_DEFECTO):
+            umbral_error=UMBRAL_ERROR_DEFECTO, estilo=None,
+            estilo_reintento=False):
     if backend not in (GENERADOR_LOCAL, GENERADOR_MERCURY):
         raise ValueError(
             f"backend no válido: {backend!r}; usa {GENERADOR_LOCAL!r} o "
@@ -644,6 +649,8 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
                     reintentos_red=reintentos_red,
                     generador=(GENERADOR_MERCURY if backend == GENERADOR_MERCURY
                                else GENERADOR_LOCAL),
+                    estilo=estilo,
+                    estilo_reintento=estilo_reintento,
                 )
             except (ValueError, KeyError, TypeError) as exc:
                 with lock:
@@ -1148,6 +1155,11 @@ def main(argv=None):
     ap.add_argument("--endpoints", default=None,
                     help="URLs locales separadas por coma (por defecto solo "
                          "el nodo2: %s)" % ENDPOINT_LOCAL_DEFECTO)
+    ap.add_argument("--estilo", default="base",
+                    help="estilo de apertura: base (compatibilidad), auto/variedad "
+                         "o nombre de estilo")
+    ap.add_argument("--estilo-reintento", action="store_true",
+                    help="reintenta una vez si la lectura abre con una fórmula vetada")
     args = ap.parse_args(argv)
 
     es_mercury = args.backend == "mercury"
@@ -1209,6 +1221,8 @@ def main(argv=None):
             reintentos_red=args.reintentos_red,
             ventana_errores=args.ventana_errores,
             umbral_error=args.umbral_error,
+            estilo=args.estilo,
+            estilo_reintento=args.estilo_reintento,
         )
     except KeyboardInterrupt:
         print("Interrumpido: las tareas en vuelo de este worker han vuelto a "
