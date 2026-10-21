@@ -28,10 +28,15 @@ JUNK = (
 )
 
 CARD_RE = re.compile(r"Carta[s]?:\s*([^(\n]+?)\s*(?:\(|\.|$)", re.I)
-SIGN_RE = re.compile(r"(?:Signo solar|Ascendente|Luna|Sol)\s*:?\s*(?:en\s+)?([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)", re.I)
+# T109: con `re.I` y sin límites de palabra, «solitario» aportaba «itario» y
+# «cartas» aportaba fragmentos basura que envenenaban el anclaje de signos.
+SIGN_RE = re.compile(
+    r"\b(?:Signo solar|Ascendente|Luna|Sol)\b\s*:?\s*(?:en\s+)?\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)\b",
+    re.I,
+)
 NUM_RE = re.compile(
-    r"(?:Camino de vida|Número|Destino|Alma|Personalidad|Año personal)"
-    r"(?:\s*\([^)]*\))?\s*:?\s*(\d{1,2})",
+    r"\b(?:Camino de vida|Número|Destino|Alma|Personalidad|Año personal)\b"
+    r"(?:\s*\([^)]*\))?\s*:?\s*(\d{1,2})\b",
     re.I,
 )
 QUESTION_RE = re.compile(r'Pregunta del consultante:\s*"([^"]+)"', re.I)
@@ -44,6 +49,13 @@ SIN_TILDES_MARCAS = (
 CARTA_LINEA_RE = re.compile(
     r"(?:Carta(?:\s*\d+)?\s*:|[-•]\s*[^\n:]+?:)\s*([^(\n]+?)\s*\((invertid[ao]|al derecho)\)",
     re.I,
+)
+# T109: líneas de tirada sin viñeta «pasado: El Hierofante (al derecho)».
+# OJO: [ \t] en vez de \s alrededor de los dos puntos: \s cruzaría el salto de
+# línea y se tragaría la cabecera («Tirada de tres cartas:\npasado: ...»).
+POS_LINEA_RE = re.compile(
+    r"(?m)^[ \t]*([a-záéíóúñ]+(?:[ \t]+[a-záéíóúñ]+)*)"
+    r"[ \t]*:[ \t]*([^(\n]+?)[ \t]*\((invertid[ao]|al derecho)\)[ \t]*$",
 )
 ARTICULOS = ("el ", "la ", "los ", "las ", "un ", "una ", "unos ", "unas ")
 
@@ -63,13 +75,30 @@ def _sin_articulo(nombre_norm: str) -> str:
 
 
 def extraer_cartas(prompt: str) -> list:
-    """[(nombre, orientacion)] con orientacion en {"derecho", "invertida"}."""
+    """[(nombre, orientacion)] con orientacion en {"derecho", "invertida"}.
+
+    T109: además de las líneas con «Carta:» o viñeta, reconoce las líneas de
+    tirada sin viñeta («pasado: El Hierofante (al derecho)»), deduplicando
+    por nombre normalizado para no exigir dos veces la misma carta.
+    """
     cartas = []
+    vistos: set = set()
     for m in CARTA_LINEA_RE.finditer(prompt):
         nombre = m.group(1).strip().strip(".").strip()
         orient = "invertida" if m.group(2).lower().startswith("invertid") else "derecho"
         if nombre and len(nombre) > 2:
-            cartas.append((nombre, orient))
+            nn = norm(nombre)
+            if nn not in vistos:
+                vistos.add(nn)
+                cartas.append((nombre, orient))
+    for m in POS_LINEA_RE.finditer(prompt):
+        nombre = m.group(2).strip().strip(".").strip()
+        orient = "invertida" if m.group(3).lower().startswith("invertid") else "derecho"
+        if nombre and len(nombre) > 2:
+            nn = norm(nombre)
+            if nn not in vistos:
+                vistos.add(nn)
+                cartas.append((nombre, orient))
     return cartas
 
 
@@ -273,10 +302,32 @@ def orientacion_ok(prompt: str, answer: str) -> bool:
             if not any(marca in na for marca in INVERT_RECONOC):
                 return False
         else:
+            otros = [t for t in (_sin_articulo(norm(n)) for n, _ in cartas)
+                    if t and t != token]
             for m in re.finditer(r"\b" + re.escape(token) + r"\b", na):
-                ventana = na[max(0, m.start() - 30): m.end() + 30]
-                if any(f in ventana for f in INVERT_AFIRMA):
-                    return False
+                inicio = max(0, m.start() - 30)
+                ventana = na[inicio: m.end() + 30]
+                # T109: el marcador explícito «al derecho» junto a la carta gana
+                # sobre el substring «invertid», que también sale en verbos como
+                # «has invertido años» y producía falsos rechazos.
+                if "al derecho" in ventana:
+                    continue
+                for f in INVERT_AFIRMA:
+                    for mf in re.finditer(re.escape(f), ventana):
+                        d_self = max(m.start() - (inicio + mf.end()),
+                                    (inicio + mf.start()) - m.end(), 0)
+                        d_otro = None
+                        for t in otros:
+                            for mo in re.finditer(r"\b" + re.escape(t) + r"\b", ventana):
+                                d = max(mo.start() - mf.end(), mf.start() - mo.end(), 0)
+                                if d_otro is None or d < d_otro:
+                                    d_otro = d
+                        # El marcador está más cerca de otra carta dibujada:
+                        # describe a esa carta, no a esta («el As de Oros
+                        # invertido y el Siete de Espadas advierten»).
+                        if d_otro is not None and d_otro < d_self:
+                            continue
+                        return False
     return True
 
 
@@ -355,20 +406,36 @@ def numeros_de_calculos(calculos: dict) -> list:
     return list(dict.fromkeys(out))
 
 
-def grounding(prompt: str, answer: str, calculos: dict | None = None) -> bool:
-    """Exige que la respuesta mencione los datos de la tarea.
+# Bloques puros de cartas: los únicos donde el escaneo de nombres propios
+# (incluir_nombres=True) no produce falsos positivos. En lecturas largas mixtas
+# (astro_natal, lectura_completa, numerologia, cruz_celta) las cabeceras
+# («El Deseo», «El Año», «Los Aspectos») no son cartas: el verificador
+# canónico `verificar_lectura` usa incluir_nombres=False ahí (T109).
+BLOQUES_NOMBRES = frozenset({"tarot_1", "tarot_2", "tarot_3", "tarot_pregunta"})
+
+
+def grounding(prompt: str, answer: str, calculos: dict | None = None,
+              bloque: str | None = None) -> bool:
+    """Exige que la respuesta esté anclada en los datos de la tarea.
 
     Fuente de signos y números (DESAJUSTE D7, alineado en T75):
     - Si la fila trae `calculos` (los datos deterministas que consumió
-      `fase1_prompts.verificar_lectura`), signos y números se leen de ahí,
-      en vez de extraerse del texto del prompt, donde los regex pierden
-      formatos (p. ej. «Año personal 2026: 5» extraía «20») y el verificador
-      ni los mira.
-    - Sin `calculos` se mantiene el comportamiento heredado: extracción del
-      texto del prompt con SIGN_RE/NUM_RE.
-    Criterio invariable: cartas del prompt, todas; signos y números, al menos
-    2/3 mencionados. Las cartas se leen siempre del texto (la fila ShareGPT
-    no las trae en `calculos`).
+      `fase1_prompts.verificar_lectura`), signos y números se leen de ahí.
+    - Sin `calculos` se extraen del texto del prompt con SIGN_RE/NUM_RE,
+      filtrados a nombres de signo válidos (T109: sin el filtro, «solitario»
+      aportaba «itario» y envenenaba el anclaje).
+
+    Criterios (T109):
+    - Cartas del prompt: todas mencionadas (invariable).
+    - Carta inventada: escaneo de nombres propios solo en BLOQUES_NOMBRES
+      (o cuando no se informa bloque, por compatibilidad).
+    - Signos y números: anclaje, al menos uno de los de la tarea mencionado.
+      El criterio 2/3 heredado rechazaba lecturas que el verificador canónico
+      acepta: una lectura de carta natal puede apoyarse solo en el Sol sin
+      nombrar Luna ni Ascendente y ser correcta.
+    - Contradicción: con `calculos` se aplican las guardas canónicas
+      `_verif_sol` y `_verif_numeros` de fase1_prompts («Sol en Aries» ≠
+      Sol calculado, «camino de vida 7» ≠ 7 calculado → rechazo).
     """
     na = norm(answer)
     cartas = extraer_cartas(prompt)
@@ -377,14 +444,23 @@ def grounding(prompt: str, answer: str, calculos: dict | None = None) -> bool:
             return False
     # Una carta que no existe en ninguno de los dos sistemas invalida la lectura,
     # aunque la tirada se mencione correctamente (mismo control que el verificador).
+    zodiaco = None
     try:
         import cartas as _cartas
         import fase1_prompts as _fp
         universo = list(_cartas.CARTAS_TAROT) + list(_cartas.NAIPES_ESPANOLES)
         dibujadas = {_fp._norm(_fp._sin_articulo(n)) for n, _ in cartas}
         conocidos = _fp._nombres_conocidos(universo, dibujadas)
-        if _fp._cartas_inventadas(answer, conocidos):
+        incluir_nombres = bloque is None or bloque in BLOQUES_NOMBRES
+        if _fp._cartas_inventadas(answer, conocidos, incluir_nombres=incluir_nombres):
             return False
+        if calculos:
+            motivos: list = []
+            _fp._verif_sol(calculos, answer, motivos)
+            _fp._verif_numeros(calculos, answer, motivos)
+            if motivos:
+                return False
+        zodiaco = getattr(_fp, "ZODIACO", None)
     except ImportError:
         pass
     if calculos:
@@ -392,15 +468,13 @@ def grounding(prompt: str, answer: str, calculos: dict | None = None) -> bool:
         numeros = numeros_de_calculos(calculos)
     else:
         signos = list(dict.fromkeys(norm(m.group(1)) for m in SIGN_RE.finditer(prompt)))
+        if zodiaco:
+            signos = [s for s in signos if s in zodiaco]
         numeros = list(dict.fromkeys(m.group(1) for m in NUM_RE.finditer(prompt)))
-    if signos:
-        menc = sum(1 for s in signos if _menciona(na, s))
-        if menc / len(signos) < 2 / 3:
-            return False
-    if numeros:
-        menc = sum(1 for n in numeros if _menciona(na, n))
-        if menc / len(numeros) < 2 / 3:
-            return False
+    if signos and not any(_menciona(na, s) for s in signos):
+        return False
+    if numeros and not any(_menciona(na, n) for n in numeros):
+        return False
     return True
 
 
@@ -429,7 +503,7 @@ def _validar_multiturno(pares: list, args, bloque: str | None,
         q = normalize(m.group(1))
         if len(q) > 25 and normalize(g1[:120]).startswith(q[:40]):
             return False, "eco_pregunta"
-    if not grounding(h1, g1, calculos):
+    if not grounding(h1, g1, calculos, bloque=bloque):
         return False, "sin_datos_del_prompt"
     if not orientacion_ok(h1, g1):
         return False, "orientacion"
@@ -472,7 +546,7 @@ def validate(row: dict, args, bloque: str | None = None) -> tuple[bool, str]:
         q = normalize(m.group(1))
         if len(q) > 25 and normalize(answer[:120]).startswith(q[:40]):
             return False, "eco_pregunta"
-    if not grounding(prompt, answer, calculos):
+    if not grounding(prompt, answer, calculos, bloque=bloque):
         return False, "sin_datos_del_prompt"
     if not orientacion_ok(prompt, answer):
         return False, "orientacion"
