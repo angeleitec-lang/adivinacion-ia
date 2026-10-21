@@ -188,10 +188,25 @@ class TestValidarParticion(unittest.TestCase):
         with self.assertRaises(ValueError):
             ck.validar_particion(2)({"grupos": [[0, 5]]})
 
-    def test_contradiction_mismo_grupo(self):
+    def test_contradiction_mismo_grupo_se_descarta(self):
+        # Un par contradictorio dentro del mismo grupo de equivalencia es ruido:
+        # se descarta el par y se conserva la particion valida (no se falla).
+        res = ck.validar_particion(2)(
+            {"grupos": [[0, 1]], "contradicciones": [[0, 1]]})
+        self.assertEqual(res["grupos"], [[0, 1]])
+        self.assertEqual(res["contradicciones"], [])
+
+    def test_contradiction_mismo_grupo_parcial(self):
+        # Se conservan los pares entre grupos distintos y se quitan los intra-grupo.
+        res = ck.validar_particion(4)(
+            {"grupos": [[0, 1], [2, 3]],
+             "contradicciones": [[0, 1], [0, 2], [2, 3]]})
+        self.assertEqual(res["contradicciones"], [[0, 2]])
+
+    def test_par_malformado_si_falla(self):
         with self.assertRaises(ValueError):
             ck.validar_particion(2)(
-                {"grupos": [[0, 1]], "contradicciones": [[0, 1]]})
+                {"grupos": [[0], [1]], "contradicciones": [[0, 9]]})
 
     def test_sin_grupos(self):
         with self.assertRaises(ValueError):
@@ -249,7 +264,35 @@ class TestAgruparCelda(unittest.TestCase):
             self.assertEqual(r1["grupos"], [[0, 1], [2]])
             r2 = ck.agrupar_celda(cliente, "e", "f", afs, cache)
             self.assertEqual(r1, r2)
-            self.assertEqual(len(llamadas), 1)
+
+    def test_fallback_singletons_si_llm_invalido(self):
+        # El LLM devuelve una particion incompleta tras todos los reintentos:
+        # la celda no debe tumbar el run; cae a singletons con fallback=True.
+        def sim(s, u):
+            return json.dumps({"grupos": [[0]]})  # faltan indices 1 y 2
+        cliente = LLMClient(simulado=sim)
+        afs = [{"afirmacion": "a"}, {"afirmacion": "b"}, {"afirmacion": "c"}]
+        res = ck.agrupar_celda(cliente, "e", "f", afs)
+        self.assertEqual(res["grupos"], [[0], [1], [2]])
+        self.assertEqual(res["contradicciones"], [])
+        self.assertTrue(res.get("fallback"))
+
+    def test_fallback_no_rompe_construir_consensos(self):
+        # Una celda en fallback se registra igual (unica_fuente por singletons)
+        # y no lanza; el resto del run continua.
+        def sim(s, u):
+            return json.dumps({"grupos": [[0]]})
+        cliente = LLMClient(simulado=sim)
+        celdas = {("e", "f"): [
+            {"entidad_id": "e", "faceta": "f", "afirmacion": "a",
+             "fuente_id": "s1"},
+            {"entidad_id": "e", "faceta": "f", "afirmacion": "b",
+             "fuente_id": "s2"},
+        ]}
+        res = ck.construir_consensos(cliente, celdas)
+        self.assertEqual(len(res), 1)
+        self.assertTrue(res[0]["fallback"])
+        self.assertEqual(len(res[0]["unica_fuente"]), 2)
 
 
 class TestConstruirConsensos(unittest.TestCase):

@@ -315,13 +315,18 @@ def validar_particion(n):
         for gi, g in enumerate(grupos):
             for idx in g:
                 grupo_de[idx] = gi
+        limpias = []
         for par in contradicciones:
             if (not isinstance(par, list) or len(par) != 2 or
                     not all(isinstance(x, int) and 0 <= x < n for x in par)):
                 raise ValueError("par de contradiccion invalido: %r" % (par,))
             if grupo_de[par[0]] == grupo_de[par[1]]:
-                raise ValueError(
-                    "par contradictorio dentro del mismo grupo: %r" % (par,))
+                # Dos afirmaciones del mismo grupo de equivalencia no pueden
+                # contradecirse: el par es ruido del LLM, se descarta y se
+                # conserva la particion valida en lugar de forzar un fallo.
+                continue
+            limpias.append(par)
+        data["contradicciones"] = limpias
         return data
     return _validar
 
@@ -344,10 +349,20 @@ def agrupar_celda(cliente, entidad_id, faceta, afirmaciones, cache=None):
         if guardada is not None:
             return guardada
     prompt = construir_prompt_consenso(entidad_id, faceta, textos)
-    respuesta = cliente.chat_json(
-        SISTEMA_CONSENSO, prompt, validar_particion(len(textos)),
-        max_tokens=1024, temperature=0.1,
-    )
+    try:
+        respuesta = cliente.chat_json(
+            SISTEMA_CONSENSO, prompt, validar_particion(len(textos)),
+            max_tokens=1024, temperature=0.1,
+        )
+    except ValueError:
+        # Respuesta LLM invalida tras los reintentos: no tumbar el run.
+        # Caida segura: cada afirmacion en su propio grupo, sin contradicciones.
+        # Se marca ``fallback`` para poder reintentar la celda mas adelante.
+        return {
+            "grupos": [[i] for i in range(len(textos))],
+            "contradicciones": [],
+            "fallback": True,
+        }
     if cache and clave:
         cache.put(clave, respuesta)
     return respuesta
@@ -435,6 +450,7 @@ def construir_consensos(cliente, celdas, cache=None):
             "mayoritarias": mayoritarias,
             "discrepancias": discrepancias,
             "unica_fuente": unica_fuente,
+            "fallback": bool(agrup.get("fallback")),
             "alertas_factuales": [
                 {
                     "afirmacion": a.get("afirmacion"),
@@ -522,6 +538,9 @@ def escribir_informe(ruta, stats):
         "- Afirmaciones de una sola fuente: %d" % stats["unica_fuente"],
         "- Alertas factuales: %d" % stats["alertas"],
     ]
+    if stats.get("fallback_celdas"):
+        lineas.append("- Celdas en caida segura (LLM invalido, sin agrupar): %d"
+                      % stats["fallback_celdas"])
     if stats.get("no_utiles"):
         lineas.append("- Descartadas por filtro de utilidad (T34): %d"
                       % stats["no_utiles"])
@@ -601,6 +620,7 @@ def main(argv=None, cliente=None):
         "discrepancias": 0,
         "unica_fuente": 0,
         "alertas": 0,
+        "fallback_celdas": 0,
         "motivos_alertas": {},
         "no_utiles": no_utiles,
         "omitidas_existentes": omitidas,
@@ -621,6 +641,8 @@ def main(argv=None, cliente=None):
                 stats["discrepancias"] += len(res["discrepancias"])
                 stats["unica_fuente"] += len(res["unica_fuente"])
                 stats["alertas"] += len(res["alertas_factuales"])
+                if res.get("fallback"):
+                    stats["fallback_celdas"] += 1
                 if res["mayoritarias"]:
                     stats["celdas_mayoritarias"] += 1
                 for a in res["alertas_factuales"]:
