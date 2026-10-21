@@ -274,5 +274,59 @@ class UnicodeYEntradasVaciasTests(unittest.TestCase):
         self.assertNotIn("sin_texto", codigos)
 
 
+class ConsensoPrerevisionTests(unittest.TestCase):
+    def _celda(self):
+        return ficha(
+            entidad_id="tarot-copas-02",
+            nivel="consenso",
+            faceta="significado_general",
+            origen="consenso",
+        )
+
+    def test_umbral_texto_consenso(self):
+        self.assertEqual(40, prerevision.UMBRAL_TEXTO["consenso"])
+
+    def test_texto_corto_consenso(self):
+        self.assertIsNotNone(prerevision.bandera_texto_corto("Casi vacía.", "consenso"))
+        self.assertIsNone(
+            prerevision.bandera_texto_corto(
+                "Afirmaciones mayoritarias:\n· La copa ofrece calma cuando uno la sostiene en calma.",
+                "consenso",
+            )
+        )
+
+    def test_otra_carta_en_celda_consenso(self):
+        texto = (
+            "Afirmaciones mayoritarias:\n"
+            "· La Reina de Copas aparece como figura de contraste en esta lectura.\n"
+            "Discrepancias:\n"
+            "1) A: La dua ofrece ternura [fuente-a] — B: La dua guarda secretos [fuente-b]"
+        )
+        resultado = prerevision.analizar_registro(self._celda(), texto)
+        codigos = [bandera["codigo"] for bandera in resultado["banderas"]]
+        self.assertIn("otra_carta", codigos)
+
+    def test_promesa_vedada_en_celda_consenso(self):
+        texto = (
+            "Aportaciones de una sola fuente:\n"
+            "· Te garantizo que encontrarás el amor verdadero en tres meses. (fuente: x)"
+        )
+        resultado = prerevision.analizar_registro(self._celda(), texto)
+        codigos = [bandera["codigo"] for bandera in resultado["banderas"]]
+        self.assertIn("promesa_vedada", codigos)
+
+    def test_celda_consenso_limpi_sin_banderas(self):
+        texto = (
+            "Afirmaciones mayoritarias:\n"
+            "· La dua invita a acoger la emoción sin drama (3 fuentes; fuentes: a, b, c)\n"
+            "Discrepancias:\n"
+            "1) A: La dua guarda secretos [fuente-a] — B: La dua canta verdades [fuente-b]\n"
+            "Aportaciones de una sola fuente:\n"
+            "· La dua regala descanso al corazón cansado. (fuente: d; tradición: Marsella)"
+        )
+        resultado = prerevision.analizar_registro(self._celda(), texto)
+        self.assertEqual([], resultado["banderas"])
+
+
 if __name__ == "__main__":
     unittest.main()

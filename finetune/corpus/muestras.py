@@ -6,15 +6,27 @@ Prepara la revisión humana previa a la fase 1 (punto 7 de
 
 Niveles y entradas (JSONL, bajo `--base`, por defecto `/Users/angelgonzalez/fase0`):
   - `web`:          `evidencias_web/evidencias.jsonl`
-  - `libros`:       `libros/evidencias/*.jsonl`
+  - `libros`:       `libros/evidencias/*.jsonl` (sin `juicios*`)
   - `afirmaciones`: `afirmaciones_full/afirmaciones.jsonl` (si falta,
-                    `afirmaciones/afirmaciones.jsonl`) y, si existe,
-                    `afirmaciones_libros/afirmaciones_libros.jsonl`
+                    `afirmaciones/afirmaciones.jsonl`), si existe
+                    `afirmaciones_libros/afirmaciones_libros.jsonl` y, desde
+                    T93, los canales rápidos `afirmaciones_rapido/web/
+                    afirmaciones.jsonl` (origen `rapido-web`) y
+                    `afirmaciones_rapido/libros/afirmaciones_libros.jsonl`
+                    (origen `rapido-libros`, generados con mercury-3)
   - `lecturas`:     `lecturas/lecturas.jsonl`
+  - `consenso`:     `consenso_kb/consenso.jsonl` (T93), celdas
+                    entidad·faceta con sus afirmaciones mayoritarias,
+                    discrepancias y aportaciones únicas; la familia y la
+                    confianza salen de `kb_v2/*.json` y la forma (M/D/U)
+                    de la propia celda.
 
-El muestreo es aleatorio reproducible (semilla fija) y estratificado por
-familia (o sistema en lecturas) y calidad; los afirmaciones de libros
-estratifican además por origen, porque libro y web son canales distintos.
+El muestreo es aleatorio reproducible (semilla fija, por defecto 42;
+fracción por defecto 0,03) y estratificado por familia (o sistema en
+lecturas) y calidad; los afirmaciones estratifican además por origen
+(web, libros, rapido-web, rapido-libros), porque libro y web son canales
+distintos y el canal rápido (mercury-3) debe poder revisarse aparte; las
+celdas de consenso estratifican por familia kb_v2, confianza y forma.
 Cada estrato con registros aporta mínimo 1 ficha y nunca se repite un id.
 
 Salida de `--accion muestrear` (en `--out-dir`):
@@ -42,7 +54,7 @@ import sys
 import juez
 
 BASE_POR_DEFECTO = "/Users/angelgonzalez/fase0"
-NIVELES = ("web", "libros", "afirmaciones", "lecturas")
+NIVELES = ("web", "libros", "afirmaciones", "lecturas", "consenso")
 FRACCION_POR_DEFECTO = 0.03
 SEMILLA_POR_DEFECTO = 42
 UMBRAL_ORO = 0.90
@@ -74,12 +86,144 @@ def familia_de(entidad_id):
     return eid or "sin-entidad"
 
 
+# ---------------------------------------------------------------------------
+# Celdas de consenso (T93)
+# ---------------------------------------------------------------------------
+
+_FORMA_CLAVES = (("mayoritarias", "M"), ("discrepancias", "D"),
+                 ("unica_fuente", "U"))
+
+
+def forma_celda(celda):
+    """Forma de una celda de consenso: M/D/U según sus listas no vacías."""
+    partes = [etiqueta for clave, etiqueta in _FORMA_CLAVES
+              if celda.get(clave)]
+    return "+".join(partes) or "vacia"
+
+
+def indice_confianza(base):
+    """(entidad_id, faceta) -> (familia kb_v2, confianza) desde kb_v2/*.json.
+
+    Cada fichero `kb_v2/<familia>.json` tiene `entidades` como dict
+    entidad -> faceta -> celda con `confianza`. Si falta el directorio o un
+    fichero, devuelve el mapa parcial (nunca lanza).
+    """
+    mapa = {}
+    patron = os.path.join(base, "kb_v2", "*.json")
+    for ruta in sorted(glob.glob(patron)):
+        try:
+            with open(ruta, encoding="utf-8") as fh:
+                kb = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        familia = kb.get("familia") or os.path.basename(ruta)[:-5]
+        entidades = kb.get("entidades") or {}
+        if not isinstance(entidades, dict):
+            continue
+        for eid, facetas in entidades.items():
+            if not isinstance(facetas, dict):
+                continue
+            for faceta, celda in facetas.items():
+                if isinstance(celda, dict):
+                    mapa[(str(eid), str(faceta))] = (
+                        familia, str(celda.get("confianza") or "s/c"))
+    return mapa
+
+
+def _fuente_corta(fuente_id, largo=60):
+    texto = str(fuente_id or "fuente desconocida")
+    return texto if len(texto) <= largo else texto[:largo] + "[…]"
+
+
+def texto_celda(celda):
+    """Texto de revisión de una celda de consenso, con procedencia inline.
+
+    Compone de forma determinista las afirmaciones mayoritarias (con número
+    de fuentes, fuentes y tradiciones), las discrepancias (A contra B con
+    sus fuentes), las aportaciones únicas (con fuente y tradición) y las
+    alertas fácticas. Devuelve None si la celda está vacía.
+    """
+    lineas = []
+    mayoritarias = celda.get("mayoritarias") or []
+    if mayoritarias:
+        lineas.append("Afirmaciones mayoritarias:")
+        for item in mayoritarias:
+            if not isinstance(item, dict):
+                continue
+            afirmacion = str(item.get("afirmacion") or "").strip()
+            if not afirmacion:
+                continue
+            partes = []
+            if item.get("n_fuentes") is not None:
+                partes.append("%s fuentes" % item["n_fuentes"])
+            fuentes = [str(f) for f in (item.get("fuentes") or []) if f]
+            if fuentes:
+                partes.append("fuentes: %s" % ", ".join(
+                    _fuente_corta(f, 40) for f in fuentes[:5]))
+            tradiciones = [str(t) for t in (item.get("tradiciones") or []) if t]
+            if tradiciones:
+                partes.append("tradiciones: %s" % ", ".join(tradiciones[:6]))
+            sufijo = " (%s)" % "; ".join(partes) if partes else ""
+            lineas.append("· %s%s" % (afirmacion, sufijo))
+    discrepancias = celda.get("discrepancias") or []
+    if discrepancias:
+        lineas.append("Discrepancias:")
+        for num, par in enumerate(discrepancias, 1):
+            if not isinstance(par, dict):
+                continue
+            partes = []
+            for lado in ("a", "b"):
+                item = par.get(lado) or {}
+                afirmacion = str(item.get("afirmacion") or "").strip()
+                if not afirmacion:
+                    continue
+                fuentes = [str(f) for f in (item.get("fuentes") or []) if f]
+                origen = (" [%s]" % ", ".join(
+                    _fuente_corta(f, 40) for f in fuentes[:3])
+                    if fuentes else "")
+                partes.append("%s: %s%s" % (lado.upper(), afirmacion, origen))
+            if partes:
+                lineas.append("%d) %s" % (num, " — ".join(partes)))
+    unicas = celda.get("unica_fuente") or []
+    if unicas:
+        lineas.append("Aportaciones de una sola fuente:")
+        for item in unicas:
+            if not isinstance(item, dict):
+                continue
+            afirmacion = str(item.get("afirmacion") or "").strip()
+            if not afirmacion:
+                continue
+            partes = ["fuente: %s" % _fuente_corta(item.get("fuente_id"))]
+            if item.get("tradicion"):
+                partes.append("tradición: %s" % item["tradicion"])
+            lineas.append("· %s (%s)" % (afirmacion, "; ".join(partes)))
+    alertas = celda.get("alertas_factuales") or []
+    if alertas:
+        lineas.append("Alertas fácticas:")
+        for item in alertas:
+            if not isinstance(item, dict):
+                continue
+            afirmacion = str(item.get("afirmacion") or "").strip()
+            if not afirmacion:
+                continue
+            partes = []
+            if item.get("motivo"):
+                partes.append("motivo: %s" % item["motivo"])
+            partes.append("fuente: %s" % _fuente_corta(item.get("fuente_id")))
+            lineas.append("! %s (%s)" % (afirmacion, "; ".join(partes)))
+    return "\n".join(lineas) if lineas else None
+
+
 def estrato_de(nivel, registro, origen=None):
     """Clave de estrato (tuple hashable) del registro según su nivel."""
     calidad = registro.get("calidad")
     calidad = "s/d" if calidad is None else str(calidad)
     if nivel == "lecturas":
         return (registro.get("sistema") or "sin-sistema", calidad)
+    if nivel == "consenso":
+        return (str(registro.get("familia_kb") or "sin-familia"),
+                str(registro.get("confianza") or "s/c"),
+                str(registro.get("forma") or "vacia"))
     if nivel == "afirmaciones":
         return (origen or "web", familia_de(registro.get("entidad_id")),
                 calidad)
@@ -178,22 +322,49 @@ def rutas_entradas(base, nivel):
                               "afirmaciones_libros.jsonl")
         if os.path.exists(libros):
             rutas.append((libros, "libros"))
+        rapido_web = os.path.join(base, "afirmaciones_rapido", "web",
+                                  "afirmaciones.jsonl")
+        if os.path.exists(rapido_web):
+            rutas.append((rapido_web, "rapido-web"))
+        rapido_libros = os.path.join(base, "afirmaciones_rapido", "libros",
+                                     "afirmaciones_libros.jsonl")
+        if os.path.exists(rapido_libros):
+            rutas.append((rapido_libros, "rapido-libros"))
         return rutas
     if nivel == "lecturas":
         return [(os.path.join(base, "lecturas", "lecturas.jsonl"), "lecturas")]
+    if nivel == "consenso":
+        return [(os.path.join(base, "consenso_kb", "consenso.jsonl"),
+                 "consenso")]
     raise ValueError("nivel desconocido: %r" % nivel)
 
 
 def cargar_registros(base, nivel):
-    """Registros del nivel, cada uno con `nivel`, `origen`, `id` y `estrato`."""
+    """Registros del nivel, cada uno con `nivel`, `origen`, `id` y `estrato`.
+
+    En el nivel `consenso` anota además `forma` (M/D/U), `familia_kb` y
+    `confianza` (desde kb_v2), y usa la confianza como `calidad` de la
+    ficha, porque la celda en sí no trae calidad.
+    """
     salida = []
+    indice = indice_confianza(base) if nivel == "consenso" else {}
     for ruta, origen in rutas_entradas(base, nivel):
         for registro in _leer_jsonl(ruta):
             fila = dict(registro)
             fila["nivel"] = nivel
             fila["origen"] = origen
+            if nivel == "consenso":
+                fila["forma"] = forma_celda(registro)
+                familia, confianza = indice.get(
+                    (str(registro.get("entidad_id") or ""),
+                     str(registro.get("faceta") or "")),
+                    ("sin-familia", "s/c"))
+                fila["familia_kb"] = familia
+                fila["confianza"] = confianza
+                fila["calidad"] = confianza
+                fila["sistema"] = familia
             fila["id"] = id_registro(registro)
-            fila["estrato"] = estrato_de(nivel, registro, origen)
+            fila["estrato"] = estrato_de(nivel, fila, origen)
             salida.append(fila)
     return salida
 
@@ -211,6 +382,8 @@ class Resolvedor:
     - Evidencias de libros: hash de las secciones de
       `<base>/libros/secciones/<libro_id>.jsonl`.
     - Afirmaciones y lecturas: traen el texto inline.
+    - Consenso: texto_celda compone mayoritarias, discrepancias, únicas y
+      alertas con su procedencia.
     """
 
     def __init__(self, base):
@@ -256,6 +429,8 @@ class Resolvedor:
             return registro.get("afirmacion")
         if nivel == "lecturas":
             return registro.get("texto")
+        if nivel == "consenso":
+            return texto_celda(registro)
         return None
 
 
@@ -299,6 +474,14 @@ def procedencia_de(nivel, registro, resolvedor):
         if registro.get("seccion") is not None:
             partes.append("sección %s" % registro["seccion"])
         return " · ".join(partes)
+    if nivel == "consenso":
+        partes = ["consenso_kb/consenso.jsonl",
+                  "kb_v2 · %s" % (registro.get("familia_kb") or "sin-familia"),
+                  "confianza %s" % (registro.get("confianza") or "s/c"),
+                  "forma %s" % (registro.get("forma") or "vacia")]
+        if registro.get("n_afirmaciones") is not None:
+            partes.append("%s afirmaciones" % registro["n_afirmaciones"])
+        return " · ".join(partes)
     return "?"
 
 
@@ -325,6 +508,9 @@ def ficha_markdown(nivel, registro, resolvedor):
     cartas = registro.get("cartas")
     if nivel == "lecturas" and isinstance(cartas, (list, tuple)) and cartas:
         extras.append("cartas: %s" % ", ".join(str(c) for c in cartas[:6]))
+    if nivel == "consenso" and registro.get("n_afirmaciones") is not None:
+        extras.append("%s afirmaciones en la celda"
+                      % registro["n_afirmaciones"])
     if extras:
         detalle += " (%s)" % "; ".join(extras)
     lineas.append("- entidad/faceta: %s" % detalle)

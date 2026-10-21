@@ -20,7 +20,7 @@ import sys
 BASE_POR_DEFECTO = "/Users/angelgonzalez/fase0"
 MAX_TEXTO_POR_DEFECTO = 6000
 VEREDICTOS = ("correcto", "dudoso", "incorrecto")
-VERSION_DATOS = 1
+VERSION_DATOS = 2
 NOMBRE_EXPORT = "muestras_revisadas.jsonl"
 
 
@@ -115,6 +115,36 @@ def _banderas(pre):
     return salida
 
 
+def etiqueta_origen(nivel, origen):
+    """Etiqueta legible del canal de procedencia para el revisor (T93).
+
+    Combina nivel y origen de la fila de muestra en una sola indicación:
+    ``nodo local`` para los canales generados en la GPU de casa, ``rápido
+    (mercury-3)`` para los canales de nodo remoto, ``evidencia`` para los
+    corpus web y de libros ya limpios, ``consenso`` para las celdas de
+    consenso/KB v2 y ``lectura`` para las lecturas de libro.
+    """
+    nivel = str(nivel or "")
+    origen = str(origen or "")
+    if origen == "rapido-web":
+        return "rápido (mercury-3) · web"
+    if origen == "rapido-libros":
+        return "rápido (mercury-3) · libros"
+    if nivel == "consenso" or origen == "consenso":
+        return "consenso · kb_v2"
+    if nivel == "web" and origen == "web":
+        return "web (evidencia)"
+    if nivel == "libros" and origen == "libros":
+        return "libro (evidencia)"
+    if nivel == "afirmaciones" and origen == "web":
+        return "nodo local · web"
+    if nivel == "afirmaciones" and origen == "libros":
+        return "nodo local · libros"
+    if nivel == "lecturas":
+        return "libro · lectura"
+    return origen or nivel or "sin origen"
+
+
 def construir_fichas(filas_muestras, filas_pre, resolver=None,
                      max_texto=MAX_TEXTO_POR_DEFECTO):
     """Fichas normalizadas para incrustar en el HTML.
@@ -169,6 +199,8 @@ def construir_fichas(filas_muestras, filas_pre, resolver=None,
             "id": rid,
             "nivel": str(fila.get("nivel") or ""),
             "origen": str(fila.get("origen") or ""),
+            "origen_etiqueta": etiqueta_origen(fila.get("nivel"),
+                                                fila.get("origen")),
             "estrato": estrato,
             "entidad": str(fila.get("entidad_id") or ""),
             "faceta": str(fila.get("faceta") or ""),
@@ -344,6 +376,7 @@ main { padding: 0.4rem 1rem 0.5rem; }
   color: var(--suave);
   white-space: nowrap;
 }
+.pill.origen { border-color: var(--acento); color: var(--acento); font-weight: 600; }
 .pill.punt-0 { border-color: var(--ok); color: var(--ok); }
 .pill.punt-baja { border-color: var(--ok); color: var(--ok); }
 .pill.punt-media { border-color: var(--duda); color: var(--duda); }
@@ -486,6 +519,9 @@ footer.acciones .sep { flex: 1 1 0.5rem; }
   <label>Nivel
     <select id="filtro-nivel"><option value="todos">todos</option></select>
   </label>
+  <label>Origen
+    <select id="filtro-origen"><option value="todos">todos</option></select>
+  </label>
   <label><input type="checkbox" id="solo-marcadas"> Solo con banderas</label>
   <label><input type="checkbox" id="solo-sin-revisar"> Solo sin revisar</label>
   <label>Orden
@@ -552,7 +588,7 @@ function construirLineasExport(fichas, veredictos, notas) {
 
 var DATOS = JSON.parse(document.getElementById("datos-revisor").textContent);
 var FICHAS = DATOS.fichas || [];
-var CLAVE = "revisor-t54-v1";
+var CLAVE = "revisor-muestras-v2";
 var TEXTO_VISIBLE = 700;
 var EXPANDIDOS = {};
 var HISTORIAL = [];
@@ -563,6 +599,7 @@ var ESTADO = {
   veredictos: {},
   notas: {},
   filtroNivel: "todos",
+  filtroOrigen: "todos",
   soloMarcadas: false,
   soloSinRevisar: false,
   orden: "sospecha"
@@ -641,6 +678,10 @@ function ordenadas(lista) {
 function visibles() {
   var lista = FICHAS.filter(function (f) {
     if (ESTADO.filtroNivel !== "todos" && f.nivel !== ESTADO.filtroNivel) {
+      return false;
+    }
+    if (ESTADO.filtroOrigen !== "todos" &&
+        String(f.origen_etiqueta || "sin origen") !== ESTADO.filtroOrigen) {
       return false;
     }
     if (ESTADO.soloMarcadas && !(f.banderas.length > 0 || f.puntuacion > 0)) {
@@ -759,6 +800,10 @@ function plantillaFicha(f, posicion, total) {
   var veredicto = ESTADO.veredictos[f.id];
   partes.push('<div class="meta">');
   partes.push('<span class="pill">' + esc(f.nivel || "sin nivel") + "</span>");
+  if (f.origen_etiqueta) {
+    partes.push('<span class="pill origen">' + esc(f.origen_etiqueta) +
+      "</span>");
+  }
   if (f.estrato) {
     partes.push('<span class="pill">' + esc(f.estrato) + "</span>");
   }
@@ -1051,6 +1096,25 @@ function iniciar() {
 
   selector.addEventListener("change", function () {
     ESTADO.filtroNivel = selector.value;
+    render();
+  });
+  var origenes = [];
+  FICHAS.forEach(function (f) {
+    var etiqueta = String(f.origen_etiqueta || "sin origen");
+    if (origenes.indexOf(etiqueta) < 0) {
+      origenes.push(etiqueta);
+    }
+  });
+  origenes.sort();
+  var selectorOrigen = document.getElementById("filtro-origen");
+  origenes.forEach(function (etiqueta) {
+    var opcion = document.createElement("option");
+    opcion.value = etiqueta;
+    opcion.textContent = etiqueta;
+    selectorOrigen.appendChild(opcion);
+  });
+  selectorOrigen.addEventListener("change", function () {
+    ESTADO.filtroOrigen = selectorOrigen.value;
     render();
   });
   var marcadas = document.getElementById("solo-marcadas");
