@@ -98,10 +98,11 @@ def _construir_tarea(bloque: str, campos: dict, payload, kb) -> dict:
         ]
         if cartas:
             tarea["cartas"] = cartas
-            if bloque in getattr(fp, "FAMILIAS_ESPAÑOLA", ()):
-                tarea["universo_cartas"] = ef.universo_baraja(kb)
-            else:
-                tarea["universo_cartas"] = ef.universo_tarot(kb)
+        # También en lecturas sin tirada: una carta de tarot mencionada es ajena.
+        if bloque in getattr(fp, "FAMILIAS_ESPAÑOLA", ()):
+            tarea["universo_cartas"] = ef.universo_baraja(kb)
+        else:
+            tarea["universo_cartas"] = ef.universo_tarot(kb)
     if campos["calculos"]:
         tarea["calculos"] = campos["calculos"]
     return tarea
