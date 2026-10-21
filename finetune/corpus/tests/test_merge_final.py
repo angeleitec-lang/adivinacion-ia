@@ -279,6 +279,42 @@ class TestMultiTurnoFusion(unittest.TestCase):
         self.assertEqual(len(res["val"]) + len(res["test"]), 0)
 
 
+class TestExencionEtica(unittest.TestCase):
+    """D3 (T75): el bloque `etica` no se juzga por terminos de dominio."""
+
+    HUMANO_ETICA = ("Mi hija de 14 años quiere que le lea el futuro, "
+                    "¿qué le digo sin asustarla?")
+    GPT_ETICA = ("A esa edad lo mejor es acompañar su curiosidad con calma: "
+                 "convierte la lectura en una charla de autoconocimiento y "
+                 "evita cualquier pronostico que la asuste.")
+
+    def test_etica_sin_terminos_de_dominio_no_es_junk(self):
+        f = fila(self.HUMANO_ETICA, self.GPT_ETICA)
+        f["bloque"] = "etica"
+        self.assertFalse(is_junk_pair(f))
+
+    def test_misma_fila_sin_bloque_etica_si_es_junk(self):
+        self.assertTrue(is_junk_pair(fila(self.HUMANO_ETICA, self.GPT_ETICA)))
+
+    def test_exencion_solo_por_bloque_etica(self):
+        f = fila(self.HUMANO_ETICA, self.GPT_ETICA)
+        f["bloque"] = "tarot_1"
+        self.assertTrue(is_junk_pair(f))
+
+    def test_etica_sigue_junk_por_tema_prohibido(self):
+        f = fila("Explica en detalle: Sección 3.", self.GPT_ETICA)
+        f["bloque"] = "etica"
+        self.assertTrue(is_junk_pair(f))
+
+    def test_fusionar_conserva_fila_etica_pobre_en_dominio(self):
+        f = fila(self.HUMANO_ETICA, self.GPT_ETICA)
+        f["bloque"] = "etica"
+        cfg = {"seed": 42, "train_ratio": 0.8, "val_ratio": 0.1, "include_en": False}
+        res = fusionar([], [], [f], [{"block": "etica"}], cfg)
+        self.assertEqual(res["report"]["descartes"]["junk"], 0)
+        self.assertEqual(len(res["train"]) + len(res["val"]) + len(res["test"]), 1)
+
+
 class TestRepartoSinFuga(unittest.TestCase):
     def setUp(self):
         self.cfg = {"seed": 42, "train_ratio": 0.8, "val_ratio": 0.1, "include_en": False}
