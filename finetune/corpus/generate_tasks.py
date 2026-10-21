@@ -509,6 +509,88 @@ CASOS_ETICA = [
     ("cobros", "No tengo para comer, pero quiero una lectura urgente: ¿me la haces gratis y me dices si cobraré el paro?"),
 ]
 
+# Familias nuevas (T107): preguntas de entrenamiento distintas de las de evaluación.
+PREGUNTAS_TRANSITOS = [
+    "¿Qué me traen los tránsitos para mi {foco}?",
+    "¿Cómo afectan los tránsitos de estos días a mi {foco}?",
+    "¿Qué clima traen los tránsitos sobre mi {foco}?",
+    "¿Cómo vivo los tránsitos actuales en mi {foco}?",
+    "¿Qué me piden los tránsitos de hoy en mi {foco}?",
+]
+
+PREGUNTAS_RS = [
+    "¿Qué me depara la revolución solar del año que viene?",
+    "¿Qué marca mi revolución solar en el año que empieza?",
+    "¿Cómo arranca mi año según la revolución solar?",
+    "¿Qué tono me da la revolución solar de este año?",
+    "¿Qué puedo esperar de mi revolución solar?",
+]
+
+PREGUNTAS_BIORRITMOS = [
+    "¿Cómo me afectan mis biorritmos estos días?",
+    "¿Cómo estoy de energía según mis biorritmos hoy?",
+    "¿Qué dicen mis biorritmos de mi estado actual?",
+    "¿Cómo vienen mis ciclos físico, emocional e intelectual?",
+    "¿Cómo me organizo según mis biorritmos de hoy?",
+]
+
+ARRANQUES_FUERA = [
+    "A ver,",
+    "Mira,",
+    "Verás,",
+    "Una consulta rápida:",
+    "No sé si podrás, pero",
+    "Me han dicho que sabes de esto:",
+    "Tengo curiosidad:",
+    "Dime si puedes,",
+    "Alguien me recomendó preguntarte:",
+    "Vengo a preguntarte:",
+]
+
+# (técnica excluida, pregunta base) — distintas de los 20 pares de evaluación.
+FUERA_ALCANCE_ENTRENAMIENTO = [
+    ("quiromancia", "¿Me lees la línea de la mano para saber cuánto viviré?"),
+    ("quiromancia", "¿Qué dice el monte de Venus en mi palma sobre mi amor?"),
+    ("runas", "¿Me tiras las runas nórdicas para ver mi destino de guerra?"),
+    ("runas", "¿Qué runa me protege en el trabajo, según los vikingos?"),
+    ("iching", "¿Me consultás el I Ching para decidir si cambio de casa?"),
+    ("iching", "¿Qué hexagrama rige mi año según el oráculo chino?"),
+    ("lenormand", "¿Me sacás una tirada Lenormand para ver si vuelvo con mi ex?"),
+    ("lenormand", "¿Qué me dice la carta del anillo en mi tirada Lenormand?"),
+    ("jyotish", "¿Me hacés una lectura védica con los nakshatras de mi luna?"),
+    ("jyotish", "¿Qué dice mi dasha lunar sobre el matrimonio en la astrología hindú?"),
+    ("bazi", "¿Me calculás los cuatro pilares del destino con mi fecha de nacimiento china?"),
+    ("bazi", "¿Qué elemento soy en el BaZi y qué me espera este año?"),
+    ("pendulo", "¿Me respondés sí o no con el péndulo sobre un mapa?"),
+    ("pendulo", "¿El péndulo dice si mi pareja me es fiel?"),
+    ("bola de cristal", "¿Qué ves en tu bola de cristal sobre mi futuro?"),
+    ("bola de cristal", "¿Me mostrás mi próxima reencarnación en la bola?"),
+    ("posos de cafe", "¿Me leés los posos del café para ver qué me pasa?"),
+    ("posos de cafe", "¿Qué figura ves en la taza y qué augura?"),
+    ("hojas de te", "¿Me leés las hojas de té para saber si me caso?"),
+    ("oraculo de dados", "¿Tirás los dados del oráculo para darme un mensaje?"),
+    ("aura", "¿Me describís el color de mi aura y qué significa?"),
+    ("aura", "¿Qué dice mi aura sobre mi salud energética?"),
+    ("mediumnidad", "¿Podés contactar con mi abuelo fallecido para que me hable?"),
+    ("mediumnidad", "¿Me pasás el mensaje de mis guías espirituales?"),
+    ("feng shui", "¿Me ordenás la casa según el feng shui para atraer abundancia?"),
+    ("feng shui", "¿Dónde pongo el espejo según el bagua para mejorar mi matrimonio?"),
+    ("horoscopo chino", "¿Soy dragón de madera? ¿Qué me toca este año?"),
+    ("horoscopo chino", "¿Me hacés el zodiaco chino completo con hora de nacimiento?"),
+    ("calendario maya", "¿Cuál es mi sello del destino en el calendario maya?"),
+    ("calendario maya", "¿Qué dice mi tono galáctico sobre mi misión de vida?"),
+    ("magia blanca", "¿Me hacés un amarre de magia blanca para que no me olvide?"),
+    ("magia blanca", "¿Me limpiás con hierbas las malas energías que me roban el dinero?"),
+    ("cristales", "¿Qué cristal me recomendás para atraer el amor verdadero?"),
+    ("cristales", "¿Me cargás los cristales para la prosperidad?"),
+    ("chakras", "¿Qué chakra tengo bloqueado y cómo me arruina la vida?"),
+    ("chakras", "¿Me alineás los chakras a distancia para sanar mi ansiedad?"),
+    ("vidas pasadas", "¿Quién fui en mi vida anterior y por qué estoy aquí?"),
+    ("vidas pasadas", "¿Tengo una deuda kármica de otra vida con mi pareja?"),
+    ("telepatia animal", "¿Podés preguntarle a mi gato qué piensa de mí?"),
+    ("oraculo de angeles", "¿Qué me dicen los ángeles sobre mi hijo enfermo?"),
+]
+
 
 class Builder:
     def __init__(self, rng, kb_tarot, kb_astro, kb_num, kb_baraja=None):
@@ -826,12 +908,92 @@ class Builder:
     def espanola_7(self, n=200):
         return [self._job_baraja("espanola_7", 7) for _ in range(n)]
 
+    def _pares_fuera(self):
+        """Recorre todos los pares (técnica, pregunta, arranque) barajados sin repetir."""
+        pares = [(tp, a) for tp in FUERA_ALCANCE_ENTRENAMIENTO for a in ARRANQUES_FUERA]
+        while True:
+            self.rng.shuffle(pares)
+            yield from pares
+
+    def transitos(self, n=400):
+        out = []
+        for _ in range(n):
+            fecha, hora, ciudad, pais, lat, lon, tz = self.nacimiento()
+            carta = calcular_carta(fecha, hora, lat, lon, tz)
+            trans, _rs = datos_proyeccion(fecha, hora, lat, lon, tz)
+            foco = self.rng.choice(FOCOS_ASTRO)
+            pregunta = self.rng.choice(PREGUNTAS_TRANSITOS).format(foco=foco)
+            tarea = {
+                "familia": "transitos", "foco": foco, "ciudad": ciudad, "pais": pais,
+                "pregunta": pregunta,
+                "calculos": {"carta_natal": carta, "transitos": trans},
+            }
+            prompt = fp.construir_prompt(tarea, self.kb_fp())["user"]
+            payload = {"carta": carta, "transitos": trans, "foco": foco,
+                       "ciudad": ciudad, "pais": pais}
+            out.append(self.job("transitos", prompt, payload,
+                               fp.RECOMENDACION_MAX_TOKENS["transitos"]))
+        return out
+
+    def revolucion_solar(self, n=400):
+        out = []
+        for _ in range(n):
+            fecha, hora, ciudad, pais, lat, lon, tz = self.nacimiento()
+            carta = calcular_carta(fecha, hora, lat, lon, tz)
+            _trans, rs = datos_proyeccion(fecha, hora, lat, lon, tz)
+            pregunta = self.rng.choice(PREGUNTAS_RS)
+            tarea = {
+                "familia": "revolucion_solar", "ciudad": ciudad, "pais": pais,
+                "pregunta": pregunta,
+                "calculos": {"carta_natal": carta, "revolucion_solar": rs},
+            }
+            prompt = fp.construir_prompt(tarea, self.kb_fp())["user"]
+            payload = {"carta": carta, "revolucion_solar": rs,
+                       "ciudad": ciudad, "pais": pais}
+            out.append(self.job("revolucion_solar", prompt, payload,
+                               fp.RECOMENDACION_MAX_TOKENS["revolucion_solar"]))
+        return out
+
+    def biorritmos(self, n=400):
+        from calculos import biorritmos as calc_bio
+        out = []
+        for _ in range(n):
+            fecha, hora, _ciudad, _pais, _lat, _lon, _tz = self.nacimiento()
+            datos = calc_bio.biorritmos(fecha, FECHA_CONSULTA)
+            pregunta = self.rng.choice(PREGUNTAS_BIORRITMOS)
+            tarea = {
+                "familia": "biorritmos", "fecha_nacimiento": fecha, "hora": hora,
+                "pregunta": pregunta,
+                "calculos": {"biorritmos": datos},
+            }
+            prompt = fp.construir_prompt(tarea, self.kb_fp())["user"]
+            payload = {"fecha_nacimiento": fecha, "hora": hora, "biorritmos": datos}
+            out.append(self.job("biorritmos", prompt, payload,
+                               fp.RECOMENDACION_MAX_TOKENS["biorritmos"]))
+        return out
+
+    def fuera_alcance(self, n=400):
+        out = []
+        for (tecnica, pregunta_base), arranque in zip(self._pares_fuera(), range(n)):
+            pregunta = f"{arranque} {pregunta_base}"
+            tarea = {
+                "familia": "fuera_alcance", "tecnica": tecnica,
+                "pregunta": pregunta,
+                "calculos": {},
+            }
+            prompt = fp.construir_prompt(tarea, self.kb_fp())["user"]
+            payload = {"tecnica": tecnica}
+            out.append(self.job("fuera_alcance", prompt, payload,
+                               fp.RECOMENDACION_MAX_TOKENS["fuera_alcance"]))
+        return out
+
 
 TARGETS = {
     "tarot_1": 936, "tarot_2": 400, "tarot_3": 1400, "cruz_celta": 500,
     "tarot_pregunta": 800, "astro_natal": 1500, "sinastria": 600,
     "numerologia": 400, "lectura_completa": 3000, "multiturno": 800, "etica": 300,
     "espanola_1": 400, "espanola_3": 900, "espanola_5": 400, "espanola_7": 200,
+    "transitos": 400, "revolucion_solar": 400, "biorritmos": 400, "fuera_alcance": 400,
 }
 
 
@@ -852,6 +1014,10 @@ def build_all(builder, only=None, scale=1.0):
         "espanola_3": lambda: builder.espanola_3(TARGETS["espanola_3"]),
         "espanola_5": lambda: builder.espanola_5(TARGETS["espanola_5"]),
         "espanola_7": lambda: builder.espanola_7(TARGETS["espanola_7"]),
+        "transitos": lambda: builder.transitos(TARGETS["transitos"]),
+        "revolucion_solar": lambda: builder.revolucion_solar(TARGETS["revolucion_solar"]),
+        "biorritmos": lambda: builder.biorritmos(TARGETS["biorritmos"]),
+        "fuera_alcance": lambda: builder.fuera_alcance(TARGETS["fuera_alcance"]),
     }
     filas = []
     for nombre, fn in metodos.items():

@@ -226,6 +226,28 @@ def tarea_desde_job(bloque, payload, pregunta, kb):
         }
     elif bloque == "etica":
         tarea["calculos"] = {}
+    elif bloque == "transitos":
+        tarea["foco"] = payload.get("foco", "")
+        tarea["ciudad"] = payload.get("ciudad", "")
+        tarea["pais"] = payload.get("pais", "")
+        tarea["calculos"] = {
+            "carta_natal": payload.get("carta") or {},
+            "transitos": payload.get("transitos") or {},
+        }
+    elif bloque == "revolucion_solar":
+        tarea["ciudad"] = payload.get("ciudad", "")
+        tarea["pais"] = payload.get("pais", "")
+        tarea["calculos"] = {
+            "carta_natal": payload.get("carta") or {},
+            "revolucion_solar": payload.get("revolucion_solar") or {},
+        }
+    elif bloque == "biorritmos":
+        tarea["fecha_nacimiento"] = _campo_payload(payload, "fecha_nacimiento", bloque)
+        tarea["hora"] = payload.get("hora", "")
+        tarea["calculos"] = {"biorritmos": payload.get("biorritmos") or {}}
+    elif bloque == "fuera_alcance":
+        tarea["tecnica"] = payload.get("tecnica", "")
+        tarea["calculos"] = {}
     else:
         raise ValueError(f"bloque desconocido: {bloque}")
     if "universo_cartas" not in tarea:
@@ -976,6 +998,65 @@ def _sim_lectura_completa(usuario):
     return "\n\n".join(secciones)
 
 
+def _sim_transitos(usuario):
+    triples = re.findall(
+        r"- (\w+) en tránsito hace (\w+) a su (\w+) natal", usuario or "")
+    frases = []
+    if triples:
+        eco = "; ".join(
+            f"{t} en tránsito hace {a} a su {n} natal" for t, a, n in triples[:4])
+        frases.append(f"Los tránsitos del día marcan el clima actual: {eco}.")
+    ejes = _sim_ejes(usuario)
+    if ejes:
+        frases.append(
+            "En tu carta natal, " + ", ".join(ejes) + " reciben ese clima.")
+    frases.append(_SIM_SINTESIS_CIERRE)
+    return " ".join(frases)
+
+
+def _sim_revolucion(usuario):
+    sol = re.search(r"Sol RS en (\w+)", usuario or "")
+    asc = re.search(r"Ascendente RS (\w+)", usuario or "")
+    frases = []
+    if sol:
+        frases.append(
+            f"En tu revolución solar, el Sol RS en {sol.group(1)} da el tono "
+            "del año que empieza.")
+    if asc:
+        frases.append(
+            f"El Ascendente RS {asc.group(1)} pinta el escenario en el que te mueves.")
+    ejes = _sim_ejes(usuario)
+    if ejes:
+        frases.append(
+            "Todo ello cae sobre tu carta natal, donde " + ", ".join(ejes)
+            + " marcan el fondo.")
+    frases.append(_SIM_SINTESIS_CIERRE)
+    return " ".join(frases)
+
+
+def _sim_biorritmos(usuario):
+    ciclos = re.findall(
+        r"- (F[íi]sico|Emocional|Intelectual): (\d+)% \(([^)]+)\)", usuario or "")
+    frases = []
+    if ciclos:
+        eco = "; ".join(f"{n} al {p}% ({f})" for n, p, f in ciclos)
+        frases.append(f"Tus ciclos hoy: {eco}.")
+    frases.append(
+        "Con esta foto de tus biorritmos, coloca las tareas que exijan más "
+        "energía cuando el ciclo correspondente te acompañe.")
+    frases.append(_SIM_SINTESIS_CIERRE)
+    return " ".join(frases)
+
+
+def _sim_fuera_alcance(usuario):
+    return (
+        "Esa técnica no forma parte de mi alcance, así que no voy a inventar "
+        "datos sobre ella. Sí puedo acompañarte con tarot, baraja española, "
+        "astrología o numerología: si te apetece, pregúntame por una de esas "
+        "técnicas y lo miramos con calma. " + _SIM_SINTESIS_CIERRE
+    )
+
+
 def simulacion_fase1(sistema, usuario):
     if "cuatro secciones" in (usuario or ""):
         return _sim_lectura_completa(usuario)
@@ -983,6 +1064,14 @@ def simulacion_fase1(sistema, usuario):
         cabeceras = _sim_esquema_cabeceras(usuario)
         if cabeceras:
             return _sim_tirada_esquema(cabeceras)
+    if "Lectura de tránsitos" in (usuario or ""):
+        return _sim_transitos(usuario)
+    if "Lectura de revolución solar" in (usuario or ""):
+        return _sim_revolucion(usuario)
+    if "Lectura de biorritmos" in (usuario or ""):
+        return _sim_biorritmos(usuario)
+    if "fuera de alcance" in (usuario or ""):
+        return _sim_fuera_alcance(usuario)
     cartas = _sim_cartas(usuario)
     frases = []
     if cartas:

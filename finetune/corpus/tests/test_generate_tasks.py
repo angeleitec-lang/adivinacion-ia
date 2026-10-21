@@ -61,6 +61,7 @@ class TestOrtografia(unittest.TestCase):
             b.tarot_pregunta(5), b.astro_natal(5), b.sinastria(3),
             b.numerologia(5), b.lectura_completa(3), b.multiturno(5), b.etica(20),
             b.espanola_1(5), b.espanola_3(5), b.espanola_5(2), b.espanola_7(2),
+            b.transitos(5), b.revolucion_solar(5), b.biorritmos(5), b.fuera_alcance(5),
         ]
         for lote in lotes:
             for _bloque, system, prompt, _payload, _mt in lote:
@@ -280,7 +281,7 @@ class TestMultiturno(unittest.TestCase):
 
     def test_targets_multiturno(self):
         self.assertEqual(gt.TARGETS["multiturno"], 800)
-        self.assertEqual(sum(gt.TARGETS.values()), 12536)
+        self.assertEqual(sum(gt.TARGETS.values()), 14136)
 
     def test_targets_baraja_espanola(self):
         self.assertEqual(gt.TARGETS["espanola_1"], 400)
