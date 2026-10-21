@@ -1,0 +1,219 @@
+"""Auditoría ronda 4 (T63): casos adversos sobre la tubería de fase 0/1.
+
+Los defectos confirmados por ejecución se documentan como expectedFailure
+(el test afirma el comportamiento CORRECTO, que aún no ocurre); los
+comportamientos verificados como sanos se afirman directamente.
+Nada de esto toca red ni LLM. Ver docs/AUDITORIA_RONDA4.md.
+"""
+import json
+import os
+import shutil
+import sys
+import tempfile
+import unittest
+import unicodedata
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+import cartas
+import clasicos_pd_a_evidencias
+import cobertura
+import diagnostico_tarot_libros
+import juez
+import limpiar_evidencias_libros
+import salud_datos
+
+
+class TestEvaluarNumerologia(unittest.TestCase):
+    """evaluar_modelo: mínima de 3 etiquetas numerales."""
+
+    @unittest.expectedFailure
+    def test_doble_cuenta_ano_personal(self):
+        import evaluar_modelo
+        fallos = []
+        evaluar_modelo._check_numerologia(
+            {"calculos": {}},
+            "El camino de vida revela cosas y el año personal también.",
+            fallos)
+        menos = [f for f in fallos if f["motivo"].startswith("Menciona menos")]
+        self.assertEqual(len(menos), 1,
+                         "solo hay 2 etiquetas reales: debe exigir 3")
+
+    def test_una_sola_etiqueta_si_falla(self):
+        import evaluar_modelo
+        fallos = []
+        evaluar_modelo._check_numerologia(
+            {"calculos": {}}, "Solo el año personal importa.", fallos)
+        menos = [f for f in fallos if f["motivo"].startswith("Menciona menos")]
+        self.assertEqual(len(menos), 1)
+
+
+class TestLimpiarEvidenciasTitulosES(unittest.TestCase):
+    """limpiar_evidencias_libros: propuesta_filtro solo funciona con EN."""
+
+    def _filtro(self, titulo):
+        seccion = {"id_libro": "l1", "seccion": 1, "titulo": titulo,
+                   "texto": "x" * 60}
+        evidencia = {"entidad_id": "tarot-mayor-18",
+                     "hash_seccion": juez.hash_seccion(seccion),
+                     "faceta": "significado_general"}
+        return limpiar_evidencias_libros.propuesta_filtro(
+            [evidencia], [seccion])
+
+    def test_titulo_ingles_si_quita(self):
+        resultado = self._filtro("Death")
+        self.assertEqual(resultado["n_quitadas"], 1)
+
+    @unittest.expectedFailure
+    def test_titulo_espanol_debe_quitar(self):
+        resultado = self._filtro("La Muerte")
+        self.assertEqual(
+            resultado["n_quitadas"], 1,
+            "DEFECTO A4: clasificar_titulo y _nombra_propio solo conocen "
+            "tokens en inglés; con corpus español el filtro es inoperante")
+
+    def test_clasificar_titulo_es_neutro(self):
+        self.assertEqual(
+            diagnostico_tarot_libros.clasificar_titulo("La Muerte", "moon"),
+            "neutro")
+
+
+class TestJuezValidadores(unittest.TestCase):
+    """juez.parsear_respuesta: validación blanda de `calidad`."""
+
+    def setUp(self):
+        self.familia = "tarot"
+        self.faceta = cobertura.FACETAS_POR_FAMILIA[self.familia][0]
+        self.crudo = {"entidad_id": "tarot-mayor-18", "faceta": self.faceta,
+                      "familia": self.familia,
+                      "texto": "brilla la luna plateada en la carta"}
+
+    def _responder(self, calidad):
+        texto = json.dumps({
+            "tipo": "conocimiento",
+            "entidades": [{"entidad_id": self.crudo["entidad_id"],
+                           "limpias": [{"faceta": self.faceta,
+                                        "texto_paraphrase":
+                                            "resplandece la luna"}]}],
+            "calidad": calidad})
+        return juez.parsear_respuesta(texto, [self.crudo])
+
+    def _calidad(self, salida):
+        juicio = salida["juicio"] if isinstance(salida, dict) and "juicio" in salida else salida
+        return juicio["calidad"]
+
+    @unittest.expectedFailure
+    def test_calidad_cadena_debe_rechazarse(self):
+        self.assertRaises(ValueError, self._responder, "4")
+
+    @unittest.expectedFailure
+    def test_calidad_flotante_debe_rechazarse(self):
+        self.assertRaises(ValueError, self._responder, 3.7)
+
+    def test_calidad_actualmente_trunca_y_acepta(self):
+        self.assertEqual(self._calidad(self._responder(3.7)), 3)
+        self.assertEqual(self._calidad(self._responder("4")), 4)
+
+    def test_fuera_de_rango_si_rechaza(self):
+        self.assertRaises(ValueError, self._responder, 7)
+
+
+class TestCartas(unittest.TestCase):
+    """cartas: normalización unicode y filtrado contextual de ambiguos."""
+
+    def test_norm_iguala_nfc_y_nfd(self):
+        nfc = unicodedata.normalize("NFC", "El Niño de La Muerte")
+        nfd = unicodedata.normalize("NFD", "El Niño de La Muerte")
+        self.assertEqual(cartas.norm(nfc), cartas.norm(nfd))
+
+    def test_prosa_sin_contexto_no_extrae(self):
+        prosa = ("En el mundo todo cambia; la fuerza de la naturaleza gana, "
+                 "y la muerte llega para todos bajo el sol.")
+        self.assertEqual(cartas.extraer_cartas(prosa, mazo="tarot"), [])
+
+    def test_prosa_sin_contextual_saca_todo(self):
+        prosa = ("En el mundo todo cambia; la fuerza de la naturaleza gana, "
+                 "y la muerte llega para todos bajo el sol.")
+        menciones = cartas.extraer_cartas(prosa, mazo="tarot",
+                                          contextual=False)
+        self.assertGreaterEqual(len(menciones), 4)
+
+    def test_orientacion_hace_aceptable(self):
+        menciones = cartas.extraer_cartas("La Muerte invertida",
+                                          mazo="tarot")
+        self.assertEqual(len(menciones), 1)
+        self.assertEqual(menciones[0]["carta"]["id"], "tarot-mayor-14")
+        self.assertEqual(menciones[0]["orientacion"], "invertida")
+
+
+class TestPurgarErroresJuez(unittest.TestCase):
+    """clasicos_pd: purgar_errores_juez reescribe sin copia de seguridad."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir)
+        ev_dir = os.path.join(self.dir, "evidencias")
+        os.makedirs(ev_dir)
+        bueno = {"hash": "h1", "fuente_id": "f1", "titulo": "t",
+                 "candidatos": [], "juicio": {"tipo": "conocimiento"}}
+        malo = {"hash": "h2", "fuente_id": "f1", "titulo": "t",
+                "candidatos": [], "juicio": {"tipo": "error"}}
+        with open(os.path.join(ev_dir, "juicios.jsonl"), "w",
+                  encoding="utf-8") as fh:
+            for registro in (bueno, malo):
+                fh.write(json.dumps(registro) + "\n")
+
+    def test_quita_error_deja_bueno(self):
+        quitados = clasicos_pd_a_evidencias.purgar_errores_juez(self.dir)
+        self.assertEqual(quitados, 1)
+        with open(os.path.join(self.dir, "evidencias", "juicios.jsonl"),
+                  encoding="utf-8") as fh:
+            lineas = [l for l in fh if l.strip()]
+        self.assertEqual(len(lineas), 1)
+
+    @unittest.expectedFailure
+    def test_deberia_dejar_copia_previa(self):
+        clasicos_pd_a_evidencias.purgar_errores_juez(self.dir)
+        respaldo = [n for n in os.listdir(self.dir) +
+                    os.listdir(os.path.join(self.dir, "evidencias"))
+                    if ".bak" in n]
+        self.assertTrue(
+            respaldo,
+            "DEFECTO A5: reescribe juicios.jsonl con open('w') sin copia; "
+            "un fallo a mitad destruye todos los juicios")
+
+
+class TestSaludDatosExclusiones(unittest.TestCase):
+    """salud_datos: el patrón de exclusión .bak es demasiado amplio."""
+
+    def test_excluye_residuos_reales(self):
+        self.assertTrue(salud_datos._es_excluido("evidencias.jsonl.bak-1"))
+        self.assertTrue(salud_datos._es_excluido("x.truncada-20261001"))
+
+    @unittest.expectedFailure
+    def test_no_deberia_excluir_nombres_con_bak(self):
+        self.assertFalse(
+            salud_datos._es_excluido("naipes.bakery-ventas.jsonl"),
+            "DEFECTO B6: cualquier nombre que contenga '.bak' se oculta al "
+            "descubrimiento, aunque no sea una copia de seguridad")
+
+    def test_repara_tras_copia(self):
+        dir_ = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, dir_)
+        ruta = os.path.join(dir_, "afirmaciones.jsonl")
+        with open(ruta, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"entidad_id": "e", "faceta": "f",
+                                 "fuente_id": "s", "dominio": "d",
+                                 "periodo": "p", "calidad": 4,
+                                 "afirmacion": "a"}) + "\n")
+            fh.write('{"entidad_id": "e", "faceta": "f", "fuente')
+        acciones = salud_datos.reparar_ficheros([ruta], si=True,
+                                                intervalo=0,
+                                                comprobar_lsof=False)
+        self.assertEqual(acciones[0]["estado"], "reparado")
+        with open(ruta, encoding="utf-8") as fh:
+            self.assertEqual(len([l for l in fh if l.strip()]), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
