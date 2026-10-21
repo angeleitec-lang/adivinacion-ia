@@ -199,8 +199,13 @@ class LLMClient:
             + int(uso.get("completion_tokens") or 0))
 
     def _chat_real(self, sistema: str, usuario: str, max_tokens: int,
-                   temperature: float) -> str:
-        """Ejecuta una petición real al endpoint."""
+                   temperature: float,
+                   max_completion_tokens: Optional[int] = None) -> str:
+        """Ejecuta una petición real al endpoint.
+
+        `max_completion_tokens` permite fijar el presupuesto por petición
+        (p. ej. una familia de fase 1); si es None se usa el del cliente.
+        """
         idx = self._idx % len(self.endpoints)
         endpoint = self._siguiente_endpoint()
         spec = self._specs[idx]
@@ -214,8 +219,10 @@ class LLMClient:
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
-        if self.max_completion_tokens:
-            payload["max_completion_tokens"] = self.max_completion_tokens
+        tope = (max_completion_tokens if max_completion_tokens is not None
+                else self.max_completion_tokens)
+        if tope:
+            payload["max_completion_tokens"] = int(tope)
         if self.reasoning_effort:
             payload["reasoning_effort"] = self.reasoning_effort
         headers = self._headers_de_endpoint(spec)
@@ -244,6 +251,7 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         temperature: float = 0.2,
         max_reintentos: int = 3,
+        max_completion_tokens: Optional[int] = None,
     ) -> str:
         """Envía una petición de chat con reintentos y backoff exponencial.
 
@@ -256,6 +264,8 @@ class LLMClient:
             max_tokens: Tokens máximos de respuesta
             temperature: Temperatura de muestreo
             max_reintentos: Número máximo de reintentos ante fallo
+            max_completion_tokens: Cota de tokens de la completion para esta
+                petición; None usa la del cliente (compatibilidad total).
 
         Returns:
             Texto de la respuesta
@@ -272,7 +282,9 @@ class LLMClient:
         ultima_exc = None
         for intento in range(max_reintentos + 1):
             try:
-                return self._chat_real(sistema, usuario, max_tokens, temperature)
+                return self._chat_real(
+                    sistema, usuario, max_tokens, temperature,
+                    max_completion_tokens=max_completion_tokens)
             except RateLimitError as e:
                 ultima_exc = e
                 if intento < max_reintentos:
