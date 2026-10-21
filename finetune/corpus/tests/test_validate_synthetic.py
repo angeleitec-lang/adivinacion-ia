@@ -138,15 +138,19 @@ class TestGrounding(unittest.TestCase):
         respuesta = "Torre invertida: toca soltar lo que se sostiene con grietas."
         self.assertTrue(vs.grounding(prompt, respuesta))
 
-    def test_numerologia_dos_tercios(self):
+    def test_numerologia_anclaje_al_menos_un_numero(self):
+        # T109: basta con anclar en un número de la tarea; sin ninguno, se rechaza.
         respuesta = "El 7 marca tu camino de vida y el 3 tu alma creativa."
         self.assertTrue(vs.grounding(NUMEROLOGIA, respuesta))
-        self.assertFalse(vs.grounding(NUMEROLOGIA, "Solo el 7 rige tu sendero vital."))
+        self.assertTrue(vs.grounding(NUMEROLOGIA, "Solo el 7 rige tu sendero vital."))
+        self.assertFalse(vs.grounding(NUMEROLOGIA, "Solo el 9 rige tu sendero vital."))
 
-    def test_astrologia_dos_tercios(self):
+    def test_astrologia_anclaje_al_menos_un_signo(self):
+        # T109: una lectura apoyada solo en el Sol es válida si el Sol es de la tarea.
         respuesta = "Aries impulsa tu Sol y Cáncer moja tus emociones de Virgo ascendente."
         self.assertTrue(vs.grounding(ASTRO, respuesta))
-        self.assertFalse(vs.grounding(ASTRO, "Aries marca el ritmo de esta consulta."))
+        self.assertTrue(vs.grounding(ASTRO, "Aries marca el ritmo de esta consulta."))
+        self.assertFalse(vs.grounding(ASTRO, "Libra marca el ritmo de esta consulta."))
 
 
 class TestOrientacion(unittest.TestCase):
@@ -628,6 +632,81 @@ class TestBloqueDeFila(unittest.TestCase):
             self.assertEqual(rc, 0)
             report = json.loads((d / "report.json").read_text(encoding="utf-8"))
             self.assertEqual(set(report["per_block"].keys()), {"etica", "tarot_1"})
+
+
+class TestRegresionT109(unittest.TestCase):
+    """T109: las 1807 pérdidas por sin_datos_del_prompt eran falsos positivos."""
+
+    def test_cabeceras_markdown_no_son_cartas_inventadas_astro(self):
+        calc = {"carta_natal": {"planetas": {"Sol": {"signo": "Capricornio"},
+                                            "Luna": {"signo": "Cáncer"}},
+                               "ascendente": {"signo": "Escorpio"}}}
+        ans = ("## El Deseo\nTu Sol en Capricornio ordena los afectos.\n"
+              "## El Amor\nLa Luna en Cáncer te vuelve hogareño.\n"
+              "## El Año\nEscorpio da intensidad.")
+        self.assertTrue(vs.grounding(PROMPT_ASTRO, ans, calculos=calc, bloque="astro_natal"))
+
+    def test_cabeceras_con_bloque_none_siguen_escaneandose(self):
+        calc = {"carta_natal": {"planetas": {"Sol": {"signo": "Capricornio"}}}}
+        ans = "## El Deseo\nTu Sol en Capricornio ordena los afectos hoy."
+        self.assertFalse(vs.grounding(PROMPT_ASTRO, ans, calculos=calc))
+
+    def test_astro_natal_real_14820_recuperada(self):
+        calc = {"carta_natal": {"planetas": {"Sol": {"signo": "Capricornio"},
+                                            "Luna": {"signo": "Cáncer"},
+                                            "Mercurio": {"signo": "Acuario"}},
+                               "ascendente": {"signo": "Libra"}}}
+        ans = ("Lectura de carta natal. Posiciones: Sol: Capricornio 18°40' (casa 9), "
+              "Luna: Cáncer 14°58' (casa 3). El Deseo arde bajo tu cruz.")
+        self.assertTrue(vs.grounding(PROMPT_ASTRO, ans, calculos=calc, bloque="astro_natal"))
+
+    def test_adversario_sol_en_otro_signo_rechazado(self):
+        calc = CALCULOS_ASTRO
+        ans = "Aunque dices Capricornio, tu Sol en Aries te vuelve impulsivo hoy."
+        self.assertFalse(vs.grounding(PROMPT_ASTRO, ans, calculos=calc, bloque="astro_natal"))
+
+    def test_adversario_camino_de_vida_otro_numero_rechazado(self):
+        calc = {"numerologia": {"camino_de_vida": 7, "expresion": 3, "alma": 5}}
+        prompt = "Lectura numerológica con tus números calculados."
+        ans = "El 7 te acompaña siempre, pero tu camino de vida 3 pide prudencia."
+        self.assertFalse(vs.grounding(prompt, ans, calculos=calc, bloque="numerologia"))
+
+    def test_lineas_de_posicion_extraen_cartas(self):
+        prompt = ("Tirada de la Cruz Celta (diez cartas).\n"
+                 "situación: Cuatro de Bastos (invertida)\n"
+                 "obstáculo: Cuatro de Copas (al derecho)\n"
+                 "raíz: Cinco de Oros (al derecho)\n")
+        cartas = vs.extraer_cartas(prompt)
+        nombres = {vs.norm(n) for n, _ in cartas}
+        self.assertIn("cuatro de bastos", nombres)
+        self.assertIn("cuatro de copas", nombres)
+        self.assertIn("cinco de oros", nombres)
+
+    def test_cruz_celta_real_13559_recuperada(self):
+        prompt = ("Tirada de la Cruz Celta (diez cartas).\n"
+                 "situación: Cuatro de Bastos (invertida)\n"
+                 "obstáculo: Cuatro de Copas (al derecho)\n"
+                 "raíz: Cinco de Oros (al derecho)\n")
+        ans = ("El Cuatro de Bastos invertido muestra inestabilidad; el Cuatro de Copas "
+               "al derecho habla de apatía y el Cinco de Oros de miedos materiales.")
+        self.assertTrue(vs.grounding(prompt, ans, bloque="cruz_celta"))
+
+    def test_adversaria_lectura_de_otra_carta_rechazada(self):
+        prompt = "Tirada de una carta de tarot. Carta: El Sol (al derecho). Contexto: trabajo."
+        ans = ("La Luna aparece luminosa en tu tirada y anuncia cambios en el trabajo "
+              "con paciencia y claridad interior para ti hoy.")
+        self.assertFalse(vs.grounding(prompt, ans, bloque="tarot_1"))
+
+    def test_signos_sin_basura_de_dentro_de_palabras(self):
+        prompt = "Con un corazón solitario, el Sol en Leo pide calor y el Año personal 2026 llega."
+        signos = [m.group(1).lower() for m in vs.SIGN_RE.finditer(prompt)]
+        self.assertEqual(signos, ["leo"])
+        self.assertEqual(vs.NUM_RE.findall(prompt), [])
+
+    def test_adversario_lectura_generica_sin_signos_rechazada(self):
+        prompt = "Tu Sol en Aries y tu Luna en Géminis piden acción."
+        ans = "Hoy toca descansar, observar y dejar que las cosas fluyan solas."
+        self.assertFalse(vs.grounding(prompt, ans, bloque="astro_natal"))
 
 
 if __name__ == "__main__":
