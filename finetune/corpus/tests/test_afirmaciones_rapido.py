@@ -318,5 +318,68 @@ class Estimacion(unittest.TestCase):
         self.assertEqual(est["tokens_estimados"], 2 * 1600)
 
 
+class CeldasConFuentesNuevas(unittest.TestCase):
+    def _reg(self, eid, faceta, fuente):
+        return {"entidad_id": eid, "faceta": faceta, "fuente_id": fuente,
+                "dominio": fuente}
+
+    def test_gana_fuente_nueva(self):
+        base = [self._reg("tarot-copas-02", "significado_general",
+                          "https://a.com")]
+        extra = [self._reg("tarot-copas-02", "significado_general",
+                           "https://b.com")]
+        res = ar.celdas_con_fuentes_nuevas(base, extra)
+        self.assertIn(("tarot-copas-02", "significado_general"), res)
+        self.assertEqual(res[("tarot-copas-02", "significado_general")]
+                         ["fuentes_base"], 1)
+        self.assertEqual(res[("tarot-copas-02", "significado_general")]
+                         ["fuentes_nuevas"], 1)
+
+    def test_misma_fuente_no_es_nueva(self):
+        base = [self._reg("tarot-copas-02", "significado_general",
+                          "https://a.com")]
+        extra = [self._reg("tarot-copas-02", "significado_general",
+                           "https://a.com")]
+        self.assertFalse(ar.celdas_con_fuentes_nuevas(base, extra))
+
+    def test_separa_por_celda(self):
+        base = [self._reg("tarot-copas-02", "significado_general",
+                          "https://a.com")]
+        extra = [
+            self._reg("tarot-copas-02", "significado_general",
+                      "https://b.com"),
+            self._reg("naipe-bastos-02", "significado_general",
+                      "https://c.com"),
+            self._reg("naipe-bastos-02", "significado_general",
+                      "https://c.com"),
+        ]
+        res = ar.celdas_con_fuentes_nuevas(base, extra)
+        self.assertEqual(len(res), 2)
+
+
+class EscribirExtraFiltrado(unittest.TestCase):
+    def _reg(self, eid, faceta, fuente):
+        return {"entidad_id": eid, "faceta": faceta, "fuente_id": fuente,
+                "dominio": fuente}
+
+    def test_escribe_solo_celdas_ganadoras(self):
+        with tempfile.TemporaryDirectory() as d:
+            ruta = os.path.join(d, "extra.jsonl")
+            extra = [
+                self._reg("tarot-copas-02", "significado_general",
+                          "https://b.com"),
+                self._reg("naipe-bastos-02", "significado_general",
+                          "https://c.com"),
+            ]
+            n = ar.escribir_extra_filtrado(
+                ruta, extra, {("tarot-copas-02", "significado_general")})
+            self.assertEqual(n, 1)
+            with open(ruta, encoding="utf-8") as fh:
+                lineas = [l for l in fh.read().splitlines() if l.strip()]
+            self.assertEqual(len(lineas), 1)
+            self.assertEqual(json.loads(lineas[0])["entidad_id"],
+                             "tarot-copas-02")
+
+
 if __name__ == "__main__":
     unittest.main()

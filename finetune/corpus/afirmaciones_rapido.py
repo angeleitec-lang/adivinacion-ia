@@ -423,7 +423,64 @@ def celdas_que_pasan_a_cinco(exitosos, cobertura_ruta, fuentes_base,
     return pasan
 
 
-def escribir_informe(ruta, stats, estimacion, pasan, abortado):
+def _fuente_afirmacion(reg):
+    """Clave de fuente de una afirmación (fuente_id o dominio), igual que el
+    consenso (`_clave_fuente`): la independencia se cuenta por fuente."""
+    return reg.get("fuente_id") or reg.get("dominio") or ""
+
+
+def fuentes_por_celda(afirmaciones):
+    """(entidad_id, faceta) -> set(fuente) a partir de afirmaciones."""
+    por_celda = {}
+    for r in afirmaciones:
+        k = (r.get("entidad_id"), r.get("faceta"))
+        f = _fuente_afirmacion(r)
+        if f:
+            por_celda.setdefault(k, set()).add(f)
+    return por_celda
+
+
+def celdas_con_fuentes_nuevas(base_afirmaciones, extra_afirmaciones):
+    """Celdas que ganan ≥1 fuente independiente nueva con los extras.
+
+    Compara las fuentes ya presentes en la base (consenso/afirmaciones ya
+    contadas) con las que aportan los extras; solo devuelve celdas donde los
+    extras introducen al menos una fuente nueva. Es el filtro propuesto en T94
+    para no rehacer las miles de celdas que solo duplican fuentes ya contadas.
+    """
+    base = fuentes_por_celda(base_afirmaciones)
+    extra_por_celda = {}
+    for r in extra_afirmaciones:
+        k = (r.get("entidad_id"), r.get("faceta"))
+        f = _fuente_afirmacion(r)
+        if f:
+            extra_por_celda.setdefault(k, set()).add(f)
+    resultado = {}
+    for k, fextra in sorted(extra_por_celda.items()):
+        fbase = base.get(k, set())
+        nuevas = fextra - fbase
+        if nuevas:
+            resultado[k] = {
+                "fuentes_base": len(fbase),
+                "fuentes_nuevas": len(nuevas),
+                "fuentes_nuevas_lista": sorted(nuevas),
+            }
+    return resultado
+
+
+def escribir_extra_filtrado(ruta, extra_afirmaciones, celdas_ganadoras):
+    """Escribe solo las afirmaciones extra de celdas que ganan fuentes nuevas."""
+    filtradas = [r for r in extra_afirmaciones
+                 if (r.get("entidad_id"), r.get("faceta")) in celdas_ganadoras]
+    with open(ruta, "w", encoding="utf-8") as fh:
+        for r in filtradas:
+            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    return len(filtradas)
+
+
+def escribir_informe(ruta, stats, estimacion, pasan, abortado,
+                     celdas_nuevas=None):
+    celdas_nuevas = celdas_nuevas or {}
     lineas = [
         "# Informe de afirmaciones del backend rápido (T69)",
         "",
@@ -484,6 +541,28 @@ def escribir_informe(ruta, stats, estimacion, pasan, abortado):
     lineas.append("")
     lineas.append("Total de celdas que pasan a ≥5 fuentes: %d" % len(pasan))
     lineas.append("")
+    if celdas_nuevas:
+        lineas += ["", "## Celdas que ganan ≥1 fuente independiente nueva "
+                       "(filtro propuesto en T94 para el consenso)", "",
+                   "| Entidad | Faceta | Familia | Fuentes base | Fuentes "
+                   "nuevas |", "|---|---|---|---|---|"]
+        for k, info in sorted(celdas_nuevas.items()):
+            familia = es.familia_de_entidad(k[0])
+            lineas.append("| %s | %s | %s | %d | %d |"
+                          % (k[0], k[1], familia, info["fuentes_base"],
+                             info["fuentes_nuevas"]))
+        lineas.append("")
+        lineas.append("Total de celdas que ganan fuentes nuevas: %d"
+                      % len(celdas_nuevas))
+        lineas.append("")
+        por_familia = collections.Counter()
+        for k, info in celdas_nuevas.items():
+            por_familia[es.familia_de_entidad(k[0])] += 1
+        lineas += ["Desglose por familia:", ""]
+        for familia, n in sorted(por_familia.items(),
+                                 key=lambda kv: -kv[1]):
+            lineas.append("- %s: %d celdas" % (familia, n))
+        lineas.append("")
     with open(ruta, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lineas))
 
@@ -521,6 +600,12 @@ def main(argv=None, cliente=None):
     parser.add_argument("--libros-secciones-dir",
                         default=DEFAULT_LIBROS_SECCIONES)
     parser.add_argument("--cobertura", default=DEFAULT_COBERTURA)
+    parser.add_argument("--base-web-afirmaciones",
+                        default="/Users/angelgonzalez/fase0/afirmaciones_full/"
+                                "afirmaciones.jsonl")
+    parser.add_argument("--base-libros-afirmaciones",
+                        default="/Users/angelgonzalez/fase0/afirmaciones_"
+                                "libros/afirmaciones_libros.jsonl")
     parser.add_argument("--out-root", default=DEFAULT_OUT_ROOT)
     parser.add_argument("--web-min-calidad", type=int,
                         default=DEFAULT_WEB_MIN_CALIDAD)
@@ -609,8 +694,32 @@ def main(argv=None, cliente=None):
     pasan = celdas_que_pasan_a_cinco(
         ejecutor.exitosos, args.cobertura, fuentes_base, celda_por_clave)
 
+    base_afirmaciones = []
+    for ruta in (args.base_web_afirmaciones,
+                 args.base_libros_afirmaciones):
+        if ruta and os.path.exists(ruta):
+            base_afirmaciones.extend(cargar_jsonl(ruta))
+    extra_afirmaciones = []
+    for rel in ("web/afirmaciones.jsonl",
+                "libros/afirmaciones_libros.jsonl"):
+        ruta = os.path.join(args.out_root, rel)
+        if os.path.exists(ruta):
+            extra_afirmaciones.extend(cargar_jsonl(ruta))
+    celdas_nuevas = celdas_con_fuentes_nuevas(
+        base_afirmaciones, extra_afirmaciones)
+
+    if celdas_nuevas:
+        ruta_filtro = os.path.join(args.out_root,
+                                    "afirmaciones_celdas_nuevas.jsonl")
+        n_filtradas = escribir_extra_filtrado(
+            ruta_filtro, extra_afirmaciones, set(celdas_nuevas))
+        print("[afirmaciones_rapido] Filtro de consenso: %d celdas que "
+              "ganan fuentes nuevas (%d afirmaciones extra filtradas) -> %s"
+              % (len(celdas_nuevas), n_filtradas, ruta_filtro), flush=True)
+
     ruta_informe = os.path.join(args.out_root, "informe.md")
-    escribir_informe(ruta_informe, stats, estimacion, pasan, abortado)
+    escribir_informe(ruta_informe, stats, estimacion, pasan, abortado,
+                     celdas_nuevas=celdas_nuevas)
     print("[afirmaciones_rapido] Informe escrito en %s" % ruta_informe,
           flush=True)
     return stats
