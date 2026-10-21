@@ -440,7 +440,7 @@ def _lado_discrepancia(miembros):
     rep = _representante(miembros)
     return {
         "afirmacion": rep.get("afirmacion"),
-        "fuentes": sorted({m.get("fuente_id") for m in miembros}),
+        "fuentes": sorted({_clave_fuente(m) for m in miembros} - {""}),
         "tradiciones": sorted({
             tradicion_de_fuente(m.get("fuente_id"), m.get("periodo"))
             for m in miembros
@@ -480,7 +480,7 @@ def construir_consensos(cliente, celdas, cache=None):
             miembros = [utiles[i] for i in g if i < len(utiles)]
             if not miembros:
                 continue
-            fuentes = {m.get("fuente_id") for m in miembros}
+            fuentes = {_clave_fuente(m) for m in miembros} - {""}
             rep = _representante(miembros)
             if len(fuentes) >= 2:
                 mayoritarias.append({
@@ -518,6 +518,7 @@ def construir_consensos(cliente, celdas, cache=None):
             "discrepancias": discrepancias,
             "unica_fuente": unica_fuente,
             "fallback": bool(agrup.get("fallback")),
+            "n_no_agrupadas": max(0, len(utiles) - MAX_POR_CELDA),
             "alertas_factuales": [
                 {
                     "afirmacion": a.get("afirmacion"),
@@ -579,6 +580,9 @@ def _cargar_celdas_procesadas(ruta):
                     continue
                 try:
                     reg = json.loads(linea)
+                    if reg.get("fallback"):
+                        # Las celdas fallback no son definitivas: se reintentan.
+                        continue
                     procesadas.add((reg["entidad_id"], reg["faceta"]))
                 except (json.JSONDecodeError, KeyError):
                     continue
@@ -752,6 +756,9 @@ def escribir_informe(ruta, stats):
     if stats.get("fallback_celdas"):
         lineas.append("- Celdas en caida segura (LLM invalido, sin agrupar): %d"
                       % stats["fallback_celdas"])
+    if stats.get("afirmaciones_no_agrupadas"):
+        lineas.append("- Afirmaciones fuera del tope por celda (%d): %d"
+                      % (MAX_POR_CELDA, stats["afirmaciones_no_agrupadas"]))
     if stats.get("no_utiles"):
         lineas.append("- Descartadas por filtro de utilidad (T34): %d"
                       % stats["no_utiles"])
@@ -949,6 +956,7 @@ def main(argv=None, cliente=None):
         "unica_fuente": 0,
         "alertas": 0,
         "fallback_celdas": 0,
+        "afirmaciones_no_agrupadas": 0,
         "motivos_alertas": {},
         "no_utiles": no_utiles,
         "omitidas_existentes": omitidas,
@@ -978,6 +986,8 @@ def main(argv=None, cliente=None):
                 stats["discrepancias"] += len(res["discrepancias"])
                 stats["unica_fuente"] += len(res["unica_fuente"])
                 stats["alertas"] += len(res["alertas_factuales"])
+                stats["afirmaciones_no_agrupadas"] += res.get(
+                    "n_no_agrupadas", 0)
                 if res.get("fallback"):
                     stats["fallback_celdas"] += 1
                 if res["mayoritarias"]:
