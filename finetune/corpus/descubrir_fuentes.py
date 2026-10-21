@@ -218,13 +218,13 @@ FUENTES_T86 = [
     {
         "dominio": "yourastrallife.com",
         "sitemap": "https://www.yourastrallife.com/sitemap.xml",
-        "patron": r"yourastrallife\.com/es/",
+        "patron": r"yourastrallife\.com/es/blog/",
         "familia": "astrologia",
     },
     {
         "dominio": "miastrologa.com",
         "sitemap": "https://miastrologa.com/sitemap.xml",
-        "patron": r"miastrologa\.com/es/",
+        "patron": r"miastrologa\.com/es/aspects/",
         "familia": "astrologia",
     },
     # --- Astrología en inglés ---

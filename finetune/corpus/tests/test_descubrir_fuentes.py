@@ -436,6 +436,11 @@ class TestFuentesT86(unittest.TestCase):
     def test_patrones_no_casan_ruido(self):
         ruido = [
             "https://www.yourastrallife.com/pt/blog/compatibilidade-de-marte/",
+            "https://www.yourastrallife.com/es/biblioteca",
+            "https://www.yourastrallife.com/es/tarot/respuesta-inmediata",
+            "https://miastrologa.com/es/chat",
+            "https://miastrologa.com/es/pricing",
+            "https://miastrologa.com/es/calendar",
             "https://cafeastrology.com/birthday/august-12.html",
             "https://www.astrology.com/tarot/card-meanings.html",
             "https://mundoastro.com/contacto/",
