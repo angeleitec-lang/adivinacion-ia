@@ -170,13 +170,85 @@ FUENTES_T79 = [
     },
 ]
 
-_CONJUNTOS = {"t74": FUENTES_DEF, "t79": FUENTES_T79}
+# Fuentes de la ronda 4 (T86): dominios NUEVOS de astrología (ES primero, luego
+# EN) con ficha por combinación (planeta en signo/casa, aspectos, nodos, Quirón,
+# ascendente). Todos verificados contra su sitemap real y con muestra de calidad
+# ≥3 el 2026-10-21; ninguno repite dominio de T74/T79 ni está en
+# DOMINIOS_BLOQUEADOS. Los clásicos en papel (Lilly, Ptolomeo, Alan Leo,
+# Sepharial) no se descubren aquí: se listan como candidatos en
+# knowledge/fuentes_nuevas_t86.md para que otra pista los procese.
+FUENTES_T86 = [
+    # --- Astrología en español ---
+    {
+        "dominio": "mundoastro.com",
+        "sitemap": "https://mundoastro.com/sitemap.xml",
+        "patron": r"mundoastro\.com/(planetas|casas|signos)/",
+        "familia": "astrologia",
+    },
+    {
+        "dominio": "astralisis.com",
+        "sitemap": "https://astralisis.com/sitemap.xml",
+        "patron": r"astralisis\.com/articulos/",
+        "familia": "astrologia",
+    },
+    {
+        "dominio": "aspectados.com",
+        "sitemap": "https://aspectados.com/sitemap.xml",
+        "patron": r"aspectados\.com/(guias|blog)/",
+        "familia": "astrologia",
+    },
+    {
+        "dominio": "astrocronos.com",
+        "sitemap": "https://astrocronos.com/sitemap.xml",
+        "patron": r"astrocronos\.com/blog/la-casa-",
+        "familia": "astrologia",
+    },
+    {
+        "dominio": "zodiacohoy.com",
+        "sitemap": "https://zodiacohoy.com/sitemap.xml",
+        "patron": r"zodiacohoy\.com/blog/",
+        "familia": "astrologia",
+    },
+    {
+        "dominio": "aprendeastrologia.com",
+        "sitemap": "https://aprendeastrologia.com/sitemap.xml",
+        "patron": r"aprendeastrologia\.com/blog/",
+        "familia": "astrologia",
+    },
+    {
+        "dominio": "yourastrallife.com",
+        "sitemap": "https://www.yourastrallife.com/sitemap.xml",
+        "patron": r"yourastrallife\.com/es/blog/",
+        "familia": "astrologia",
+    },
+    {
+        "dominio": "miastrologa.com",
+        "sitemap": "https://miastrologa.com/sitemap.xml",
+        "patron": r"miastrologa\.com/es/aspects/",
+        "familia": "astrologia",
+    },
+    # --- Astrología en inglés ---
+    {
+        "dominio": "cafeastrology.com",
+        "sitemap": "https://cafeastrology.com/sitemap.xml",
+        "patron": r"cafeastrology\.com/(natal|synastry|aspects|sign-combinations)/",
+        "familia": "astrologia",
+    },
+    {
+        "dominio": "astrology.com",
+        "sitemap": "https://www.astrology.com/sitemap.xml",
+        "patron": r"astrology\.com/(houses|planets|zodiac-signs)/",
+        "familia": "astrologia",
+    },
+]
+
+_CONJUNTOS = {"t74": FUENTES_DEF, "t79": FUENTES_T79, "t86": FUENTES_T86}
 
 _LOCS_RE = re.compile(r"(?is)<loc>\s*(.*?)\s*</loc>")
 
 
 def obtener_conjunto(nombre: str) -> list:
-    """Devuelve la lista de fuentes de un conjunto (``t74`` o ``t79``)."""
+    """Devuelve la lista de fuentes de un conjunto (``t74``, ``t79`` o ``t86``)."""
     if nombre not in _CONJUNTOS:
         raise ValueError(f"conjunto desconocido: {nombre!r}")
     return _CONJUNTOS[nombre]
@@ -225,8 +297,20 @@ def dominios_bloqueados() -> frozenset:
 
 
 def extraer_locs(xml_text: str) -> list:
-    """Devuelve el contenido de todas las etiquetas ``<loc>`` de un sitemap."""
-    return [u.strip() for u in _LOCS_RE.findall(xml_text or "") if u.strip()]
+    """Devuelve el contenido de todas las etiquetas ``<loc>`` de un sitemap.
+
+    Desenvuelve los envoltorios ``<![CDATA[...]]>`` que usan algunos generadores
+    (p. ej. All in One SEO de WordPress en cafeastrology.com), porque si no la
+    URL resultante no es válida y el recorrido del índice se corta.
+    """
+    salida = []
+    for u in _LOCS_RE.findall(xml_text or ""):
+        u = u.strip()
+        if u.startswith("<![CDATA[") and u.endswith("]]>"):
+            u = u[len("<![CDATA["):-len("]]>")].strip()
+        if u:
+            salida.append(u)
+    return salida
 
 
 def es_sitemap_index(xml_text: str) -> bool:
