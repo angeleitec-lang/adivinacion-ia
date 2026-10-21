@@ -327,13 +327,18 @@ def signos_de_calculos(calculos: dict) -> list:
 
     Misma fuente canónica que `fase1_prompts.verificar_lectura` (carta_natal,
     carta_a, carta_b), sin depender del texto del prompt (DESAJUSTE D7).
+    El Ascendente puede venir en `planetas["Ascendente"]` o en la clave
+    `ascendente` de la carta (estructura real de las cartas natales).
     """
     signos = []
     for clave in ("carta_natal", "carta_a", "carta_b"):
         carta = calculos.get(clave) or {}
         planetas = carta.get("planetas") or {}
         for eje in EJES_ASTRALES:
-            signo = (planetas.get(eje) or {}).get("signo")
+            dato = planetas.get(eje)
+            if not dato and eje == "Ascendente":
+                dato = carta.get("ascendente")
+            signo = (dato or {}).get("signo")
             if signo:
                 signos.append(norm(signo))
     return list(dict.fromkeys(signos))
