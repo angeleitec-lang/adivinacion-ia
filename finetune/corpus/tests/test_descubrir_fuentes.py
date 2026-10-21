@@ -363,12 +363,79 @@ class TestFuentesT79(unittest.TestCase):
                            f"patrón casa con ruido: {url}")
 
 
+class TestFuentesT86(unittest.TestCase):
+    def test_shape_valido(self):
+        self.assertGreaterEqual(len(df.FUENTES_T86), 8)
+        for f in df.FUENTES_T86:
+            for clave in ("dominio", "sitemap", "patron", "familia"):
+                self.assertIn(clave, f)
+            re.compile(f["patron"])
+
+    def test_sin_dominios_bloqueados(self):
+        bloqueados = df.dominios_bloqueados()
+        for f in df.FUENTES_T86:
+            self.assertNotIn(df.norm_dominio(f["dominio"]), bloqueados)
+
+    def test_todas_de_astrologia(self):
+        for f in df.FUENTES_T86:
+            self.assertEqual(f["familia"], "astrologia")
+
+    def test_no_repite_dominios_t74_t79_astrologia(self):
+        previos = set()
+        for f in list(df.FUENTES_DEF) + list(df.FUENTES_T79):
+            if f["familia"] == "astrologia":
+                previos.add(df.norm_dominio(f["dominio"]))
+        for f in df.FUENTES_T86:
+            self.assertNotIn(df.norm_dominio(f["dominio"]), previos)
+
+    def test_patrones_coinciden_con_slugs_reales(self):
+        esperadas = {
+            "https://mundoastro.com/planetas/nodo-norte/": "mundoastro.com",
+            "https://mundoastro.com/planetas/quiron/": "mundoastro.com",
+            "https://astralisis.com/articulos/urano-en-aries": "astralisis.com",
+            "https://astralisis.com/articulos/saturno-en-aries": "astralisis.com",
+            "https://aspectados.com/guias/aspectos-astrologicos": "aspectados.com",
+            "https://aspectados.com/blog/aspectos-aplicativos-separativos-orbes-astrologia": "aspectados.com",
+            "https://astrocronos.com/blog/la-casa-1-y-el-ascendente": "astrocronos.com",
+            "https://zodiacohoy.com/blog/ascendente-en-aries-personalidad-y-vida-diaria": "zodiacohoy.com",
+            "https://aprendeastrologia.com/blog/sol-en-geminis/": "aprendeastrologia.com",
+            "https://www.yourastrallife.com/es/blog/lectura-de-quiron-en-la-carta-astral": "yourastrallife.com",
+            "https://miastrologa.com/es/aspects/chiron-semisextile-ascendant": "miastrologa.com",
+            "https://cafeastrology.com/synastry/venus_mars_aspects.html": "cafeastrology.com",
+            "https://cafeastrology.com/natal/venus-in-aries.html": "cafeastrology.com",
+            "https://www.astrology.com/houses/eighth-house": "astrology.com",
+            "https://www.astrology.com/planets/venus": "astrology.com",
+        }
+        for url, dominio in esperadas.items():
+            regexes = [re.compile(f["patron"]) for f in df.FUENTES_T86
+                       if df.norm_dominio(f["dominio"]) == dominio]
+            self.assertTrue(regexes, f"sin fuente para {dominio}")
+            self.assertTrue(any(r.search(url) for r in regexes),
+                          f"ningún patrón de {dominio} casa con {url}")
+
+    def test_patrones_no_casan_ruido(self):
+        ruido = [
+            "https://www.yourastrallife.com/pt/blog/compatibilidade-de-marte/",
+            "https://cafeastrology.com/birthday/august-12.html",
+            "https://www.astrology.com/tarot/card-meanings.html",
+            "https://mundoastro.com/contacto/",
+            "https://astralisis.com/servicios/consulta",
+        ]
+        regexes = [re.compile(f["patron"]) for f in df.FUENTES_T86]
+        for url in ruido:
+            self.assertFalse(any(r.search(url) for r in regexes),
+                           f"patrón casa con ruido: {url}")
+
+
 class TestConjunto(unittest.TestCase):
     def test_t74_es_la_defecto(self):
         self.assertIs(df.obtener_conjunto("t74"), df.FUENTES_DEF)
 
     def test_t79_devuelve_nueva(self):
         self.assertIs(df.obtener_conjunto("t79"), df.FUENTES_T79)
+
+    def test_t86_devuelve_astrologia(self):
+        self.assertIs(df.obtener_conjunto("t86"), df.FUENTES_T86)
 
     def test_conjunto_desconocido_error(self):
         with self.assertRaises(ValueError):
