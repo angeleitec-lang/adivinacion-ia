@@ -328,6 +328,155 @@ class TestKbV2SinMezcla(unittest.TestCase):
         self.assertNotIn("tarot-mayor-20", baraja["entidades"])
 
 
+class TestPaso2ClaveCompleta(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.limpio = os.path.join(self.tmp, "limpio")
+        os.makedirs(self.limpio)
+        self.evidencias = os.path.join(self.tmp, "evidencias.jsonl")
+        self.ctx = {"evidencias_libros": self.evidencias,
+                   "libros_limpio": self.limpio}
+
+    def _retirada(self, h, eid, faceta):
+        return {"evidencia": {"entidad_id": eid, "faceta": faceta,
+                              "hash_seccion": h}}
+
+    def test_misma_seccion_retirada_para_otra_celda_no_falla(self):
+        _escribir_jsonl(os.path.join(self.limpio, "evidencias_retiradas.jsonl"),
+                       [self._retirada("h1", "tarot-mayor-20",
+                                      "significado_general")])
+        _escribir_jsonl(self.evidencias, [
+            {"entidad_id": "tarot-mayor-19", "faceta": "significado_general",
+             "hash_seccion": "h1"}])
+        res = cierre._verificacion_limpieza(self.ctx)
+        self.assertEqual(res["retiradas"], 1)
+        self.assertEqual(res["vigentes"], 1)
+
+    def test_retirada_realmente_vigente_si_falla(self):
+        _escribir_jsonl(os.path.join(self.limpio, "evidencias_retiradas.jsonl"),
+                       [self._retirada("h1", "tarot-mayor-20",
+                                      "significado_general")])
+        _escribir_jsonl(self.evidencias, [
+            {"entidad_id": "tarot-mayor-20", "faceta": "significado_general",
+             "hash_seccion": "h1"}])
+        with self.assertRaises(cierre.PasoFallido):
+            cierre._verificacion_limpieza(self.ctx)
+
+    def test_falta_fichero_retiradas_falla(self):
+        _escribir_jsonl(self.evidencias, [{"hash_seccion": "h1"}])
+        with self.assertRaises(cierre.PasoFallido):
+            cierre._verificacion_limpieza(self.ctx)
+
+
+class TestSoloVerificar(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.limpio = os.path.join(self.tmp, "limpio")
+        os.makedirs(self.limpio)
+        self.evidencias = os.path.join(self.tmp, "evidencias.jsonl")
+        self.work = os.path.join(self.tmp, "cierre")
+        self.llamadas = []
+        self.orig = cierre._ejecutar
+
+        def spy(cmd, log):
+            self.llamadas.append(cmd)
+            return self.orig(cmd, log)
+
+        cierre._ejecutar = spy
+        self.addCleanup(setattr, cierre, "_ejecutar", self.orig)
+
+    def _argv(self):
+        return ["--paso", "2", "--solo-verificar",
+                "--evidencias-libros", self.evidencias,
+                "--libros-limpio", self.limpio,
+                "--work-dir", self.work]
+
+    def test_solo_verificar_no_reaplica_y_no_loquea_proceso_vivo(self):
+        _escribir_jsonl(os.path.join(self.limpio, "evidencias_retiradas.jsonl"),
+                        [{"evidencia": {"entidad_id": "tarot-mayor-20",
+                                       "faceta": "significado_general",
+                                       "hash_seccion": "h1"}}])
+        _escribir_jsonl(self.evidencias, [
+            {"entidad_id": "tarot-mayor-19", "faceta": "significado_general",
+             "hash_seccion": "h1"}])
+        rc = cierre.main(self._argv(),
+                       procesos_fn=lambda: [{"pid": 4242, "cmd": "consenso"}])
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.llamadas, [])
+        log = _leer_jsonl(os.path.join(self.work, "cierre_log.jsonl"))
+        self.assertEqual(log[-1]["estado"], "verificada")
+
+    def test_solo_verificar_detecta_retirada_vigente(self):
+        _escribir_jsonl(os.path.join(self.limpio, "evidencias_retiradas.jsonl"),
+                        [{"evidencia": {"entidad_id": "tarot-mayor-20",
+                                       "faceta": "significado_general",
+                                       "hash_seccion": "h1"}}])
+        _escribir_jsonl(self.evidencias, [
+            {"entidad_id": "tarot-mayor-20", "faceta": "significado_general",
+             "hash_seccion": "h1"}])
+        rc = cierre.main(self._argv(), procesos_fn=lambda: [])
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.llamadas, [])
+        log = _leer_jsonl(os.path.join(self.work, "cierre_log.jsonl"))
+        self.assertEqual(log[-1]["estado"], "fallido")
+
+    def test_solo_verificar_requiere_paso2(self):
+        with self.assertRaises(SystemExit):
+            cierre.main(["--paso", "3", "--solo-verificar",
+                        "--work-dir", self.work], procesos_fn=lambda: [])
+
+
+class TestConsensoTextoWebNoEsFiltracion(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        b = self.tmp
+        os.makedirs(os.path.join(b, "secciones"))
+        self.hash_excl = diag.hash_seccion("libro-astro", "EL SOL EN ARIES",
+                                          TEXTO_SECCION_EXCLUIDA)
+        _escribir_jsonl(os.path.join(b, "secciones", "libro-astro.jsonl"),
+                       [{"id_libro": "libro-astro", "seccion": "EL SOL EN ARIES",
+                         "texto": TEXTO_SECCION_EXCLUIDA}])
+        self.claves = os.path.join(b, "claves.jsonl")
+        _escribir_jsonl(self.claves, [
+            {"hash_seccion": self.hash_excl, "entidad_id": "tarot-mayor-20",
+             "faceta": "significado_general", "n_afirmaciones": 1}])
+        self.afir_libros = os.path.join(b, "afir_libros.jsonl")
+        _escribir_jsonl(self.afir_libros, [
+            {"entidad_id": "tarot-mayor-20", "faceta": "significado_general",
+             "fuente_id": "libro-astro", "afirmacion": CITA_EXCLUIDA,
+             "cita_original": CITA_EXCLUIDA}])
+        self.afir_web = os.path.join(b, "afir_web.jsonl")
+        self.consenso = os.path.join(b, "consenso.jsonl")
+        _escribir_jsonl(self.consenso, [
+            {"entidad_id": "tarot-mayor-20", "faceta": "significado_general",
+             "n_afirmaciones": 1, "mayoritarias": [], "discrepancias": [],
+             "unica_fuente": [{"afirmacion": CITA_EXCLUIDA,
+                               "fuente_id": "web-1", "tradicion": "moderna"}]}])
+        self.ctx = {
+            "consenso": self.consenso,
+            "afirmaciones_web_file": self.afir_web,
+            "afirmaciones_libros_file": self.afir_libros,
+            "claves_excluir": self.claves,
+            "secciones_dir": os.path.join(b, "secciones"),
+        }
+
+    def test_texto_igual_desde_web_no_es_filtracion(self):
+        _escribir_jsonl(self.afir_web, [
+            {"entidad_id": "tarot-mayor-20", "faceta": "significado_general",
+             "fuente_id": "web-1", "afirmacion": CITA_EXCLUIDA}])
+        cierre._comprobar_retiradas_fuera_de_consenso(self.ctx)
+
+    def test_texto_excluido_sin_origen_web_si_falla(self):
+        _escribir_jsonl(self.afir_web, [
+            {"entidad_id": "tarot-mayor-20", "faceta": "significado_general",
+             "fuente_id": "web-1", "afirmacion": AFIRMACION_WEB_SOL}])
+        with self.assertRaises(cierre.PasoFallido):
+            cierre._comprobar_retiradas_fuera_de_consenso(self.ctx)
+
+
 class TestCoberturaOmitida(unittest.TestCase):
     def test_omite_si_no_esta_integrado(self):
         script = os.path.join(cierre.CORPUS, "cobertura_v3.py")

@@ -70,6 +70,31 @@ cp evidencias.jsonl.pre-cierre-<ts> evidencias.jsonl  # deshace paso 2
   reanudar con `--paso N` tras corregir la causa.
 - Escritura atómica (tmp + fsync + `os.replace`) en todas las salidas propias.
 
+## Re-verificación sin reaplicar (T87)
+
+Si un paso se aplicó correctamente pero su verificación falló, puede
+re-verificarse sin reaplicar:
+
+```bash
+$PY $CD/cierre_recopilacion.py --paso 2 --solo-verificar
+```
+
+Es solo lectura (no ejecuta `aplicar_limpieza_libros.py` ni copia nada) y no
+loquean los procesos vivos: útil mientras el paso 3 corre en producción.
+
+## Correcciones T87 (falsos positivos de clave incompleta)
+
+- **Paso 2**: la comprobación comparaba solo `hash_seccion`, pero una misma
+  seccion puede estar retirada para una `(entidad_id, faceta)` y conservada
+  legitimamente para otra (produccion 2026-10-21: 318 "vigentes" falsos).
+  La clave correcta es `(hash_seccion, entidad_id, faceta)`.
+- **Paso 3**: el chequeo de retiradas fuera del consenso marcaba como filtracion
+  un texto identico que procedia de la web (la exclusion solo atane a secciones
+  de libros). Ahora los textos presentes en las afirmaciones web se consideran
+  legitimos y no se flaggean.
+- Dedupe (clave = celda completa) y kb_v2 (familia por entidad) revisados:
+  ya usaban claves completas.
+
 ## Aborto por procesos vivos
 
 Antes de ejecutar (no en `--dry-run`) se comprueba con `pgrep -fl` que no hay

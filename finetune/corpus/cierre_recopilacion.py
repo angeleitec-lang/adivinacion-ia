@@ -19,6 +19,9 @@ de forma atomica y el encadenado se detiene en el primer fallo.
 --dry-run solo lee: comprueba entradas, procesos vivos que escriban esos ficheros
 (aborta con aviso), espacio en disco y que haria cada paso. No escribe nada.
 
+--paso 2 --solo-verificar: re-verifica una limpieza ya aplicada sin
+reaplicarla (solo lectura; no loquean los procesos vivos).
+
 Sin LLM propio ni red (el paso 3 puede pasarse --simulado para pruebas).
 """
 import argparse
@@ -159,7 +162,41 @@ def paso1_dedupe_consenso(ctx, log_comandos):
 # Paso 2: limpieza de libros (generar en copia + aplicar con backup)
 # ---------------------------------------------------------------------------
 
+def _verificacion_limpieza(ctx, estado="verificada"):
+    """Verificacion del paso 2 con la clave COMPLETA.
+
+    Una misma seccion puede estar retirada para una (entidad_id, faceta) y
+    conservada legitimamente para otra; comparar solo hash_seccion daba falsos
+    positivos (produccion 2026-10-21: 318 'vigentes' que no lo eran).
+    """
+    ruta_retiradas = os.path.join(ctx["libros_limpio"],
+                                 "evidencias_retiradas.jsonl")
+    if not os.path.exists(ruta_retiradas):
+        raise PasoFallido("limpieza: no hay %s para verificar" % ruta_retiradas)
+    retiradas = _leer_jsonl(ruta_retiradas)
+    claves_retiradas = {
+        (r["evidencia"].get("hash_seccion"),
+         r["evidencia"].get("entidad_id"),
+         r["evidencia"].get("faceta"))
+        for r in retiradas}
+    vigentes = {
+        (e.get("hash_seccion"), e.get("entidad_id"), e.get("faceta"))
+        for e in _leer_jsonl(ctx["evidencias_libros"])}
+    filtradas = claves_retiradas & vigentes
+    if filtradas:
+        ejemplo = sorted(filtradas)[0]
+        raise PasoFallido(
+            "limpieza: %d evidencias retiradas siguen vigentes "
+            "(ejemplo: hash=%s... entidad=%s faceta=%s)"
+            % (len(filtradas), (ejemplo[0] or "")[:12], ejemplo[1], ejemplo[2]))
+    return {"estado": estado, "retiradas": len(retiradas),
+            "claves_retiradas": len(claves_retiradas),
+            "vigentes": len(vigentes)}
+
+
 def paso2_limpieza_libros(ctx, log_comandos):
+    if ctx.get("solo_verificar"):
+        return _verificacion_limpieza(ctx, "verificada")
     script = os.path.join(CORPUS, "aplicar_limpieza_libros.py")
     cmd = [sys.executable, script,
            "--evidencias", ctx["evidencias_libros"],
@@ -176,22 +213,14 @@ def paso2_limpieza_libros(ctx, log_comandos):
     recuento = informe.get("recuento", {})
     limpias = os.path.join(ctx["libros_limpio"], "evidencias_limpias.jsonl")
     if _md5(ctx["evidencias_libros"]) == _md5(limpias):
-        return {"estado": "ya_aplicada", "recuento": recuento}
+        return dict(_verificacion_limpieza(ctx, "ya_aplicada"),
+                   recuento=recuento)
     backup = _copia_previa(ctx["evidencias_libros"])
     tmp = ctx["evidencias_libros"] + ".tmp-%d" % os.getpid()
     shutil.copy2(limpias, tmp)
     os.replace(tmp, ctx["evidencias_libros"])
-    # Comprobacion: ninguna evidencia retirada aparece en el fichero vigente.
-    retiradas = _leer_jsonl(os.path.join(ctx["libros_limpio"],
-                                        "evidencias_retiradas.jsonl"))
-    hashes_retirados = {r["evidencia"]["hash_seccion"] for r in retiradas}
-    vigentes = {e.get("hash_seccion") for e in _leer_jsonl(ctx["evidencias_libros"])}
-    filtradas = hashes_retirados & vigentes
-    if filtradas:
-        raise PasoFallido("limpieza: %d evidencias retiradas siguen vigentes"
-                         % len(filtradas))
-    return {"estado": "ok", "recuento": recuento, "backup": backup,
-            "retiradas": len(retiradas)}
+    return dict(_verificacion_limpieza(ctx, "ok"),
+                recuento=recuento, backup=backup)
 
 
 # ---------------------------------------------------------------------------
@@ -230,14 +259,24 @@ def _comprobar_retiradas_fuera_de_consenso(ctx):
         afirmaciones, claves, secciones)
     cons_norm = {(a.get("entidad_id"), a.get("faceta"),
                  cartas.norm(a.get("afirmacion", ""))) for a in conservadas}
+    # El mismo texto procedente de la web no es una filtracion de la limpieza
+    # de libros: la exclusion solo atane a las secciones de libros.
+    web_norm = set()
+    if os.path.exists(ctx.get("afirmaciones_web_file", "")):
+        web_norm = {(a.get("entidad_id"), a.get("faceta"),
+                    cartas.norm(a.get("afirmacion", "")))
+                   for a in _leer_jsonl(ctx["afirmaciones_web_file"])}
     textos_por_celda = {}
     for a in afirmaciones:
         clave = (a.get("entidad_id"), a.get("faceta"))
         if clave not in excluidas_por_celda:
             continue
-        if (clave[0], clave[1], cartas.norm(a.get("afirmacion", ""))) in cons_norm:
+        texto_norm = cartas.norm(a.get("afirmacion", ""))
+        if (clave[0], clave[1], texto_norm) in cons_norm:
             continue
-        textos_por_celda.setdefault(clave, set()).add(cartas.norm(a["afirmacion"]))
+        if (clave[0], clave[1], texto_norm) in web_norm:
+            continue
+        textos_por_celda.setdefault(clave, set()).add(texto_norm)
     consenso = _leer_jsonl(ctx["consenso"])
     for celda in consenso:
         clave = (celda.get("entidad_id"), celda.get("faceta"))
@@ -475,6 +514,10 @@ def main(argv=None, procesos_fn=None):
                        help="solo lectura: entradas, procesos vivos, disco y plan")
     parser.add_argument("--paso", type=int, choices=sorted(PASOS),
                        help="ejecutar un unico paso")
+    parser.add_argument("--solo-verificar", action="store_true",
+                       help="solo con --paso 2: re-verificar una limpieza ya "
+                            "aplicada sin reaplicarla (solo lectura; no loquean "
+                            "los procesos vivos)")
     parser.add_argument("--todo", action="store_true",
                        help="ejecutar todos los pasos en orden")
     parser.add_argument("--simulado", action="store_true",
@@ -499,6 +542,10 @@ def main(argv=None, procesos_fn=None):
     ctx = construir_ctx(args)
     procesos_fn = procesos_fn or procesos_vivos
 
+    if args.solo_verificar and args.paso != 2:
+        parser.error("--solo-verificar solo aplica a --paso 2")
+    ctx["solo_verificar"] = args.solo_verificar
+
     if args.dry_run:
         return dry_run(ctx, procesos_fn)
     if not args.paso and not args.todo:
@@ -506,7 +553,8 @@ def main(argv=None, procesos_fn=None):
 
     os.makedirs(ctx["work_dir"], exist_ok=True)
     ctx["log"] = os.path.join(ctx["work_dir"], "cierre_log.jsonl")
-    vivos = procesos_fn()
+    # --solo-verificar es solo lectura: no loquean los procesos vivos.
+    vivos = [] if args.solo_verificar else procesos_fn()
     if vivos:
         print("AVISO: procesos vivos que escriben los ficheros del cierre:")
         for v in vivos:
