@@ -97,7 +97,119 @@ FUENTES_DEF = [
     },
 ]
 
+# Fuentes de la ronda 3 (T79): continuación de T74. Incluye (a) dominios ya
+# validados en T74 a los que se les agota el sitemap (con tope mayor) y
+# secciones nuevas útiles, (b) dominios nuevos de baraja española en español,
+# numerología ES/EN y astrología en español (planetas en casas, aspectos,
+# nodos lunares y Quirón: la familia más floja del corpus). Todos verificados
+# contra su sitemap real el 2026-10-21; ninguno está en DOMINIOS_BLOQUEADOS.
+FUENTES_T79 = [
+    # --- Baraja española (prioritaria) ---
+    {
+        "dominio": "annacasas.es",
+        "sitemap": "https://annacasas.es/sitemap_index.xml",
+        "patron": r"annacasas\.es/(significado-[^/]*baraja-espanola|[^/]*de-(oros|copas|espadas|bastos)-baraja-espanola|el-\d+-de-(oros|copas|espadas|bastos)-en-una-lectura|[^/]*(sota|caballo|rey|reyina)-de-(oros|copas|espadas|bastos)-en-el-tarot|tirada[^/]*baraja-espanola)",
+        "familia": "baraja_espanola",
+    },
+    {
+        "dominio": "elreydecopas.com",
+        "sitemap": "https://elreydecopas.com/sitemap_index.xml",
+        "patron": r"elreydecopas\.com/baraja-espanola/",
+        "familia": "baraja_espanola",
+    },
+    {
+        "dominio": "astrologuias.com",
+        "sitemap": "https://astrologuias.com/sitemap_index.xml",
+        "patron": r"astrologuias\.com/baraja-espanola/",
+        "familia": "baraja_espanola",
+    },
+    # --- Numerología (prioritaria, ES/EN) ---
+    {
+        "dominio": "numerologist.com",
+        "sitemap": "https://www.numerologist.com/sitemap.xml",
+        "patron": r"numerologist\.com/numerology/(master-number|chaldean|life-path|soul|birthday|personality)",
+        "familia": "numerologia",
+    },
+    # --- Astrología en español: ficha por combinación ---
+    {
+        "dominio": "campus-astrologia.es",
+        "sitemap": "https://campus-astrologia.es/sitemap.xml",
+        "patron": r"campus-astrologia\.es/(nodo-|quiro|[^/]+-en-[^/]+-en-casa-\d+|[^/]+-(conjuncion|oposicion|trino|cuadratura|sextil)-[^/]+)",
+        "familia": "astrologia",
+    },
+    {
+        "dominio": "astralsagehub.com",
+        "sitemap": "https://astralsagehub.com/sitemap.xml",
+        "patron": r"astralsagehub\.com/es-es/(sol-ascendente|casas-astrologicas|aspectos|planetas|signos)/",
+        "familia": "astrologia",
+    },
+    {
+        "dominio": "astro-cours.com",
+        "sitemap": "https://astro-cours.com/sitemap.xml",
+        "patron": r"astro-cours\.com/es/(planetas|casas|signos)/",
+        "familia": "astrologia",
+    },
+    # --- Tarot: fichas y tiradas (dominios validados T74) ---
+    {
+        "dominio": "biddytarot.com",
+        "sitemap": "https://biddytarot.com/sitemap.xml",
+        "patron": r"biddytarot\.com/tarot-card-meanings/",
+        "familia": "tarot",
+    },
+    {
+        "dominio": "labyrinthos.co",
+        "sitemap": "https://labyrinthos.co/sitemap.xml",
+        "patron": r"labyrinthos\.co/blogs/.*meaning",
+        "familia": "tarot",
+    },
+    {
+        "dominio": "tiradadetarot.com",
+        "sitemap": "https://tiradadetarot.com/sitemap.xml",
+        "patron": r"tiradadetarot\.com/(tirada|lectura-de-vida)",
+        "familia": "tarot",
+    },
+]
+
+_CONJUNTOS = {"t74": FUENTES_DEF, "t79": FUENTES_T79}
+
 _LOCS_RE = re.compile(r"(?is)<loc>\s*(.*?)\s*</loc>")
+
+
+def obtener_conjunto(nombre: str) -> list:
+    """Devuelve la lista de fuentes de un conjunto (``t74`` o ``t79``)."""
+    if nombre not in _CONJUNTOS:
+        raise ValueError(f"conjunto desconocido: {nombre!r}")
+    return _CONJUNTOS[nombre]
+
+
+def norm_url(url: str) -> str:
+    """Normaliza una URL para deduplicar: sin query ni fragmento."""
+    return (url or "").split("?")[0].split("#")[0]
+
+
+def cargar_exclusiones_de_manifest(ruta: str) -> set:
+    """URLs ya procesadas en un manifest JSONL, normalizadas.
+
+    Se usa para no volver a proponer en el plan páginas que ya se descargaron
+    en rondas anteriores (web/, web_recup2/, web_recup3/).
+    """
+    excluir = set()
+    try:
+        with open(ruta, encoding="utf-8") as fh:
+            for linea in fh:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    entrada = json.loads(linea)
+                except json.JSONDecodeError:
+                    continue
+                url = entrada.get("url")
+                if url:
+                    excluir.add(norm_url(url))
+    except OSError:
+        return set()
+    return excluir
 
 
 def norm_dominio(netloc: str) -> str:
@@ -150,11 +262,13 @@ def descubrir_desde_sitemap(
     robots=None,
     sleep=time.sleep,
     _profundidad: int = 0,
+    excluir=None,
 ) -> list:
     """Recorre un sitemap (o índice recursivo) y devuelve URLs que casan con el patrón.
 
     - Respeta ``robots`` (callable) y el ``limite`` de URLs.
     - Si el documento es un ``<sitemapindex>``, desciende a los sub-sitemaps.
+    - ``excluir``: conjunto de URLs normalizadas ya procesadas que se omiten.
     - Devuelve una lista ordenada de URLs únicas.
     """
     if limite <= 0 or _profundidad > 3:
@@ -192,6 +306,8 @@ def descubrir_desde_sitemap(
                 continue
             if robots is not None and not robots(loc):
                 continue
+            if excluir and norm_url(loc) in excluir:
+                continue
             salida.append(loc)
 
     _procesar_doc(sitemap_url)
@@ -199,8 +315,11 @@ def descubrir_desde_sitemap(
 
 
 def construir_plan(fuentes, cliente, max_por_dominio=60, sleep=time.sleep,
-                  robots_fn=fabrica_robots):
-    """Descubre candidatas por fuente y devuelve ``{familia: [urls]}``."""
+                  robots_fn=fabrica_robots, excluir=None):
+    """Descubre candidatas por fuente y devuelve ``{familia: [urls]}``.
+
+    ``excluir``: conjunto de URLs normalizadas ya procesadas que se omiten.
+    """
     por_familia = {}
     bloqueados = dominios_bloqueados()
     for f in fuentes:
@@ -211,6 +330,7 @@ def construir_plan(fuentes, cliente, max_por_dominio=60, sleep=time.sleep,
         urls = descubrir_desde_sitemap(
             cliente, f["sitemap"], f["patron"],
             limite=max_por_dominio, robots=robots, sleep=sleep,
+            excluir=excluir,
         )
         for u in urls:
             bucket = por_familia.setdefault(f["familia"], [])
@@ -219,7 +339,7 @@ def construir_plan(fuentes, cliente, max_por_dominio=60, sleep=time.sleep,
     return por_familia
 
 
-def escribir_plan(por_familia, ruta) -> int:
+def escribir_plan(por_familia, ruta, prefijo="t74") -> int:
     """Escribe el plan JSONL compatible con recuperacion_descarga. Devuelve nº de URLs."""
     total = 0
     lineas = []
@@ -228,9 +348,9 @@ def escribir_plan(por_familia, ruta) -> int:
         if not urls:
             continue
         entrada = {
-            "entidad_id": f"t74_{familia}",
+            "entidad_id": f"{prefijo}_{familia}",
             "familia": familia,
-            "nombre": f"Fuentes nuevas T74 ({familia})",
+            "nombre": f"Fuentes nuevas {prefijo.upper()} ({familia})",
             "urls_candidatas": [{"url": u} for u in urls],
         }
         lineas.append(json.dumps(entrada, ensure_ascii=False))
@@ -241,17 +361,28 @@ def escribir_plan(por_familia, ruta) -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Descubre fuentes nuevas y escribe un plan T74.")
+    ap = argparse.ArgumentParser(description="Descubre fuentes nuevas y escribe un plan de descarga.")
     ap.add_argument("--out", default="/Users/angelgonzalez/fase0/plan_t74.jsonl",
                     help="Ruta del plan JSONL de salida.")
     ap.add_argument("--max-por-dominio", type=int, default=60,
                     help="Máximo de URLs candidatas por dominio.")
+    ap.add_argument("--conjunto", choices=sorted(_CONJUNTOS), default="t74",
+                    help="Conjunto de fuentes a descubrir (t74 o t79).")
+    ap.add_argument("--excluir-manifest", action="append", default=[],
+                    help="Manifest JSONL con URLs ya procesadas a excluir "
+                         "(repetible; se unen todas).")
     args = ap.parse_args(argv)
 
     from web_fetch import Cliente
+    excluir = set()
+    for ruta_man in args.excluir_manifest:
+        excluir |= cargar_exclusiones_de_manifest(ruta_man)
     cliente = Cliente(USER_AGENT, min_interval=1.2)
-    por_familia = construir_plan(FUENTES_DEF, cliente, max_por_dominio=args.max_por_dominio)
-    total = escribir_plan(por_familia, args.out)
+    por_familia = construir_plan(
+        obtener_conjunto(args.conjunto), cliente,
+        max_por_dominio=args.max_por_dominio, excluir=excluir or None,
+    )
+    total = escribir_plan(por_familia, args.out, prefijo=args.conjunto)
     for familia in sorted(por_familia):
         print(f"{familia}: {len(por_familia[familia])} candidatas")
     print(f"Plan escrito en {args.out} ({total} URLs)")
