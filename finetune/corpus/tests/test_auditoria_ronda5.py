@@ -1,9 +1,10 @@
 """Auditoría ronda 5 (T81): casos adversos sobre consenso, KB v2, descarga,
 ejecutor de fase 1, prompts y KB de la baraja.
 
-Los defectos confirmados por ejecución se documentan como expectedFailure
-(el test afirma el comportamiento CORRECTO, que aún no ocurre); los
-comportamientos verificados como sanos se afirman directamente.
+Los defectos confirmados por ejecución se documentan aquí como casos
+adversos: afirman el comportamiento CORRECTO y en T91 ya pasan tras
+arreglar los módulos. Los comportamientos verificados como sanos se
+afirman directamente.
 Nada de esto toca red ni LLM real. Ver docs/AUDITORIA_RONDA5.md.
 """
 import json
