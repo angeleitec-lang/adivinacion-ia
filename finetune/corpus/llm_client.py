@@ -38,6 +38,15 @@ class RateLimitError(Exception):
             return None
 
 
+class ContenidoVacioError(Exception):
+    """El modelo devolvió una respuesta vacía (`content=None`).
+
+    Suele ocurrir cuando el modelo agota el presupuesto de tokens en
+    razonamiento antes de emitir contenido visible (finish_reason=length).
+    Es reintentable en `chat()`.
+    """
+
+
 class _LimitadorTasa:
     """Limita las peticiones a `max_por_minuto` por ventana de 60 s.
 
@@ -84,6 +93,9 @@ class LLMClient:
         max_concurrencia: int = 1,
         tasa_max_por_minuto: int = 0,
         metricas: Optional[Dict[str, float]] = None,
+        max_tokens_default: int = 1024,
+        reasoning_effort: Optional[str] = None,
+        max_completion_tokens: Optional[int] = None,
     ):
         """
         Args:
@@ -102,6 +114,14 @@ class LLMClient:
             metricas: Dict opcional donde se acumulan latencia y tokens
                 (peticiones, latencia_total, max_latencia, prompt_tokens,
                 completion_tokens). None = no registrar.
+            max_tokens_default: Presupuesto de tokens por defecto cuando
+                `chat()`/`chat_json()` no reciben `max_tokens` explícito.
+            reasoning_effort: Nivel de esfuerzo de razonamiento del proveedor
+                (p. ej. "instant", "low", "medium", "high"). None = omitir el
+                parámetro (usa el valor por defecto del proveedor).
+            max_completion_tokens: Cota superior de tokens de la completion
+                (incluye razonamiento). Si se indica, el proveedor la
+                prioriza sobre `max_tokens`.
         """
         self.endpoints = list(endpoints or [
             "http://10.0.0.3:8000/v1",
@@ -112,6 +132,9 @@ class LLMClient:
         self.simulado = simulado
         self.api_key_env = api_key_env
         self.metricas = metricas
+        self.max_tokens_default = int(max_tokens_default)
+        self.reasoning_effort = reasoning_effort
+        self.max_completion_tokens = max_completion_tokens
         self._idx = 0  # round-robin index
         self._specs = [self._normalizar_endpoint(ep) for ep in self.endpoints]
         self._sem = threading.BoundedSemaphore(max(int(max_concurrencia), 1))
@@ -191,6 +214,10 @@ class LLMClient:
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        if self.max_completion_tokens:
+            payload["max_completion_tokens"] = self.max_completion_tokens
+        if self.reasoning_effort:
+            payload["reasoning_effort"] = self.reasoning_effort
         headers = self._headers_de_endpoint(spec)
         kwargs: Dict[str, Any] = {"json": payload, "timeout": self.timeout}
         if headers:
@@ -205,13 +232,16 @@ class LLMClient:
         resp.raise_for_status()
         data = resp.json()
         self._registrar_metricas(latencia, data)
-        return data["choices"][0]["message"]["content"]
+        contenido = data["choices"][0]["message"].get("content")
+        if contenido is None:
+            raise ContenidoVacioError()
+        return contenido
 
     def chat(
         self,
         sistema: str,
         usuario: str,
-        max_tokens: int = 1024,
+        max_tokens: Optional[int] = None,
         temperature: float = 0.2,
         max_reintentos: int = 3,
     ) -> str:
@@ -233,6 +263,8 @@ class LLMClient:
         Raises:
             Exception: Si se agotan los reintentos
         """
+        if max_tokens is None:
+            max_tokens = self.max_tokens_default
         if self.simulado:
             return self.simulado(sistema, usuario)
 
@@ -309,7 +341,7 @@ class LLMClient:
         sistema: str,
         usuario: str,
         validar: Callable[[Dict[str, Any]], None],
-        max_tokens: int = 1024,
+        max_tokens: Optional[int] = None,
         temperature: float = 0.2,
         intentos: int = 3,
     ) -> Dict[str, Any]:
