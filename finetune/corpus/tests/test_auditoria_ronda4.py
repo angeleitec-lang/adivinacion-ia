@@ -441,5 +441,74 @@ class TestEscribirCasosCopia(unittest.TestCase):
             self.assertEqual(ruta.read_text(encoding="utf-8"), antes)
 
 
+class _ClienteFallo:
+    def chat(self, *args, **kwargs):
+        raise ConnectionError("sin nodos en el test")
+
+
+class TestPilotoHuella(unittest.TestCase):
+    """B4 (T63) arreglado en T67: reanudación consciente del contenido."""
+
+    def setUp(self):
+        import fase1_piloto as fp
+        self.fp = fp
+
+    def _tarea(self, ident="tarot-01", usuario="u1"):
+        return {"id": ident, "familia": "tarot",
+                "prompt_system": "s", "prompt_user": usuario}
+
+    def _piloto_con(self, dir, fila):
+        ruta = pathlib.Path(dir) / "piloto.jsonl"
+        ruta.write_text(json.dumps(fila, ensure_ascii=False) + "\n",
+                        encoding="utf-8")
+        return ruta
+
+    def test_misma_tarea_se_omite_sin_aviso(self):
+        with tempfile.TemporaryDirectory() as dir:
+            t = self._tarea()
+            self._piloto_con(dir, {"id": t["id"], "familia": "tarot",
+                                   "huella": self.fp._huella(t), "ok": True})
+            resumen = self.fp.ejecutar_piloto([t], object(), out_dir=dir)
+            self.assertEqual(resumen["omitidos"], 1)
+            self.assertEqual(resumen["omitidos_contenido_distinto"], 0)
+
+    def test_id_con_otra_tarea_avisa(self):
+        with tempfile.TemporaryDirectory() as dir:
+            self._piloto_con(dir, {"id": "tarot-01", "familia": "tarot",
+                                   "huella": "0" * 16, "ok": True})
+            resumen = self.fp.ejecutar_piloto([self._tarea()], object(),
+                                              out_dir=dir)
+            self.assertEqual(resumen["omitidos"], 1)
+            self.assertEqual(resumen["omitidos_contenido_distinto"], 1)
+
+    def test_registros_viejos_sin_huella_no_avisan(self):
+        with tempfile.TemporaryDirectory() as dir:
+            self._piloto_con(dir, {"id": "tarot-01", "familia": "tarot",
+                                   "ok": True})
+            resumen = self.fp.ejecutar_piloto([self._tarea()], object(),
+                                              out_dir=dir)
+            self.assertEqual(resumen["omitidos_contenido_distinto"], 0)
+
+    def test_errores_no_acumulan_duplicados(self):
+        with tempfile.TemporaryDirectory() as dir:
+            ruta = pathlib.Path(dir) / "piloto_errores.jsonl"
+            lineas = [{"id": "tarot-01", "error": "viejo1"},
+                      {"id": "tarot-02", "error": "otro"},
+                      {"id": "tarot-01", "error": "viejo2"}]
+            ruta.write_text("".join(json.dumps(f) + "\n" for f in lineas),
+                            encoding="utf-8")
+            self.fp.ejecutar_piloto([self._tarea()], _ClienteFallo(),
+                                    out_dir=dir)
+            restantes = [json.loads(l) for l in
+                         ruta.read_text(encoding="utf-8").splitlines() if l]
+            ids = [f["id"] for f in restantes]
+            self.assertEqual(sorted(ids), ["tarot-01", "tarot-02"])
+            nuevo = [f for f in restantes if f["id"] == "tarot-01"][0]
+            self.assertTrue(nuevo["error"].startswith("error_red"))
+            copias = [p.name for p in pathlib.Path(dir).iterdir()
+                      if "piloto_errores.jsonl.bak-" in p.name]
+            self.assertEqual(len(copias), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

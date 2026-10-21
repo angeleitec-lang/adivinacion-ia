@@ -9,14 +9,17 @@ informe (informe_piloto.md). No toca jobs.db ni los generadores suspendidos.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 import threading
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -131,6 +134,7 @@ def ejecutar_una(tarea, cliente, max_reintentos=1, max_tokens=2048, temperature=
     return {
         "id": tarea["id"],
         "familia": tarea["familia"],
+        "huella": _huella(tarea),
         "prompt_system": tarea["prompt_system"],
         "prompt_user": tarea["prompt_user"],
         "lectura": lectura,
@@ -143,18 +147,77 @@ def ejecutar_una(tarea, cliente, max_reintentos=1, max_tokens=2048, temperature=
     }
 
 
+def _huella(tarea):
+    """Identidad de contenido de la tarea (T67, defecto B4).
+
+    Los ids «{familia}-{NN}» no fijan el contenido: al reanudar con otra
+    --semilla o --n-por-familia el mismo id puede corresponder a otra tarea.
+    La huella permite detectarlo y avisar en vez de omitir en silencio.
+    """
+    base = "\n".join([tarea.get("prompt_system", ""), tarea.get("prompt_user", "")])
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
+
+
 def _ids_existente(destino):
-    hechos = set()
+    """Devuelve {id: huella} de piloto.jsonl.
+
+    huella es None en registros escritos antes de T67 (sin el campo) o sin
+    prompts: esos casos no permiten afirmar cambio de contenido y no avisan.
+    """
+    hechos = {}
     if Path(destino).exists():
         with Path(destino).open(encoding="utf-8") as fh:
             for linea in fh:
                 if not linea.strip():
                     continue
                 try:
-                    hechos.add(json.loads(linea)["id"])
-                except (json.JSONDecodeError, KeyError):
+                    fila = json.loads(linea)
+                    hechos[fila["id"]] = fila.get("huella")
+                except (json.JSONDecodeError, KeyError, TypeError):
                     continue
     return hechos
+
+
+def _compactar_errores(errores_destino):
+    """Deja en piloto_errores.jsonl solo el último registro por id (T67, B4).
+
+    Al reanudar, la misma tarea fallida se reapuntaba en cada pasada y el
+    fichero acumulaba duplicados. Se reescribe de forma atómica previa copia
+    diaria; devuelve cuántas líneas se retiraron (0 si no hizo falta).
+    """
+    errores_destino = Path(errores_destino)
+    if not errores_destino.exists():
+        return 0
+    con_error = []
+    corruptas = 0
+    with errores_destino.open(encoding="utf-8") as fh:
+        for linea in fh:
+            if not linea.strip():
+                continue
+            try:
+                con_error.append(json.loads(linea))
+            except json.JSONDecodeError:
+                corruptas += 1
+    por_id = {}
+    orden = []
+    for fila in con_error:
+        ident = fila.get("id")
+        if ident not in por_id:
+            orden.append(ident)
+        por_id[ident] = fila
+    if len(por_id) + corruptas == len(con_error):
+        return 0  # ya sin duplicados: no se toca el fichero
+    respaldo = errores_destino.with_name(
+        errores_destino.name + ".bak-" + datetime.now().strftime("%Y%m%d")
+    )
+    if not respaldo.exists():
+        shutil.copy2(errores_destino, respaldo)
+    tmp = errores_destino.with_name(errores_destino.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        for ident in orden:
+            fh.write(json.dumps(por_id[ident], ensure_ascii=False) + "\n")
+    os.replace(tmp, errores_destino)
+    return len(con_error) - len(por_id)
 
 
 def ejecutar_piloto(
@@ -181,6 +244,18 @@ def ejecutar_piloto(
     hechos = _ids_existente(destino)
     pendientes = [t for t in tareas if t["id"] not in hechos]
     omitidos = len(tareas) - len(pendientes)
+    # T67 (B4): omitir está bien si la tarea es la misma; si el id cambió de
+    # contenido (otra --semilla / --n-por-familia) hay que decirlo, no callar.
+    distintos = [
+        t["id"] for t in tareas
+        if t["id"] in hechos and hechos[t["id"]] is not None
+        and hechos[t["id"]] != _huella(t)
+    ]
+    if distintos:
+        print(f"AVISO: {len(distintos)} ids omitidos corresponden a otra tarea "
+              f"(los prompts coinciden con registros previos de otra semilla o "
+              f"otro --n-por-familia): {distintos[:5]}. Repite con --out-dir "
+              "nuevo o retira piloto.jsonl.", flush=True)
 
     lock = threading.Lock()
     estado = {"errores": 0, "procesadas": 0, "escritas": 0}
@@ -232,12 +307,15 @@ def ejecutar_piloto(
             for f in as_completed(futuros):
                 f.result()
 
+    compactados = _compactar_errores(errores_destino) if estado["errores"] else 0
     resumen = {
         "escritas": estado["escritas"],
         "procesadas": estado["procesadas"],
         "errores": estado["errores"],
         "pendientes": len(pendientes),
         "omitidos": omitidos,
+        "omitidos_contenido_distinto": len(distintos),
+        "errores_compactados": compactados,
         "parada": parada[0] if parada else None,
         "piloto": str(destino),
     }
@@ -291,12 +369,12 @@ def generar_informe(out_dir, meta=None):
         "| familia | n | ok | ok a la primera | tasa | tasa 1er intento |",
         "|---|---|---|---|---|---|",
     ]
-    familias = sorted({r["familia"] for r in registros})
+    familias = sorted({r.get("familia") or "(sin familia)" for r in registros})
     total = len(registros)
     ok_total = 0
     primera_total = 0
     for familia in familias:
-        rs = [r for r in registros if r["familia"] == familia]
+        rs = [r for r in registros if (r.get("familia") or "(sin familia)") == familia]
         ok = sum(1 for r in rs if r.get("ok"))
         primera = sum(1 for r in rs if r.get("ok") and r.get("intentos", 1) <= 1)
         ok_total += ok
