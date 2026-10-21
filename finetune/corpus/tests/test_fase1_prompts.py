@@ -13,9 +13,11 @@ KB = {
     "tarot": gt.load_kb("tarot.json"),
     "astrologia": gt.load_kb("astrologia.json"),
     "numerologia": gt.load_kb("numerologia.json"),
+    "baraja": gt.load_kb("baraja_espanola.json"),
 }
 
 UNIVERSO = [c["nombre"] for c in KB["tarot"]["mayores"] + KB["tarot"]["menores"]]
+UNIVERSO_ESP = fp.universo_baraja(KB["baraja"], KB["tarot"])
 
 
 def tarea_tarot(cartas, contexto="amor", familia="tarot_3"):
@@ -353,6 +355,310 @@ class TestVerificarLectura(unittest.TestCase):
         ok, motivos = fp.verificar_lectura(t, texto)
         self.assertFalse(ok)
         self.assertTrue(any("ajena" in m and "Sol" in m for m in motivos))
+
+
+from cartas import NAIPES_ESPANOLES  # noqa: E402
+
+NAIPE = {c["nombre"]: c for c in NAIPES_ESPANOLES}
+
+
+def naipe_carta(nombre, invertida=False):
+    return {"nombre": nombre, "invertida": invertida,
+            "sinonimos": list(NAIPE[nombre].get("sinonimos") or [])}
+
+
+def tarea_baraja(cartas, familia="espanola_3"):
+    t = {"familia": familia, "mazo": "espanol", "contexto": "amor",
+         "pregunta": "¿Cómo va mi relación?",
+         "cartas": cartas, "universo_cartas": UNIVERSO_ESP}
+    if familia in fp.POSICIONES_ESPAÑOLA:
+        t["posiciones"] = list(fp.POSICIONES_ESPAÑOLA[familia])
+    return t
+
+
+MAYORES = [c["nombre"] for c in KB["tarot"]["mayores"]]
+
+
+def tarea_cruz():
+    cartas = [{"nombre": n, "invertida": False} for n in MAYORES[:10]]
+    pos = ["situacion", "obstaculo", "raiz", "pasado", "meta", "futuro cercano",
+           "actitud", "entorno", "esperanzas y miedos", "resultado"]
+    return {"familia": "cruz_celta", "contexto": "amor",
+            "pregunta": "¿Qué camino me conviene?", "cartas": cartas,
+            "posiciones": pos, "universo_cartas": UNIVERSO}
+
+
+def texto_cruz(tarea, omitir=None, desorden=False, largo=False, sintesis=True,
+               sin_carta_en=None):
+    lineas = []
+    for i, c in enumerate(tarea["cartas"]):
+        k = i + 1
+        if omitir == k:
+            continue
+        num = k
+        if desorden and k == 3:
+            num = 4
+        elif desorden and k == 4:
+            num = 3
+        cuerpo = (
+            f"Esta posición habla de una tendencia que puedes cuidar con calma y "
+            f"presencia en tu día a día, sin apresurar los acontecimientos ni forzar "
+            f"salidas."
+        )
+        if sin_carta_en != k:
+            cuerpo = f"{c['nombre']} señala esto: " + cuerpo
+        if largo and k == 5:
+            cuerpo = cuerpo + (" Y además conviene matizar mucho cada palabra. " * 40)
+        nombre_cab = c["nombre"] if sin_carta_en != k else ""
+        linea_cab = f"## {num}. {tarea['posiciones'][i]} — {nombre_cab} (al derecho)"
+        lineas.append(f"{linea_cab}\n{cuerpo}")
+    if sintesis:
+        lineas.append("## Síntesis\nAtando todo, avanza con pasos pequeños y medidos. Buen cierre.")
+    return "\n\n".join(lineas)
+
+
+class TestConstruirPromptTiradasLargas(unittest.TestCase):
+    def test_recomendacion_cubre_todas_las_familias(self):
+        for f in fp.FAMILIAS:
+            self.assertIn(f, fp.RECOMENDACION_MAX_TOKENS)
+        self.assertGreaterEqual(fp.RECOMENDACION_MAX_TOKENS["cruz_celta"], 6144)
+        self.assertGreaterEqual(fp.RECOMENDACION_MAX_TOKENS["lectura_completa"], 6144)
+
+    def test_cruz_celta_prompt_incluye_esquema_con_cabeceras(self):
+        t = tarea_cruz()
+        u = fp.construir_prompt(t, KB, {})["user"]
+        self.assertIn("ESQUEMA OBLIGATORIO", u)
+        for i, c in enumerate(t["cartas"], start=1):
+            self.assertIn(f"## {i}. {t['posiciones'][i - 1]} — {c['nombre']} (al derecho)", u)
+        self.assertIn("## Síntesis", u)
+        self.assertIn("Solo existen las 10 cartas", u)
+
+    def test_lectura_completa_prompt_incluye_cuatro_secciones(self):
+        t = {"familia": "lectura_completa", "nombre": "María", "contexto": "amor",
+             "pregunta": "¿Cómo va el año?",
+             "cartas": [{"nombre": "El Loco", "invertida": False}],
+             "universo_cartas": UNIVERSO}
+        u = fp.construir_prompt(t, KB, {})["user"]
+        for cab in ("## Carta natal", "## Tirada de tres cartas", "## Numerología", "## Síntesis"):
+            self.assertIn(cab, u)
+
+    def test_espanola_1_prompt_usa_kb_baraja(self):
+        t = tarea_baraja([naipe_carta("As de Copas")], familia="espanola_1")
+        u = fp.construir_prompt(t, KB, {})["user"]
+        self.assertIn("baraja española (40 naipes)", u)
+        self.assertIn("no es tarot ni baraja francesa", u)
+        self.assertIn("Referencia", u)
+        kb_as = next(c for c in KB["baraja"]["naipes"] if c["nombre"] == "As de Copas")
+        self.assertIn(kb_as["significado"], u)
+
+    def test_espanola_5_prompt_esquema_y_posiciones(self):
+        cartas = [naipe_carta(n) for n in ("As de Oros", "Tres de Copas", "Siete de Espadas",
+                                           "Sota de Bastos", "Rey de Oros")]
+        t = tarea_baraja(cartas, familia="espanola_5")
+        u = fp.construir_prompt(t, KB, {})["user"]
+        self.assertIn("ESQUEMA OBLIGATORIO", u)
+        self.assertIn("## 1. situación — As de Oros (al derecho)", u)
+        self.assertIn("## 5. resultado — Rey de Oros (al derecho)", u)
+
+
+class TestVerificarBaraja(unittest.TestCase):
+    def test_universo_baraja_tiene_40_naipes_y_ajenas(self):
+        naipes = [e for e in UNIVERSO_ESP if isinstance(e, dict)]
+        extras = [e for e in UNIVERSO_ESP if isinstance(e, str)]
+        self.assertEqual(len(naipes), 40)
+        self.assertIn("Reina de Copas", extras)
+        self.assertIn("Ocho de Oros", extras)
+        self.assertIn("El Sol", extras)
+        self.assertNotIn("Caballero de Copas", extras)
+        self.assertNotIn("Sota de Oros", extras)
+
+    def test_baraja_lectura_valida_pasa(self):
+        t = tarea_baraja([naipe_carta("As de Copas"),
+                          naipe_carta("Tres de Oros", invertida=True),
+                          naipe_carta("Sota de Bastos")])
+        texto = (
+            "El As de Copas abre la tirada con ilusiones nuevas. El Tres de Oros "
+            "invertido avisa de descuidos que conviene revisar. La Sota de Bastos "
+            "trae noticias prácticas para el día a día. Cierra con calma."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertTrue(ok, motivos)
+
+    def test_baraja_detecta_carta_ajena_de_tarot(self):
+        t = tarea_baraja([naipe_carta("As de Copas"),
+                          naipe_carta("Tres de Oros"),
+                          naipe_carta("Sota de Bastos")])
+        texto = (
+            "El As de Copas abre, el Tres de Oros sostiene y la Sota de Bastos "
+            "concreta. Además, la Reina de Copas corona la lectura con madurez."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertFalse(ok)
+        self.assertTrue(any("ajena" in m and "Reina de Copas" in m for m in motivos))
+
+    def test_baraja_detecta_41_carta_ocho_de_oros(self):
+        t = tarea_baraja([naipe_carta("As de Copas"),
+                          naipe_carta("Tres de Oros"),
+                          naipe_carta("Sota de Bastos")])
+        texto = (
+            "El As de Copas abre, el Tres de Oros sostiene y la Sota de Bastos "
+            "concreta. El Ocho de Oros añade un final de ciclo material."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertFalse(ok)
+        self.assertTrue(any("ajena" in m and "Ocho de Oros" in m for m in motivos))
+
+    def test_baraja_sinonimo_caballero_no_es_ajena_ni_faltante(self):
+        t = tarea_baraja([naipe_carta("Caballo de Copas"),
+                          naipe_carta("Tres de Oros"),
+                          naipe_carta("Sota de Bastos")])
+        texto = (
+            "El Caballero de Copas trae propuestas afectivas, el Tres de Oros las "
+            "sostiene con esfuerzo y la Sota de Bastos las concreta en gestos pequeños."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertTrue(ok, motivos)
+
+    def test_baraja_carta_repetida_en_tirada(self):
+        t = tarea_baraja([naipe_carta("As de Copas"),
+                          naipe_carta("As de Copas"),
+                          naipe_carta("Sota de Bastos")])
+        texto = (
+            "El As de Copas abre y la Sota de Bastos concreta, con ganas de cuidar "
+            "lo que empieza."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertFalse(ok)
+        self.assertTrue(any("repetida" in m for m in motivos))
+
+    def test_espanola_5_exige_esquema(self):
+        cartas = [naipe_carta(n) for n in ("As de Oros", "Tres de Copas", "Siete de Espadas",
+                                           "Sota de Bastos", "Rey de Oros")]
+        t = tarea_baraja(cartas, familia="espanola_5")
+        libre = " ".join(c["nombre"] + " trae su mensaje; " for c in cartas)
+        ok, motivos = fp.verificar_lectura(t, libre)
+        self.assertFalse(ok)
+        self.assertTrue(any("Falta la sección" in m for m in motivos))
+        self.assertTrue(any("Síntesis" in m for m in motivos))
+
+
+class TestVerificarEsquema(unittest.TestCase):
+    def test_cruz_celta_esquema_correcto_pasa(self):
+        t = tarea_cruz()
+        ok, motivos = fp.verificar_lectura(t, texto_cruz(t))
+        self.assertTrue(ok, motivos)
+
+    def test_cruz_celta_sin_esquema_falla(self):
+        t = tarea_cruz()
+        libre = " ".join(c["nombre"] + " aporta su lectura en este momento; " for c in t["cartas"])
+        ok, motivos = fp.verificar_lectura(t, libre)
+        self.assertFalse(ok)
+        self.assertTrue(any("Falta la sección" in m for m in motivos))
+        self.assertTrue(any("Síntesis" in m for m in motivos))
+
+    def test_cruz_celta_falta_sintesis(self):
+        t = tarea_cruz()
+        ok, motivos = fp.verificar_lectura(t, texto_cruz(t, sintesis=False))
+        self.assertFalse(ok)
+        self.assertTrue(any("Síntesis" in m for m in motivos))
+
+    def test_cruz_celta_omite_posicion(self):
+        t = tarea_cruz()
+        ok, motivos = fp.verificar_lectura(t, texto_cruz(t, omitir=7))
+        self.assertFalse(ok)
+        self.assertTrue(any("Falta la sección 7" in m for m in motivos))
+
+    def test_cruz_celta_seccion_sin_su_carta(self):
+        t = tarea_cruz()
+        ok, motivos = fp.verificar_lectura(t, texto_cruz(t, sin_carta_en=3))
+        self.assertFalse(ok)
+        self.assertTrue(any("no nombra a la carta" in m for m in motivos))
+
+    def test_cruz_celta_fuera_de_orden(self):
+        t = tarea_cruz()
+        ok, motivos = fp.verificar_lectura(t, texto_cruz(t, desorden=True))
+        self.assertFalse(ok)
+        self.assertTrue(any("orden" in m for m in motivos))
+
+    def test_cruz_celta_seccion_larga_excede(self):
+        t = tarea_cruz()
+        ok, motivos = fp.verificar_lectura(t, texto_cruz(t, largo=True))
+        self.assertFalse(ok)
+        self.assertTrue(any("excede el máximo" in m for m in motivos))
+
+    def test_lectura_completa_secciones_en_orden_pasan(self):
+        t = {"familia": "lectura_completa", "nombre": "María", "contexto": "amor",
+             "pregunta": "¿Cómo va el año?",
+             "cartas": [
+                 {"nombre": "El Loco", "invertida": False},
+                 {"nombre": "La Templanza", "invertida": False},
+                 {"nombre": "La Estrella", "invertida": False},
+             ],
+             "universo_cartas": UNIVERSO}
+        texto = (
+            "## Carta natal\nTu Sol y tu Luna piden movimiento sereno; el Ascendente acompaña.\n\n"
+            "## Tirada de tres cartas\nEl Loco abre, La Templanza sostiene y La Estrella ilusiona.\n\n"
+            "## Numerología\nTus números calculados hablan de constancia en lo cotidiano.\n\n"
+            "## Síntesis\nUn año de pasos serenos: cuídalo sin prisa y con presencia."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertTrue(ok, motivos)
+
+    def test_lectura_completa_sin_secciones_falla(self):
+        t = {"familia": "lectura_completa", "nombre": "María", "contexto": "amor",
+             "pregunta": "¿Cómo va el año?",
+             "cartas": [
+                 {"nombre": "El Loco", "invertida": False},
+                 {"nombre": "La Templanza", "invertida": False},
+                 {"nombre": "La Estrella", "invertida": False},
+             ],
+             "universo_cartas": UNIVERSO}
+        texto = "El Loco abre, La Templanza sostiene y La Estrella ilusiona este año."
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertFalse(ok)
+        self.assertTrue(any("Falta la sección" in m for m in motivos))
+
+    def test_compatibilidad_tarot_3_sin_esquema(self):
+        t = tarea_tarot([
+            {"nombre": "El Loco", "invertida": False},
+            {"nombre": "La Luna", "invertida": False},
+            {"nombre": "El Sol", "invertida": False},
+        ])
+        texto = (
+            "El Loco abre con ganas, La Luna pide escucha interior y El Sol cierra "
+            "con calidez compartida."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertTrue(ok, motivos)
+
+
+class TestMascaraAstros(unittest.TestCase):
+    def test_blanquea_luminar_en_signo(self):
+        txt = "La Luna en Capricornio pide calma y el Sol en Leo brilla."
+        m = fp._mascara_astros(txt)
+        self.assertNotIn("Luna", m)
+        self.assertNotIn("Sol", m)
+
+    def test_respeta_menciones_sin_signo(self):
+        txt = "La Luna ilumina el final del camino."
+        self.assertIn("Luna", fp._mascara_astros(txt))
+
+    def test_lectura_con_natal_no_marca_luminares_como_ajenos(self):
+        t = tarea_tarot([{"nombre": "El Loco", "invertida": False}])
+        t["calculos"] = {"carta_natal": {"signos": {}}}
+        texto = (
+            "El Loco abre el camino con ilusión; La Luna en Cáncer "
+            "solo es un apunte de tu carta natal."
+        )
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertTrue(ok, motivos)
+
+    def test_sin_natal_si_marca_ajena(self):
+        t = tarea_tarot([{"nombre": "El Loco", "invertida": False}])
+        texto = "El Loco abre el camino y La Luna sugiere paciencia."
+        ok, motivos = fp.verificar_lectura(t, texto)
+        self.assertFalse(ok)
+        self.assertTrue(any("La Luna" in m for m in motivos))
 
 
 if __name__ == "__main__":

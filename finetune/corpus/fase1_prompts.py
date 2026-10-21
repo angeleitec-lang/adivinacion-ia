@@ -31,7 +31,46 @@ FAMILIAS = (
     "tarot_1", "tarot_2", "tarot_3", "cruz_celta", "tarot_pregunta",
     "astro_natal", "sinastria", "numerologia", "lectura_completa",
     "multiturno", "etica",
+    "espanola_1", "espanola_3", "espanola_5", "espanola_7",
 )
+
+FAMILIAS_ESPAÑOLA = ("espanola_1", "espanola_3", "espanola_5", "espanola_7")
+
+# Familias de tirada larga con esquema duro por posiciones (diagnóstico T72:
+# sin límite por sección el modelo se extendía en las primeras posiciones y
+# truncaba antes de cubrir la tirada; el esquema acota y obliga a cerrar).
+FAMILIAS_ESQUEMA = ("cruz_celta", "espanola_5", "espanola_7")
+
+POSICIONES_ESPAÑOLA = {
+    "espanola_3": ["pasado", "presente", "futuro"],
+    "espanola_5": ["situación", "obstáculo", "pasado", "futuro", "resultado"],
+    "espanola_7": ["base", "pasado", "presente", "futuro", "entorno", "consejo", "resultado"],
+}
+
+LIMITE_POSICION_CHARS = 1200
+LIMITE_SINTESIS_CHARS = 800
+
+# max_tokens recomendado por familia, calculado desde longitudes reales del
+# piloto: 2,05 chars/token de media en español (cortes observados a 4.173-4.428
+# chars con 2.048 tokens). Presupuesto = secciones × ~300 chars + cabeceras +
+# síntesis, con margen ×1,6 y redondeado. Ver docs/FASE1_TIRADAS_LARGAS.md.
+RECOMENDACION_MAX_TOKENS = {
+    "tarot_1": 1536,
+    "tarot_pregunta": 1536,
+    "etica": 1536,
+    "tarot_2": 2048,
+    "multiturno": 2048,
+    "numerologia": 2048,
+    "espanola_1": 1536,
+    "tarot_3": 2560,
+    "espanola_3": 2560,
+    "astro_natal": 3072,
+    "espanola_5": 4096,
+    "sinastria": 4096,
+    "espanola_7": 5120,
+    "cruz_celta": 6144,
+    "lectura_completa": 6144,
+}
 
 ZODIACO = {
     "aries", "tauro", "gemini", "geminis", "cancer", "leo", "virgo", "libra",
@@ -69,7 +108,26 @@ INSTRUCCIONES = {
         "Responde con honestidad y empatía, marcando los límites de la lectura y "
         "derivando a un profesional cuando corresponda."
     ),
+    "espanola_1": "Interpreta el naipe para esta persona, en el contexto indicado.",
+    "espanola_3": "Interpreta la tirada completa, relacionando las tres posiciones.",
+    "espanola_5": "Interpreta la tirada en cruz completa, relacionando las cinco posiciones.",
+    "espanola_7": "Interpreta la tirada completa, relacionando las siete posiciones.",
 }
+
+# Esquema duro de lectura_completa: el piloto mostraba que la carta natal se
+# desbordaba listando aspectos y la lectura no llegaba a cubrir el tarot.
+_ESQUEMA_COMPLETA = """ESQUEMA OBLIGATORIO (cuatro secciones, en este orden y con estas cabeceras):
+## Carta natal
+## Tirada de tres cartas
+## Numerología
+## Síntesis
+
+Reglas:
+- En «Carta natal» (máximo 600 caracteres) interpreta solo Sol, Luna, Ascendente y el foco de la pregunta; NO hagas listas de aspectos ni de posiciones planetarias.
+- En «Tirada de tres cartas» dedica un párrafo de 150 a 300 caracteres a cada carta con su posición (pasado, presente, futuro), nombrándola cada vez con su nombre exacto y su orientación.
+- En «Numerología» (máximo 400 caracteres) usa los números calculados que se dan, sin contradecirlos.
+- En «Síntesis» (máximo 400 caracteres) ata las tres técnicas, da un consejo y cierra la lectura con una frase final.
+- No menciones naipes ni arcanos distintos de los tres dibujados, ni otros signos o números que no estén en los datos."""
 
 # Promesas y afirmaciones vedadas (diagnóstico/promesa médica, muerte, garantías,
 # lotería). Se descartan cuando van negadas inmediatamente antes.
@@ -233,6 +291,37 @@ def _ref_tarot(cartas, kb_tarot, contexto=None):
     return CABECERA_REFERENCIA + "\n" + "\n".join(lineas)
 
 
+def _ref_baraja(cartas, kb_baraja, contexto=None):
+    naipes = kb_baraja.get("naipes", []) if isinstance(kb_baraja, dict) else list(kb_baraja or [])
+    por = {_norm(c["nombre"]): c for c in naipes}
+    lineas = []
+    for c in cartas or []:
+        kb = por.get(_norm(c.get("nombre")))
+        if not kb:
+            continue
+        if c.get("invertida"):
+            texto = kb.get("invertida") or kb.get("significado", "")
+            orient = "invertida"
+        else:
+            texto = kb.get("significado", "")
+            orient = "al derecho"
+        frases = [f"- {c.get('nombre')} ({orient}): {texto}"]
+        if contexto:
+            ctx = (kb.get("contextos") or {}).get(contexto)
+            if ctx:
+                frases.append(f"En {contexto}: {ctx}")
+        claves = ", ".join(kb.get("palabras_clave", []))
+        if claves:
+            frases.append(f"Palabras clave: {claves}")
+        disc = _nota_discrepancia(kb)
+        if disc:
+            frases.append(disc)
+        lineas.append(_unir(frases))
+    if not lineas:
+        return ""
+    return CABECERA_REFERENCIA + "\n" + "\n".join(lineas)
+
+
 def _ref_astro(carta, kb_astro):
     carta = carta or {}
     signos = {_norm(s["nombre"]): s for s in kb_astro.get("signos", [])}
@@ -331,6 +420,19 @@ def _cuerpo(tarea, calc):
             cuerpo += f"\nContexto: {ctx}."
         return cuerpo + f'\nPregunta del consultante: "{q}"'
 
+    if f in FAMILIAS_ESPAÑOLA:
+        titulos = {
+            "espanola_1": "Tirada de una carta de la baraja española (40 naipes).",
+            "espanola_3": "Tirada de tres cartas de la baraja española (pasado, presente y futuro).",
+            "espanola_5": "Tirada en cruz de cinco cartas de la baraja española.",
+            "espanola_7": "Tirada de siete cartas de la baraja española.",
+        }
+        cuerpo = f"{titulos[f]}\n\n{_fmt_cartas(tarea.get('cartas'), tarea.get('posiciones'))}"
+        cuerpo += "\nBaraja española de 40 naipes: no es tarot ni baraja francesa; no la mezcles."
+        if ctx:
+            cuerpo += f"\nContexto: {ctx}."
+        return cuerpo + f'\nPregunta del consultante: "{q}"'
+
     if f == "astro_natal":
         cuerpo = (
             "Lectura de carta natal.\n\n"
@@ -383,6 +485,8 @@ def _referencia(tarea, kb, calc):
 
     if f in ("tarot_1", "tarot_2", "tarot_3", "cruz_celta", "tarot_pregunta", "multiturno"):
         return _ref_tarot(tarea.get("cartas"), kb_tarot, ctx)
+    if f in FAMILIAS_ESPAÑOLA:
+        return _ref_baraja(tarea.get("cartas"), kb.get("baraja", {}), ctx)
     if f == "astro_natal":
         return _ref_astro(calc.get("carta_natal"), kb_astro)
     if f == "sinastria":
@@ -406,14 +510,48 @@ def _referencia(tarea, kb, calc):
     return ""
 
 
+def _esquema_texto(tarea):
+    """Esquema obligatorio para tiradas largas y lectura completa (o '' si no aplica)."""
+    f = tarea.get("familia", "")
+    if f == "lectura_completa":
+        return _ESQUEMA_COMPLETA
+    if f not in FAMILIAS_ESQUEMA:
+        return ""
+    cartas = tarea.get("cartas") or []
+    posiciones = tarea.get("posiciones") or []
+    n = len(cartas)
+    lineas = [
+        f"ESQUEMA OBLIGATORIO ({n} secciones numeradas y una síntesis final). "
+        "Copia cada cabecera en su propia línea, en este orden exacto:",
+    ]
+    for i, c in enumerate(cartas):
+        orient = "invertida" if c.get("invertida") else "al derecho"
+        pos = posiciones[i] if i < len(posiciones) else f"posición {i + 1}"
+        lineas.append(f"## {i + 1}. {pos} — {c.get('nombre', '?')} ({orient})")
+    lineas.append("## Síntesis")
+    lineas += [
+        "",
+        "Reglas:",
+        f"- Después de cada cabecera, escribe entre 150 y 300 caracteres de interpretación "
+        f"dedicados SOLO a esa posición. No te extiendas más: el lector debe poder recorrer "
+        f"las {n} posiciones sin que se agote el espacio.",
+        f"- Solo existen las {n} cartas dibujadas, con la orientación indicada. No menciones "
+        "ninguna otra carta, ni siquiera como comparación o ejemplo.",
+        "- En «Síntesis» (máximo 400 caracteres) ata las posiciones en una idea central, "
+        "da un consejo práctico y cierra la lectura con una frase final.",
+    ]
+    return "\n".join(lineas)
+
+
 def construir_prompt(tarea, kb, calculos=None):
     """Devuelve {"system", "user"} con estilo, Referencia de la KB y datos calculados."""
     calc = calculos if calculos is not None else (tarea.get("calculos") or {})
     f = tarea.get("familia", "")
     cuerpo = _cuerpo(tarea, calc)
+    esquema = _esquema_texto(tarea)
     referencia = _referencia(tarea, kb, calc)
     instruccion = INSTRUCCIONES.get(f, "Interpreta la consulta con las técnicas indicadas.")
-    user = "\n\n".join(p for p in (cuerpo, referencia, instruccion) if p)
+    user = "\n\n".join(p for p in (cuerpo, esquema, referencia, instruccion) if p)
     return {"system": SYSTEM, "user": user}
 
 
@@ -489,27 +627,70 @@ def _presente_carta(nombre, norm):
     return False
 
 
-def _verif_cartas(cartas, universo, texto, motivos):
+def _presente_carta_any(carta, norm):
+    """_presente_carta sobre el nombre y sus sinónimos (baraja española)."""
+    if isinstance(carta, dict):
+        candidatos = [carta.get("nombre")] + list(carta.get("sinonimos") or [])
+    else:
+        candidatos = [carta]
+    return any(_presente_carta(x, norm) for x in candidatos if x)
+
+
+_SIGNOS_ZODIACO = (
+    r"aries|tauro|g[ée]minis|c[áa]ncer|leo|virgo|libra|escorpio(?:n)?|"
+    r"sagitario|capricornio|acuario|piscis"
+)
+_RE_ASTRO_LUMINAR = re.compile(
+    r"(?i)\b(?:el\s+sol|la\s+luna)\s+en\s+(?:" + _SIGNOS_ZODIACO + r")(?![" + _LETRAS + r"])"
+)
+
+
+def _mascara_astros(texto):
+    """Blanquea las menciones astrológicas «el sol / la luna en <signo>».
+
+    En lecturas con carta natal, El Sol y La Luna nombran astros, no arcanos:
+    sin este filtro el verificador los marcaría como cartas ajenas.
+    """
+    return _RE_ASTRO_LUMINAR.sub(lambda m: " " * len(m.group(0)), texto)
+
+
+def _verif_cartas(cartas, universo, texto, motivos, texto_ajenas=None):
+    """Presencia, repetición, orientación y cartas ajenas.
+
+    texto_ajenas: si se aporta, se usa solo para buscar menciones ajenas
+    (permite ocultar los astros homónimos en lecturas con carta natal).
+    """
     norm = _norm(texto)
     drawn = set()
+    drawn_todo = set()
     validas = []
     for c in cartas:
         if not isinstance(c, dict) or not c.get("nombre"):
             motivos.append(f"Carta de la tirada no válida: {c!r}")
             continue
         validas.append(c)
-        drawn.add(_norm(c.get("nombre")))
+        nn = _norm(c.get("nombre"))
+        if nn in drawn:
+            motivos.append(f"Carta repetida en la tirada: {c.get('nombre')}")
+        drawn.add(nn)
+        drawn_todo.add(nn)
+        for s in c.get("sinonimos") or []:
+            drawn_todo.add(_norm(s))
     for c in validas:
-        if not _presente_carta(c.get("nombre"), norm):
+        if not _presente_carta_any(c, norm):
             motivos.append(f"Falta la carta de la tirada: {c.get('nombre')}")
+    for_ajenas = texto if texto_ajenas is None else texto_ajenas
     for elemento in universo:
         nombre = elemento.get("nombre") if isinstance(elemento, dict) else elemento
         if not nombre:
             continue
         nn = _norm(nombre)
-        if nn in drawn:
+        if nn in drawn_todo:
             continue
-        if nn and _mencion_carta(nombre, texto):
+        sinon = (elemento.get("sinonimos") or []) if isinstance(elemento, dict) else []
+        if any(_norm(s) in drawn_todo for s in sinon):
+            continue
+        if nn and _mencion_carta(nombre, for_ajenas):
             motivos.append(f"Menciona carta ajena a la tirada: {nombre}")
     hay_inv = any(c.get("invertida") for c in validas)
     inv = _tiene_inversion(texto)
@@ -565,6 +746,83 @@ def _verif_juego(texto, motivos):
             motivos.append(f"Promesa vedada de juego o apuestas: «{m.group(0)}»")
 
 
+_CAB_NUM = re.compile(r"(?m)^[ \t>*#-]*(\d+)[.)][ \t]+(.*)$")
+_CAB_SINTESIS = re.compile(r"(?m)^[ \t>*#-]*S[ií]ntesis[ \t:.—-]*(.*)$")
+
+
+def _verif_esquema(tarea, texto, motivos):
+    """Exige orden, presencia de la carta y límites por sección en tiradas largas."""
+    f = tarea.get("familia", "")
+    if f == "lectura_completa":
+        n = _norm(texto)
+        esperado = ["carta natal", "tirada de tres cartas", "numerolog", "sintesis"]
+        ultima = -1
+        for etiqueta in esperado:
+            i = n.find(etiqueta)
+            if i == -1:
+                motivos.append(f"Falta la sección: {etiqueta}")
+            elif i < ultima:
+                motivos.append(f"La sección «{etiqueta}» está fuera de orden")
+            else:
+                ultima = i
+        return
+    cartas = tarea.get("cartas") or []
+    posiciones = tarea.get("posiciones") or []
+    n = len(cartas)
+    if not n:
+        return
+    heads = []
+    for m in _CAB_NUM.finditer(texto):
+        heads.append((int(m.group(1)), m.start(), m.end()))
+    fin_posiciones = max((s for _num, s, _e in heads), default=0)
+    msin = None
+    for m in _CAB_SINTESIS.finditer(texto):
+        if m.start() >= fin_posiciones:
+            msin = m
+            break
+    vistos = {}
+    for num, start, end in heads:
+        if num in vistos:
+            motivos.append(f"Sección {num} duplicada")
+            continue
+        vistos[num] = (start, end)
+    primera_aparicion = []
+    for num, _start, _end in heads:
+        if num not in primera_aparicion:
+            primera_aparicion.append(num)
+    if primera_aparicion != sorted(primera_aparicion):
+        motivos.append("Las secciones numeradas no siguen el orden 1 a " + str(n))
+    for k in range(1, n + 1):
+        etiqueta = posiciones[k - 1] if k - 1 < len(posiciones) else f"posición {k}"
+        if k not in vistos:
+            motivos.append(f"Falta la sección {k} ({etiqueta})")
+            continue
+        start, _end = vistos[k]
+        siguiente = min((st for _num, st, _e in heads if st > start), default=len(texto))
+        if msin and start < msin.start() < siguiente:
+            siguiente = msin.start()
+        segmento = texto[start:siguiente]
+        c = cartas[k - 1]
+        if not _presente_carta_any(c, _norm(segmento)):
+            motivos.append(
+                f"La sección {k} ({etiqueta}) no nombra a la carta {c.get('nombre')}"
+            )
+        if len(segmento) > LIMITE_POSICION_CHARS:
+            motivos.append(
+                f"La sección {k} ({etiqueta}) excede el máximo de "
+                f"{LIMITE_POSICION_CHARS} caracteres ({len(segmento)})"
+            )
+    if not msin:
+        motivos.append("Falta la sección de Síntesis")
+    else:
+        cola = texto[msin.end():]
+        if len(cola) > LIMITE_SINTESIS_CHARS:
+            motivos.append(
+                f"La síntesis excede el máximo de {LIMITE_SINTESIS_CHARS} caracteres "
+                f"({len(cola)})"
+            )
+
+
 def verificar_lectura(tarea, texto):
     """Comprueba presencia, no invención, coherencia con lo calculado y vedados."""
     motivos = []
@@ -574,7 +832,12 @@ def verificar_lectura(tarea, texto):
     calc = tarea.get("calculos") or {}
     cartas = tarea.get("cartas") or []
     if cartas:
-        _verif_cartas(cartas, tarea.get("universo_cartas") or [], texto, motivos)
+        texto_ajenas = _mascara_astros(texto) if "carta_natal" in calc else None
+        _verif_cartas(cartas, tarea.get("universo_cartas") or [], texto, motivos,
+                      texto_ajenas=texto_ajenas)
+    f = tarea.get("familia", "")
+    if f in FAMILIAS_ESQUEMA or f == "lectura_completa":
+        _verif_esquema(tarea, texto, motivos)
     _verif_numeros(calc, texto, motivos)
     _verif_sol(calc, texto, motivos)
     _verif_promesas(texto, motivos)
@@ -591,7 +854,28 @@ def _cargar_kb_real():
         "tarot": gt.load_kb("tarot.json"),
         "astrologia": gt.load_kb("astrologia.json"),
         "numerologia": gt.load_kb("numerologia.json"),
+        "baraja": gt.load_kb("baraja_espanola.json"),
     }
+
+
+def universo_baraja(kb_baraja, kb_tarot):
+    """Universo de la baraja: los 40 naipes (con sinónimos) más los nombres del
+    tarot que NO son naipe (mayores, reinas, ochos/nueves/dieces), para que el
+    verificador detecte como ajenas las cartas de la 41 en adelante y las
+    mezclas con tarot. Caballero/Sota/Caballo y As-Siete compartidos no se listan
+    como ajenos porque son variantes o naipes legítimos."""
+    from cartas import NAIPES_ESPANOLES
+    aceptadas = set()
+    for c in NAIPES_ESPANOLES:
+        aceptadas.add(_norm(c["nombre"]))
+        for s in c.get("sinonimos") or []:
+            aceptadas.add(_norm(s))
+    extras = []
+    for c in (kb_tarot.get("mayores", []) + kb_tarot.get("menores", [])):
+        nn = _norm(c.get("nombre", ""))
+        if nn and nn not in aceptadas:
+            extras.append(c["nombre"])
+    return list(NAIPES_ESPANOLES) + extras
 
 
 def _fabricar_tarea(familia, rng, kb):
@@ -645,6 +929,19 @@ def _fabricar_tarea(familia, rng, kb):
                "actitud", "entorno", "esperanzas y miedos", "resultado"]
         t = {"familia": familia, "contexto": contexto, "pregunta": pregunta,
              "cartas": dibujar(10), "posiciones": pos, "universo_cartas": universo}
+        return t, {}
+
+    if familia in FAMILIAS_ESPAÑOLA:
+        from cartas import NAIPES_ESPANOLES
+        n = {"espanola_1": 1, "espanola_3": 3, "espanola_5": 5, "espanola_7": 7}[familia]
+        elegidas = rng.sample(NAIPES_ESPANOLES, n)
+        cartas_e = [{"nombre": c["nombre"], "invertida": rng.random() < 0.35,
+                     "sinonimos": list(c.get("sinonimos") or [])} for c in elegidas]
+        t = {"familia": familia, "mazo": "espanol", "contexto": contexto,
+             "pregunta": pregunta, "cartas": cartas_e,
+             "universo_cartas": universo_baraja(kb.get("baraja", {}), kb["tarot"])}
+        if familia in POSICIONES_ESPAÑOLA:
+            t["posiciones"] = list(POSICIONES_ESPAÑOLA[familia])
         return t, {}
 
     if familia == "astro_natal":
