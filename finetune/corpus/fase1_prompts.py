@@ -32,6 +32,7 @@ FAMILIAS = (
     "astro_natal", "sinastria", "numerologia", "lectura_completa",
     "multiturno", "etica",
     "espanola_1", "espanola_3", "espanola_5", "espanola_7",
+    "transitos", "revolucion_solar", "biorritmos", "fuera_alcance",
 )
 
 FAMILIAS_ESPAÑOLA = ("espanola_1", "espanola_3", "espanola_5", "espanola_7")
@@ -81,6 +82,10 @@ RECOMENDACION_MAX_TOKENS = {
     "espanola_7": 5120,
     "cruz_celta": 6144,
     "lectura_completa": 6144,
+    "transitos": 3072,
+    "revolucion_solar": 3072,
+    "biorritmos": 2048,
+    "fuera_alcance": 1536,
 }
 
 ZODIACO = {
@@ -123,6 +128,14 @@ INSTRUCCIONES = {
     "espanola_3": "Interpreta la tirada completa, relacionando las tres posiciones.",
     "espanola_5": "Interpreta la tirada en cruz completa, relacionando las cinco posiciones.",
     "espanola_7": "Interpreta la tirada completa, relacionando las siete posiciones.",
+    "transitos": "Interpreta los tránsitos indicados, relacionándolos con la carta natal.",
+    "revolucion_solar": "Interpreta la revolución solar a partir de los datos indicados.",
+    "biorritmos": "Interpreta los tres ciclos con los porcentajes indicados, sin inventar cifras.",
+    "fuera_alcance": (
+        "Explica con claridad que esa técnica no forma parte de tu alcance (tarot, "
+        "baraja española, astrología y numerología), no inventes datos y ofrece una "
+        "alternativa dentro de esas técnicas si tiene sentido."
+    ),
 }
 
 # Esquema duro de lectura_completa: el piloto mostraba que la carta natal se
@@ -519,6 +532,43 @@ def _cuerpo(tarea, calc):
     if f == "etica":
         return f"Consulta delicada.\n\nPregunta del consultante: \"{q}\""
 
+    if f == "transitos":
+        import generate_tasks as gt
+        return (
+            "Lectura de tránsitos sobre una carta natal.\n\n"
+            + _fmt_carta_natal(calc.get("carta_natal"), tarea.get("ciudad", ""), tarea.get("pais", ""))
+            + "\n\n" + gt.fmt_transitos(calc.get("transitos") or {})
+            + f'\n\nPregunta del consultante: "{q}"'
+        )
+
+    if f == "revolucion_solar":
+        import generate_tasks as gt
+        return (
+            "Lectura de revolución solar.\n\n"
+            + _fmt_carta_natal(calc.get("carta_natal"), tarea.get("ciudad", ""), tarea.get("pais", ""))
+            + "\n\n" + gt.fmt_revolucion_solar(calc.get("revolucion_solar") or {})
+            + f'\n\nPregunta del consultante: "{q}"'
+        )
+
+    if f == "biorritmos":
+        datos = calc.get("biorritmos") or {}
+        ciclos = datos.get("ciclos") or {}
+        etiquetas = (("fisico", "Físico"), ("emocional", "Emocional"), ("intelectual", "Intelectual"))
+        lineas = [
+            f"- {etiq}: {ciclos[clave].get('porcentaje')}% ({ciclos[clave].get('fase')})"
+            for clave, etiq in etiquetas if clave in ciclos
+        ]
+        return (
+            "Lectura de biorritmos.\n\n"
+            + f"Datos de nacimiento: {tarea.get('fecha_nacimiento', '')}, {tarea.get('hora', '')}.\n"
+            + f"Biorritmos para el {datos.get('fecha', '')}:\n"
+            + "\n".join(lineas)
+            + f'\n\nPregunta del consultante: "{q}"'
+        )
+
+    if f == "fuera_alcance":
+        return f"Consulta fuera de alcance.\n\nPregunta del consultante: \"{q}\""
+
     return f'Consulta.\n\nPregunta del consultante: "{q}"'
 
 
@@ -553,6 +603,8 @@ def _referencia(tarea, kb, calc):
             _ref_numerologia(calc.get("numerologia"), kb_num),
         ) if r]
         return "\n\n".join(refs)
+    if f in ("transitos", "revolucion_solar"):
+        return _ref_astro(calc.get("carta_natal"), kb_astro)
     return ""
 
 
@@ -1230,6 +1282,122 @@ def _verif_cartas_sin_tirada(universo, texto, motivos, astro):
                 f"Menciona carta de tarot en una lectura sin tirada: {nombre}")
 
 
+_RE_TRIPLE_TRANSITO = re.compile(
+    r"\b([a-z]+)\s+(?:en\s+transito\s+)?hace\s+([a-z]+)\s+a\s+(?:su|tu)\s+([a-z]+)\s+natal\b")
+
+_RE_SOL_RS = re.compile(r"\bsol\s+(?:rs|de la revolucion)\s+(?:en\s+)?([a-z]+)\b")
+
+_RE_ASC_RS = re.compile(r"\bascendente\s+(?:rs|de la revolucion)\s+(?:en\s+)?([a-z]+)\b")
+
+_RE_PCT = re.compile(r"(\d{1,3})\s*%")
+
+_RECHAZO_ALCANCE = re.compile(
+    r"no puedo|no voy a|no es posible|no estoy (para|en condiciones)|no forma parte|"
+    r"no entra dentro|queda fuera de mi alcance|no sustituye|no reemplaza|"
+    r"no soy (?:m[ée]dico|profesional|sanador)|no doy|no hago|me niego|"
+    r"no está en mi (?:alcance|mano)|no tengo (?:acceso|datos|forma)|no dispongo|"
+    r"no es mi cometido|no corresponde|no puedo (?:garantizar|predecir|diagnosticar|asegurar|darte)",
+    re.IGNORECASE)
+
+_ALTERNATIVA_TECNICAS = re.compile(
+    r"tarot|baraja|astrolog|numerolog|carta\s+natal|tr[aá]nsito|"
+    r"revoluci[oó]n\s+solar|biorritmo", re.IGNORECASE)
+
+
+def _verif_transitos(calc, texto, motivos):
+    """Solo contradicciones: triples 'X hace Y a su Z natal' no calculados."""
+    trans = (calc or {}).get("transitos") or {}
+    aspectos = trans.get("aspectos") or []
+    if not aspectos:
+        return
+    esperados = {
+        (_norm(a.get("planeta_transito", "")), _norm(a.get("aspecto", "")),
+         _norm(a.get("planeta_natal", "")))
+        for a in aspectos
+    }
+    n = _norm(texto)
+    for t, a, npl in _RE_TRIPLE_TRANSITO.findall(n):
+        if (t, a, npl) not in esperados:
+            motivos.append(
+                f"Menciona un tránsito que no está entre los calculados: "
+                f"{t} hace {a} a su {npl} natal")
+
+
+def _verif_revolucion(calc, texto, motivos):
+    """Solo contradicciones: Sol/Ascendente de la revolución distintos de los calculados."""
+    rs = (calc or {}).get("revolucion_solar") or {}
+    if not rs:
+        return
+    sol_rs = next(
+        (p.get("signo") for p in (rs.get("carta") or {}).get("planetas") or []
+         if p.get("nombre") == "Sol"), None)
+    asc_rs = (rs.get("ascendente") or {}).get("signo")
+    n = _norm(texto)
+    if sol_rs:
+        for tok in _RE_SOL_RS.findall(n):
+            if tok in ZODIACO and tok != _norm(sol_rs):
+                motivos.append(
+                    f"Contradice el Sol de la revolución solar calculado "
+                    f"({sol_rs}): el texto dice {tok}")
+    if asc_rs:
+        for tok in _RE_ASC_RS.findall(n):
+            if tok in ZODIACO and tok != _norm(asc_rs):
+                motivos.append(
+                    f"Contradice el Ascendente de la revolución solar calculado "
+                    f"({asc_rs}): el texto dice {tok}")
+
+
+def _verif_biorritmos(calc, texto, motivos):
+    """Solo contradicciones: porcentajes citados fuera de ±5 de los calculados."""
+    datos = (calc or {}).get("biorritmos") or {}
+    ciclos = datos.get("ciclos") or {}
+    if not ciclos:
+        return
+    n = _norm(texto)
+    alias = {
+        "fisico": ("fisico", "fisica"),
+        "emocional": ("emocional",),
+        "intelectual": ("intelectual",),
+    }
+    for clave, nombres in alias.items():
+        ciclo = ciclos.get(clave)
+        if not ciclo:
+            continue
+        esperado = ciclo.get("porcentaje")
+        if esperado is None:
+            continue
+        for nombre in nombres:
+            for m in re.finditer(r"\b" + nombre + r"\b", n):
+                inicio = max(0, m.start() - 60)
+                ventana = n[inicio: m.end() + 120]
+                candidatos = list(_RE_PCT.finditer(ventana))
+                if not candidatos:
+                    continue
+                # El porcentaje propio del ciclo va justo después del nombre
+                # ("intelectual al 87%"); se prefiere ese y solo se falla si
+                # todas las lecturas razonables contradicen lo calculado.
+                cercano = min(candidatos,
+                             key=lambda c: abs((inicio + c.start()) - m.start()))
+                despues = [c for c in candidatos
+                          if inicio + c.start() >= m.end()]
+                elegidos = [despues[0], cercano] if despues else [cercano]
+                if all(abs(int(c.group(1)) - int(esperado)) > 5
+                       for c in elegidos):
+                    motivos.append(
+                        f"Contradice el ciclo {clave} calculado "
+                        f"({esperado}%): el texto dice {cercano.group(1)}%")
+
+
+def _verif_negativa_alcance(tarea, texto, motivos):
+    """fuera_alcance: exige rechazo explícito y alternativa dentro del producto."""
+    if tarea.get("familia") != "fuera_alcance":
+        return
+    if not _RECHAZO_ALCANCE.search(texto):
+        motivos.append("No rechaza la técnica fuera de alcance")
+    if not _ALTERNATIVA_TECNICAS.search(texto):
+        motivos.append("No ofrece alternativa dentro de las técnicas del producto")
+
+
 def verificar_lectura(tarea, texto):
     """Comprueba presencia, no invención, coherencia con lo calculado y vedados."""
     motivos = []
@@ -1255,6 +1423,10 @@ def verificar_lectura(tarea, texto):
         _verif_esquema(tarea, texto, motivos)
     _verif_numeros(calc, texto, motivos)
     _verif_sol(calc, texto, motivos)
+    _verif_transitos(calc, texto, motivos)
+    _verif_revolucion(calc, texto, motivos)
+    _verif_biorritmos(calc, texto, motivos)
+    _verif_negativa_alcance(tarea, texto, motivos)
     _verif_promesas(texto, motivos)
     _verif_juego(texto, motivos)
     return (len(motivos) == 0, motivos)
@@ -1399,6 +1571,38 @@ def _fabricar_tarea(familia, rng, kb):
         arranque = rng.choice(gt.ARRANQUES_ETICA)
         t = {"familia": familia, "tema": tema,
              "pregunta": f"{arranque} {pregunta_e}"}
+        return t, {}
+
+    if familia == "transitos":
+        fecha, hora, ciudad, pais, lat, lon, tz = nacimiento()
+        carta = gt.calcular_carta(fecha, hora, lat, lon, tz)
+        trans, _rs = gt.datos_proyeccion(fecha, hora, lat, lon, tz)
+        foco = rng.choice(gt.FOCOS_ASTRO)
+        t = {"familia": familia, "foco": foco, "ciudad": ciudad, "pais": pais,
+             "pregunta": rng.choice(gt.PREGUNTAS_TRANSITOS).format(foco=foco)}
+        return t, {"carta_natal": carta, "transitos": trans}
+
+    if familia == "revolucion_solar":
+        fecha, hora, ciudad, pais, lat, lon, tz = nacimiento()
+        carta = gt.calcular_carta(fecha, hora, lat, lon, tz)
+        _trans, rs = gt.datos_proyeccion(fecha, hora, lat, lon, tz)
+        t = {"familia": familia, "ciudad": ciudad, "pais": pais,
+             "pregunta": rng.choice(gt.PREGUNTAS_RS)}
+        return t, {"carta_natal": carta, "revolucion_solar": rs}
+
+    if familia == "biorritmos":
+        from calculos import biorritmos as calc_bio
+        fecha, hora, _ciudad, _pais, _lat, _lon, _tz = nacimiento()
+        datos = calc_bio.biorritmos(fecha, gt.FECHA_CONSULTA)
+        t = {"familia": familia, "fecha_nacimiento": fecha, "hora": hora,
+             "pregunta": rng.choice(gt.PREGUNTAS_BIORRITMOS)}
+        return t, {"biorritmos": datos}
+
+    if familia == "fuera_alcance":
+        tecnica, pregunta_f = rng.choice(gt.FUERA_ALCANCE_ENTRENAMIENTO)
+        arranque = rng.choice(gt.ARRANQUES_FUERA)
+        t = {"familia": familia, "tecnica": tecnica,
+             "pregunta": f"{arranque} {pregunta_f}"}
         return t, {}
 
     raise ValueError(f"familia desconocida: {familia}")
