@@ -888,8 +888,10 @@ def insertar_jobs(con, filas, replace_pending=False):
     """Inserta jobs por bloque de forma idempotente dentro de una transacción.
 
     Sin replace_pending: si el bloque ya tiene filas en la BD, se omite entero.
-    Con replace_pending: se borran solo las filas 'pending' de ese bloque y se
-    insertan las nuevas; done/running/failed no se tocan.
+    Con replace_pending: se borran las filas 'pending' y 'failed' del bloque y
+    se reinserta solo lo que no exista ya por (prompt, payload). Así una
+    regeneración determinista no duplica las tareas que ya están 'done' y los
+    fallos vuelven a intentarse sin crear filas nuevas.
     """
     bloques = []
     for f in filas:
@@ -906,8 +908,30 @@ def insertar_jobs(con, filas, replace_pending=False):
                 print(f"bloque {bloque}: ya existe ({existentes} filas), omitido")
                 continue
             if replace_pending:
-                con.execute("DELETE FROM jobs WHERE bloque=? AND status='pending'", (bloque,))
-            grupo = [f for f in filas if f[0] == bloque]
+                con.execute(
+                    "DELETE FROM jobs WHERE bloque=? AND status IN "
+                    "('pending','failed')", (bloque,))
+                # Solo las 'done' bloquean la reinserción: un 'running' puede
+                # seguir procesándose y su tarea debe quedar también pendiente.
+                vistas = {
+                    (r[0], r[1])
+                    for r in con.execute(
+                        "SELECT prompt, payload FROM jobs "
+                        "WHERE bloque=? AND status='done'", (bloque,))
+                }
+            else:
+                vistas = set()
+            grupo = []
+            for f in filas:
+                if f[0] != bloque:
+                    continue
+                clave = (f[2], f[3])
+                if clave in vistas:
+                    continue
+                vistas.add(clave)
+                grupo.append(f)
+            if not grupo:
+                continue
             con.executemany(
                 "INSERT INTO jobs (bloque, system, prompt, payload, max_tokens) VALUES (?,?,?,?,?)",
                 grupo,

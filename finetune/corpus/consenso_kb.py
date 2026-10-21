@@ -606,18 +606,24 @@ def _cargar_consenso_existente(ruta):
     return existentes
 
 
-def cargar_claves_exclusion(rutas):
-    """Claves de exclusin (T71/T88) indexadas por (entidad_id, faceta).
+def cargar_claves_exclusion(rutas, estadisticas=None):
+    """Claves de exclusión (T71/T88) indexadas por (entidad_id, faceta).
 
     ``rutas`` puede ser una ruta o una lista de rutas (p. ej. la de limpieza
-    de libros T71 y la del filtro de atribucin T88). Se unen todas: una
+    de libros T71 y la del filtro de atribución T88). Se unen todas: una
     misma clave (entidad_id, faceta) que aparezca en varias listas se fusiona
-    en un nico set de hashes, de modo que la celda se rehace una sola vez.
-    Cada lnea del JSONL debe traer hash_seccion, entidad_id y faceta.
+    en un único set de hashes, de modo que la celda se rehace una sola vez.
+    Cada línea del JSONL debe traer hash_seccion, entidad_id y faceta; las
+    líneas incompletas o con hash vacío se descartan y se cuentan en
+    ``estadisticas`` si se pasa un dict (claves lineas/validas/descartadas).
     Devuelve dict (entidad_id, faceta) -> set(hash_seccion).
     """
-    if isinstance(rutas, str) or rutas is None:
+    if isinstance(rutas, (str, os.PathLike)) or rutas is None:
         rutas = [rutas] if rutas else []
+    stats = estadisticas if estadisticas is not None else {}
+    stats.setdefault("lineas", 0)
+    stats.setdefault("validas", 0)
+    stats.setdefault("descartadas", 0)
     claves = {}
     for ruta in rutas:
         if not ruta or not os.path.exists(ruta):
@@ -627,12 +633,20 @@ def cargar_claves_exclusion(rutas):
                 linea = linea.strip()
                 if not linea:
                     continue
+                stats["lineas"] += 1
                 try:
                     reg = json.loads(linea)
-                    claves.setdefault((reg["entidad_id"], reg["faceta"]),
-                                     set()).add(reg["hash_seccion"])
-                except (json.JSONDecodeError, KeyError):
+                    entidad = reg["entidad_id"]
+                    faceta = reg["faceta"]
+                    h = reg["hash_seccion"]
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    stats["descartadas"] += 1
                     continue
+                if not isinstance(h, str) or not h.strip():
+                    stats["descartadas"] += 1
+                    continue
+                claves.setdefault((entidad, faceta), set()).add(h.strip())
+                stats["validas"] += 1
     return claves
 
 

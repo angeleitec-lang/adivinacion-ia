@@ -125,17 +125,8 @@ class TestGeneracionIdempotente(unittest.TestCase):
             ("alfa", "sys", "p3", "{}", 100),
         ]
 
-    @unittest.expectedFailure
     def test_replace_pending_no_duplica_tareas_ya_hechas(self):
-        """Regenerar con la misma semilla reinserta lo que ya estaba `done`.
-
-        `insertar_jobs(..., replace_pending=True)` borra solo las pendientes y
-        vuelve a insertar TODAS las filas del bloque. Si el bloque ya se había
-        procesado (done) y la generación es determinista (misma `--seed`), las
-        mismas tareas quedan duplicadas: una hecha y otra pendiente.
-
-        Reproduccion: test_replace_pending_no_duplica_tareas_ya_hechas.
-        """
+        """Regenerar con la misma semilla no duplica lo que ya estaba `done`."""
         filas = self._filas()
         gt.insertar_jobs(self.con, filas, replace_pending=False)
         self.con.execute("UPDATE jobs SET status='done' WHERE bloque='alfa'")
@@ -240,16 +231,8 @@ class TestParadaPorErrores(unittest.TestCase):
             for _ in range(4)
         ])
 
-    @unittest.expectedFailure
     def test_los_rechazos_del_verificador_cuentan_para_la_parada(self):
-        """La ventana de errores solo mira `error_red`, no los rechazos.
-
-        Con `ventana_errores=2` y `umbral_error=0.2`, cuatro lecturas
-        rechazadas por el verificador (100 % de fallos) deberían disparar la
-        parada; hoy la ventana queda a cero y el run sigue.
-
-        Reproduccion: test_los_rechazos_del_verificador_cuentan_para_la_parada.
-        """
+        """Los rechazos del verificador cuentan como fallos para `parada`."""
         self._cuatro_rechazos()
         res = ef.ejecutar(self.db, ClienteGuion(["Hola."]), self.kb,
                           workers=1, out_dir=self.out,
@@ -281,15 +264,12 @@ class TestFugaEvaluacion(unittest.TestCase):
             "id": i,
         }
 
-    @unittest.expectedFailure
     def test_el_prompt_de_evaluacion_no_aparece_en_train(self):
-        """El dedupe compara respuestas, no preguntas: el mismo prompt se cuela.
+        """Ninguna pregunta reservada para val/test puede reaparecer en train.
 
-        Una pregunta real reservada para val/test puede volver a train vía una
-        fila sintética con OTRA respuesta (el par no es duplicado exacto). Se
-        espera que ningún human de train esté en val/test.
-
-        Reproduccion: test_el_prompt_de_evaluacion_no_aparece_en_train.
+        Una fila sintética con la misma pregunta que una real de val/test y
+        otra respuesta se excluye por human (no solo por respuesta). Se espera
+        que ningún human de train esté en val/test.
         """
         pregunta = "¿Qué significa la carta El Sol en la tirada %d del tarot?"
         reales = [
@@ -318,23 +298,15 @@ class TestVerificador(unittest.TestCase):
         return ef.tarea_desde_job(
             "tarot_1", payload, "¿Qué me depara el trabajo?", KB_MIN)
 
-    @unittest.expectedFailure
     def test_rechaza_carta_inventada_fuera_del_universo(self):
-        """Solo compara contra el universo conocido: un arcano inventado pasa.
-
-        Reproduccion: test_rechaza_carta_inventada_fuera_del_universo.
-        """
+        """Un nombre propio con artículo que no existe en el sistema se rechaza."""
         tarea = self._tarea({"cartas": [{"nombre": "El Sol", "invertida": False}]})
         texto = "El Sol trae claridad. El Arquitecto abre tu camino."
         ok, motivos = fp.verificar_lectura(tarea, texto)
         self.assertFalse(ok, motivos)
 
-    @unittest.expectedFailure
     def test_la_orientacion_se_comprueba_por_carta(self):
-        """Basta una marca global de inversión: El Sol invertida queda sin marcar.
-
-        Reproduccion: test_la_orientacion_se_comprueba_por_carta.
-        """
+        """Cada carta exige (o prohíbe) su marca de inversión en su propia frase."""
         tarea = self._tarea({"cartas": [
             {"nombre": "El Sol", "invertida": True},
             {"nombre": "La Luna", "invertida": False},
@@ -344,14 +316,8 @@ class TestVerificador(unittest.TestCase):
         ok, motivos = fp.verificar_lectura(tarea, texto)
         self.assertFalse(ok, motivos)
 
-    @unittest.expectedFailure
     def test_numero_contradicho_en_frase_natural(self):
-        """`_verif_numeros` exige la etiqueta pegada al dígito.
-
-        «Tu camino de vida es el 8» no se detecta contra el 7 calculado.
-
-        Reproduccion: test_numero_contradicho_en_frase_natural.
-        """
+        """«Tu camino de vida es el 8» contradice el 7 calculado."""
         tarea = ef.tarea_desde_job(
             "numerologia", {"fecha": "1992-11-29", "nombre": "Ana"},
             "¿Qué me depara el trabajo?", KB_MIN)
@@ -360,27 +326,16 @@ class TestVerificador(unittest.TestCase):
             tarea, "Tu camino de vida es el 8 y marca tu año.")
         self.assertFalse(ok, motivos)
 
-    @unittest.expectedFailure
     def test_promesa_vedada_con_perifrasis(self):
-        """«Puedes dejar de tomar la medicación» no coincide con el patrón.
-
-        Reproduccion: test_promesa_vedada_con_perifrasis.
-        """
+        """«Puedes dejar de tomar la medicación» es una promesa médica vedada."""
         tarea = self._tarea({"cartas": [{"nombre": "El Sol", "invertida": False}]})
         texto = ("El Sol te acompaña. Puedes dejar de tomar la medicación sin "
                  "problema.")
         ok, motivos = fp.verificar_lectura(tarea, texto)
         self.assertFalse(ok, motivos)
 
-    @unittest.expectedFailure
     def test_una_negativa_expresa_no_es_promesa_vedada(self):
-        """«No puedo darte números de la lotería» se rechaza como si prometiera.
-
-        `_negado` solo mira 6 caracteres antes del patrón y aquí la negación
-        queda más lejos.
-
-        Reproduccion: test_una_negativa_expresa_no_es_promesa_vedada.
-        """
+        """La negación al inicio de la cláusula exime la mención de lotería."""
         tarea = self._tarea({"cartas": [{"nombre": "El Sol", "invertida": False}]})
         texto = "El Sol te acompaña. No puedo darte números de la lotería."
         ok, motivos = fp.verificar_lectura(tarea, texto)
@@ -427,16 +382,8 @@ class TestVerificador(unittest.TestCase):
 
 
 class TestValidador(unittest.TestCase):
-    @unittest.expectedFailure
     def test_el_validador_rechaza_una_carta_inventada(self):
-        """`grounding` exige las cartas del prompt, pero no prohíbe las de más.
-
-        Un texto que menciona El Sol (la carta de la tirada) y además «El
-        Arquitecto» (arcano inexistente) pasa las puertas y llega a
-        `synthetic_clean.jsonl`.
-
-        Reproduccion: test_el_validador_rechaza_una_carta_inventada.
-        """
+        """`grounding` rechaza un arcano que no existe en ningún sistema."""
         prompt = (
             "Tirada de una carta de tarot.\n\n"
             "Carta: El Sol (al derecho).\nContexto: trabajo.\n"
@@ -472,12 +419,8 @@ class TestCierreDedupe(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    @unittest.expectedFailure
     def test_dedupe_no_se_queda_la_ultima_si_es_peor(self):
-        """El dedupe conserva la ÚLTIMA fila de cada celda, sea fallback o no.
-
-        Reproduccion: test_dedupe_no_se_queda_la_ultima_si_es_peor.
-        """
+        """El dedupe prefiere la fila definitiva y con más texto, no la última."""
         buena = {"entidad_id": "tarot|loco", "faceta": "significado",
                  "texto": "lectura buena", "fallback": False}
         mala = {"entidad_id": "tarot|loco", "faceta": "significado",
@@ -512,12 +455,8 @@ class TestPerdidasSilenciosas(unittest.TestCase):
             '{"a": 1}\n{"a": 2, "b": "cortada', encoding="utf-8")
         self.assertEqual(merge_final.load_jsonl(self.ruta), [{"a": 1}])
 
-    @unittest.expectedFailure
     def test_claves_de_exclusion_con_hash_vacio_no_crean_celda(self):
-        """Una clave de exclusión sin hash no excluye nada y pasa en silencio.
-
-        Reproduccion: test_claves_de_exclusion_con_hash_vacio_no_crean_celda.
-        """
+        """Los hashes vacíos o las líneas incompletas se descartan y se cuentan."""
         ruta = str(Path(self.tmp.name) / "claves.jsonl")
         Path(ruta).write_text("\n".join([
             json.dumps({"entidad_id": "e", "faceta": "f", "hash_seccion": "abc"}),
@@ -555,12 +494,8 @@ class TestHuerfanas(unittest.TestCase):
 
 
 class TestExcepcionNoControlada(unittest.TestCase):
-    @unittest.expectedFailure
     def test_una_excepcion_en_un_job_no_aborta_todo_el_run(self):
-        """`f.result()` no está protegido: un fallo no capturado tumba la pasada.
-
-        Reproduccion: test_una_excepcion_en_un_job_no_aborta_todo_el_run.
-        """
+        """Una excepción no controlada se registra como `failed` y el run sigue."""
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         db = str(Path(tmp.name) / "jobs.db")

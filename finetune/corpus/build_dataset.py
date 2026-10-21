@@ -541,6 +541,55 @@ def dedupe(pairs: list[dict]) -> list[dict]:
     return out
 
 
+def _norm_humano(texto: str) -> str:
+    return unicodedata.normalize(
+        "NFC", re.sub(r"\s+", " ", texto or "").strip().lower())
+
+
+def humanos_evaluacion(rutas) -> set[str]:
+    """Humanos normalizados de los casos reservados de evaluación (T56, A3/C1)."""
+    if isinstance(rutas, (str, Path)):
+        rutas = [rutas]
+    humanos: set[str] = set()
+    for ruta in rutas or ():
+        if not ruta or not Path(ruta).exists():
+            continue
+        with Path(ruta).open("r", encoding="utf-8") as fh:
+            for linea in fh:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    fila = json.loads(linea)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(fila, dict):
+                    continue
+                reservada = (fila.get("origen") == "evaluacion"
+                             or str(fila.get("id", "")).startswith("eval-"))
+                if not reservada:
+                    continue
+                for turno in fila.get("conversations") or []:
+                    if isinstance(turno, dict) and turno.get("from") == "human":
+                        humanos.add(_norm_humano(turno.get("value", "")))
+    return humanos
+
+
+def filtrar_evaluacion(pairs: list[dict], humanos: set[str]) -> list[dict]:
+    """Descarta pares cuya pregunta coincida con un caso de evaluación."""
+    if not humanos:
+        return pairs
+    out = []
+    for pair in pairs:
+        charla = pair.get("conversations") if isinstance(pair, dict) else None
+        if isinstance(charla, list) and len(charla) > 1:
+            human = _norm_humano((charla[1] or {}).get("value", ""))
+            if human in humanos:
+                continue
+        out.append(pair)
+    return out
+
+
 def write_jsonl(path: Path, pairs: list[dict]) -> None:
     """Escribe una lista de pares como JSONL."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -576,6 +625,8 @@ def main(argv=None) -> int:
                              "default: 0)")
     parser.add_argument("--dry-run", action="store_true",
                         help="No escribe ficheros, solo informa de los conteos")
+    parser.add_argument("--eval-casos", default=None,
+                        help="JSONL del conjunto de evaluación (T56) a excluir")
     parser.add_argument("--license-filter", choices=["off", "strict"],
                         default="off",
                         help="strict exige license_filter.py (track T5) para "
@@ -624,6 +675,13 @@ def main(argv=None) -> int:
 
     train = dedupe([p for d in train_docs for p in by_doc[d]])
     val = dedupe([p for d in val_docs for p in by_doc[d]])
+
+    reservados = humanos_evaluacion(args.eval_casos)
+    if reservados:
+        antes = len(train) + len(val)
+        train = filtrar_evaluacion(train, reservados)
+        val = filtrar_evaluacion(val, reservados)
+        print(f"Pares de evaluación excluidos: {antes - len(train) - len(val)}")
 
     print(f"Documentos escaneados: {len(docs)}")
     print(f"Documentos con pares: {len(doc_names)}")

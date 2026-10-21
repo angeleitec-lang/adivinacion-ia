@@ -138,7 +138,14 @@ _PROMESAS_VEDADAS = [
     r"quedar[aá]s?\s+curad",
     r"(puedes|puede)\s+dejar\s+(la|tu)\s+medicaci[oó]n",
     r"\bdeja\s+(la|tu)\s+medicaci[oó]n",
-    r"no\s+necesitas\s+(el\s+)?(m[eé]dico|ir\s+al\s+m[eé]dico)",
+    r"(?:puedes|puede|pod[eé]is|pueden|podr[aá]s|podr[eé]is)\s+"
+    r"dejar(?:[aá]s|eis|éis)?\s+de\s+(?:tomar|llevar)",
+    r"\b(?:dejar[aá]s?|dejar[eé]is|abandonar[aá]s?|abandonar[eé]is|"
+    r"suspender[aá]s?|suspender[eé]is)\s+(?:el|la|tu|su)?\s*"
+    r"(?:tratamiento|medicaci[oó]n|medicamentos?)",
+    r"\bno\s+necesitar[aá]s\s+(?:el\s+)?"
+    r"(?:m[eé]dico|tratamiento|medicaci[oó]n|ir\s+al\s+m[eé]dico)",
+    r"\bno\s+necesitas\s+(el\s+)?(m[eé]dico|ir\s+al\s+m[eé]dico)",
     r"vas\s+a\s+morir",
     r"\bmorir[aá]s\b",
     r"fecha\s+de\s+(tu|su)\s+muerte",
@@ -164,13 +171,24 @@ _ARTICULOS = {"el", "la", "los", "las", "un", "una", "unos", "unas"}
 _PREPOS = {"de", "del", "a", "al", "en", "con", "y", "e", "u"}
 _LETRAS = "A-Za-zÁÉÍÓÚÜÑáéíóúüñ"
 
+# El valor puede venir pegado a la etiqueta («camino de vida 7») o en frase
+# natural («tu camino de vida es el 8»). `\d{1,2}` evita capturar un año de
+# cuatro cifras como si fuera el número calculado.
+_NEXO_NUM = (
+    r"(?:(?:es|ser[aá]|corresponde\s+al|marca\s+el|da(?:r[aá])?|arroja|"
+    r"indica|resulta\s+en|equivale\s+a)\s+(?:el\s+)?)?"
+)
 _VERIF_NUM = [
-    ("año personal", r"año\s*personal\s*(?:(?:\d{4})\s*[:\-–]\s*)?(\d+)",
+    ("año personal",
+     r"año\s*personal\s*(?:(?:\d{4})\s*[:\-–]\s*|[:\-–]\s*)?"
+     + _NEXO_NUM + r"(\d{1,2})(?!\d)",
      "anio_personal"),
-    ("camino de vida", r"camino\s*de\s*vida\s*(\d+)", "camino_de_vida"),
-    ("expresión", r"expresi[oó]n\s*(\d+)", "expresion"),
-    ("alma", r"alma\s*(\d+)", "alma"),
-    ("personalidad", r"personalidad\s*(\d+)", "personalidad"),
+    ("camino de vida", r"camino\s*de\s*vida\s*" + _NEXO_NUM + r"(\d{1,2})(?!\d)",
+     "camino_de_vida"),
+    ("expresión", r"expresi[oó]n\s*" + _NEXO_NUM + r"(\d{1,2})(?!\d)", "expresion"),
+    ("alma", r"alma\s*" + _NEXO_NUM + r"(\d{1,2})(?!\d)", "alma"),
+    ("personalidad", r"personalidad\s*" + _NEXO_NUM + r"(\d{1,2})(?!\d)",
+     "personalidad"),
 ]
 
 
@@ -565,8 +583,66 @@ def _tiene_inversion(texto):
 
 
 def _negado(texto, inicio):
-    pre = texto[max(0, inicio - 6):inicio]
-    return bool(re.search(r"\bno\s+$", pre, re.IGNORECASE))
+    """True si el match cae bajo una negación de la misma cláusula.
+
+    Mira hasta 40 caracteres atrás, cortando en el último signo de puntuación
+    fuerte o coma: cubre «No puedo darte números de la lotería» y
+    «La Luna no está invertida», sin arrastrar negaciones de otra cláusula.
+    """
+    pre = texto[max(0, inicio - 40):inicio]
+    pre = re.split(r"[.;,:!?¡¿\n]", pre)[-1]
+    return bool(re.search(r"\bno\b(?:\s+\w+){0,6}\s*$", pre, re.IGNORECASE))
+
+
+_CARTA_NOMBRE_RE = re.compile(
+    r"(?<![" + _LETRAS + r"])"
+    r"((?:El|La|Los|Las)\s+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]+"
+    r"(?:\s+(?:de|del)\s+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]+)?)"
+    r"(?![" + _LETRAS + r"])"
+)
+
+_GENERICOS_CARTA = {
+    "carta", "cartas", "arcano", "arcanos", "tirada", "tiradas", "lectura",
+    "sintesis", "consultante", "posicion", "posiciones", "signo", "signos",
+    "planeta", "planetas", "casa", "casas", "ascendente", "descendente",
+    "medio", "cielo", "fondo", "nodo", "nodos", "pregunta", "contexto",
+}
+
+
+def _sin_articulo(texto):
+    return re.sub(r"^(?:el|la|los|las|un|una|unos|unas)\s+", "",
+                  str(texto).strip(), flags=re.IGNORECASE)
+
+
+def _nombres_conocidos(universo, drawn_todo):
+    """Formas normalizadas (con y sin artículo) de las cartas del sistema."""
+    conocidos = set(drawn_todo)
+    for elemento in universo:
+        nombre = elemento.get("nombre") if isinstance(elemento, dict) else elemento
+        if not nombre:
+            continue
+        formas = [nombre]
+        if isinstance(elemento, dict):
+            formas += list(elemento.get("sinonimos") or [])
+        for forma in formas:
+            conocidos.add(_norm(forma))
+            conocidos.add(_norm(_sin_articulo(forma)))
+    return conocidos
+
+
+def _cartas_inventadas(texto, conocidos):
+    """Nombres propios con artículo que no pertenecen al universo del sistema."""
+    inventadas = []
+    for m in _CARTA_NOMBRE_RE.finditer(texto or ""):
+        nombre = m.group(1)
+        base = _norm(_sin_articulo(nombre))
+        if not base or not base.split()[0:1] or base.split()[0] in _GENERICOS_CARTA:
+            continue
+        if base in conocidos:
+            continue
+        if nombre not in inventadas:
+            inventadas.append(nombre)
+    return inventadas
 
 
 def _tokens_propios(nombre):
@@ -655,6 +731,48 @@ def _mascara_astros(texto):
     return _RE_ASTRO_LUMINAR.sub(lambda m: " " * len(m.group(0)), texto)
 
 
+def _afirma_inversion(texto):
+    """True si hay una marca de inversión no negada dentro del fragmento."""
+    for m in re.finditer(r"invertid\w*|al\s+rev[eé]s", texto, re.IGNORECASE):
+        if not _negado(texto, m.start()):
+            return True
+    return False
+
+
+def _ventanas_carta(carta, texto):
+    """Fragmentos (frases) donde aparece la carta o sus sinónimos."""
+    if isinstance(carta, dict):
+        candidatos = [carta.get("nombre")] + list(carta.get("sinonimos") or [])
+    else:
+        candidatos = [carta]
+    solo_mayus = not any(ch.islower() for ch in texto if ch.isalpha())
+    ventanas = []
+    for cand in candidatos:
+        if not cand:
+            continue
+        pat = re.compile(
+            r"(?<![" + _LETRAS + r"])" + re.escape(str(cand))
+            + r"(?![" + _LETRAS + r"])", re.IGNORECASE)
+        for m in pat.finditer(texto):
+            if not solo_mayus:
+                props = [t for t in m.group(0).split()
+                         if _norm(t) not in _ARTICULOS and _norm(t) not in _PREPOS]
+                if not any(t[:1].isupper() for t in props):
+                    continue
+            ini = max(texto.rfind(".", 0, m.start()),
+                      texto.rfind("\n", 0, m.start()),
+                      texto.rfind(";", 0, m.start()))
+            ini = 0 if ini == -1 else ini + 1
+            fines = [p for p in (texto.find(".", m.end()),
+                                 texto.find("\n", m.end()),
+                                 texto.find(";", m.end())) if p != -1]
+            fin = min(fines) if fines else len(texto)
+            fragmento = texto[ini:fin]
+            if fragmento not in ventanas:
+                ventanas.append(fragmento)
+    return ventanas
+
+
 def _verif_cartas(cartas, universo, texto, motivos, texto_ajenas=None):
     """Presencia, repetición, orientación y cartas ajenas.
 
@@ -693,15 +811,24 @@ def _verif_cartas(cartas, universo, texto, motivos, texto_ajenas=None):
             continue
         if nn and _mencion_carta(nombre, for_ajenas):
             motivos.append(f"Menciona carta ajena a la tirada: {nombre}")
+    conocidos = _nombres_conocidos(universo, drawn_todo)
+    for nombre in _cartas_inventadas(for_ajenas, conocidos):
+        motivos.append(f"Menciona una carta inexistente en el sistema: {nombre}")
     hay_inv = any(c.get("invertida") for c in validas)
     inv = _tiene_inversion(texto)
-    if hay_inv and not inv:
-        nombres = ", ".join(c.get("nombre") for c in validas if c.get("invertida"))
-        motivos.append(f"No indica la orientación invertida de: {nombres}")
     if (not hay_inv) and inv:
         motivos.append(
             "Menciona una orientación invertida sin que haya cartas invertidas en la tirada"
         )
+    for c in validas:
+        ventanas = _ventanas_carta(c, texto)
+        marcada = any(_afirma_inversion(v) for v in ventanas)
+        if c.get("invertida") and not marcada:
+            motivos.append(
+                f"No indica la orientación invertida de: {c.get('nombre')}")
+        if (not c.get("invertida")) and marcada:
+            motivos.append(
+                f"Marca como invertida una carta que está al derecho: {c.get('nombre')}")
 
 
 def _verif_numeros(calc, texto, motivos):
@@ -759,17 +886,34 @@ def _verif_esquema(tarea, texto, motivos):
     """Exige orden, presencia de la carta y límites por sección en tiradas largas."""
     f = tarea.get("familia", "")
     if f == "lectura_completa":
-        n = _norm(texto)
         esperado = ["carta natal", "tirada de tres cartas", "numerolog", "sintesis"]
-        ultima = -1
-        for etiqueta in esperado:
-            i = n.find(etiqueta)
-            if i == -1:
+        patrones = ["carta natal", "tirada de tres cartas", "numerolog",
+                    r"s[ií]ntesis"]
+        posiciones = []
+        for etiqueta, patron in zip(esperado, patrones):
+            m = re.search(patron, texto, re.IGNORECASE)
+            if not m:
                 motivos.append(f"Falta la sección: {etiqueta}")
-            elif i < ultima:
-                motivos.append(f"La sección «{etiqueta}» está fuera de orden")
+                posiciones.append(None)
             else:
-                ultima = i
+                posiciones.append(m.start())
+        presentes = [i for i in posiciones if i is not None]
+        if presentes != sorted(presentes):
+            motivos.append("Las secciones no siguen el orden esperado")
+        for j, (etiqueta, inicio) in enumerate(zip(esperado, posiciones)):
+            if inicio is None:
+                continue
+            siguientes = [p for p in posiciones[j + 1:]
+                          if p is not None and p > inicio]
+            fin = min(siguientes) if siguientes else len(texto)
+            limite = (LIMITE_SINTESIS_CHARS if etiqueta == "sintesis"
+                      else LIMITE_POSICION_CHARS)
+            largo = fin - inicio
+            if largo > limite:
+                motivos.append(
+                    f"La sección «{etiqueta}» excede el máximo de "
+                    f"{limite} caracteres ({largo})"
+                )
         return
     cartas = tarea.get("cartas") or []
     posiciones = tarea.get("posiciones") or []

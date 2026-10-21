@@ -88,20 +88,38 @@ def is_junk_pair(row: dict, min_terms: int = 2) -> bool:
     return any(_par_es_junk(h, a, min_terms) for h, a in _pares_o_fallback(row))
 
 
-def load_jsonl(path: Path) -> list[dict]:
+def load_jsonl(path: Path, estricto: bool = False, estadisticas=None) -> list[dict]:
+    """Lee JSONL; por defecto descarta líneas corruptas, pero puede contarlas.
+
+    `estricto=True` lanza ValueError al primer JSON inválido. Si se pasa
+    `estadisticas`, se anotan las claves lineas/validas/descartadas.
+    """
     if not path.exists():
         return []
+    stats = estadisticas if estadisticas is not None else {}
+    stats.setdefault("lineas", 0)
+    stats.setdefault("validas", 0)
+    stats.setdefault("descartadas", 0)
     rows = []
     with path.open(encoding="utf-8") as f:
-        for line in f:
+        for num, line in enumerate(f, start=1):
             line = line.strip()
-            if line:
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(row, dict):
-                    rows.append(row)
+            if not line:
+                continue
+            stats["lineas"] += 1
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                stats["descartadas"] += 1
+                if estricto:
+                    raise ValueError(
+                        f"{path}:{num}: JSON inválido ({exc.msg})") from exc
+                continue
+            if isinstance(row, dict):
+                rows.append(row)
+                stats["validas"] += 1
+            else:
+                stats["descartadas"] += 1
     return rows
 
 
@@ -172,6 +190,29 @@ def _clave_respuestas(row: dict) -> str:
     return sha(unicodedata.normalize("NFC", concat_respuestas(row)))
 
 
+def es_caso_de_evaluacion(fila: dict) -> bool:
+    """True si la fila pertenece al conjunto reservado de evaluación (T56)."""
+    if not isinstance(fila, dict):
+        return False
+    if fila.get("origen") == "evaluacion":
+        return True
+    return str(fila.get("id", "")).startswith("eval-")
+
+
+def cargar_humanos_evaluacion(rutas) -> set[str]:
+    """Humanos normalizados de los casos de evaluación, para excluirlos por contenido."""
+    if isinstance(rutas, (str, Path)):
+        rutas = [rutas]
+    humanos: set[str] = set()
+    for ruta in rutas or ():
+        if not ruta:
+            continue
+        for fila in load_jsonl(Path(ruta)):
+            if es_caso_de_evaluacion(fila):
+                humanos.add(_norm(human_of(fila)))
+    return humanos
+
+
 def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
             meta: list[dict], cfg: dict) -> dict:
     """Fusiona reales y sintéticos: filtros, splits 50/50 del val real, dedupes y reporte.
@@ -183,11 +224,20 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
     r_train = cfg.get("train_ratio", 0.8)
     r_val = cfg.get("val_ratio", 0.1)
     include_en = cfg.get("include_en", False)
-    descartes = {"junk": 0, "duplicado_exacto": 0, "duplicado_prefijo": 0, "idioma": 0}
+    descartes = {"junk": 0, "duplicado_exacto": 0, "duplicado_prefijo": 0,
+                 "idioma": 0}
+
+    humanos_eval = {_norm(h) for h in (cfg.get("eval_humanos") or ())}
+    for r in list(real_train) + list(real_val) + list(synth):
+        if es_caso_de_evaluacion(r):
+            humanos_eval.add(_norm(human_of(r)))
 
     rt, rv = [], []
     for src, dst in ((real_train, rt), (real_val, rv)):
         for r in src:
+            if es_caso_de_evaluacion(r) or _norm(human_of(r)) in humanos_eval:
+                descartes["duplicado_exacto"] += 1
+                continue
             if is_junk_pair(r):
                 descartes["junk"] += 1
                 continue
@@ -206,18 +256,29 @@ def fusionar(real_train: list[dict], real_val: list[dict], synth: list[dict],
             continue
         seen_real.add(h)
         train_real.append(r)
+    humanos_train = {sha(human_of(r)) for r in train_real}
     for r in rv:
         h = _clave_respuestas(r)
         if h in seen_real:
             descartes["duplicado_exacto"] += 1
             continue
+        if sha(human_of(r)) in humanos_train:
+            descartes["duplicado_exacto"] += 1
+            continue
         seen_real.add(h)
         val_cands.append(r)
 
+    humanos_val = {sha(human_of(r)) for r in val_cands}
     by_block: dict[str, list[dict]] = defaultdict(list)
     dup_vs_real = 0
     seen_synth: set[str] = set()
     for r, m in zip(synth, meta):
+        if es_caso_de_evaluacion(r) or _norm(human_of(r)) in humanos_eval:
+            descartes["evaluacion"] += 1
+            continue
+        if sha(human_of(r)) in humanos_val:
+            descartes["duplicado_exacto"] += 1
+            continue
         h = _clave_respuestas(r)
         if h in seen_real:
             dup_vs_real += 1
@@ -319,12 +380,19 @@ def main(argv=None) -> int:
     ap.add_argument("--val-ratio", type=float, default=0.1)
     ap.add_argument("--include-en", action="store_true",
                     help="conserva respuestas no españolas en los datos reales")
+    ap.add_argument("--eval-casos", default=None,
+                    help="JSONL del conjunto de evaluación (T56) a excluir por contenido")
+    ap.add_argument("--strict", action="store_true",
+                    help="aborta si alguna línea JSONL es inválida")
     args = ap.parse_args(argv)
 
-    real_train = load_jsonl(Path(args.real_train))
-    real_val = load_jsonl(Path(args.real_val))
-    synth = load_jsonl(Path(args.synth))
-    meta = load_meta(Path(args.synth_meta))
+    stats = {}
+    real_train = load_jsonl(Path(args.real_train), args.strict, stats)
+    real_val = load_jsonl(Path(args.real_val), args.strict, stats)
+    synth = load_jsonl(Path(args.synth), args.strict, stats)
+    meta = load_jsonl(Path(args.synth_meta), args.strict, stats)
+    if stats.get("descartadas"):
+        print(f"[merge] aviso: {stats['descartadas']} líneas JSONL descartadas")
     if len(meta) != len(synth):
         print(f"[merge] aviso: meta={len(meta)} synth={len(synth)}; se usa el mínimo")
         n = min(len(meta), len(synth))
@@ -335,6 +403,7 @@ def main(argv=None) -> int:
         "train_ratio": args.train_ratio,
         "val_ratio": args.val_ratio,
         "include_en": args.include_en,
+        "eval_humanos": cargar_humanos_evaluacion(args.eval_casos),
     }
     res = fusionar(real_train, real_val, synth, meta, cfg)
     train, val, test, report = res["train"], res["val"], res["test"], res["report"]

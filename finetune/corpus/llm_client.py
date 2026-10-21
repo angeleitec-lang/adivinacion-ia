@@ -136,6 +136,7 @@ class LLMClient:
         self.reasoning_effort = reasoning_effort
         self.max_completion_tokens = max_completion_tokens
         self._idx = 0  # round-robin index
+        self._idx_lock = threading.Lock()
         self._specs = [self._normalizar_endpoint(ep) for ep in self.endpoints]
         self._sem = threading.BoundedSemaphore(max(int(max_concurrencia), 1))
         self._tasa = _LimitadorTasa(tasa_max_por_minuto)
@@ -158,11 +159,16 @@ class LLMClient:
             return spec
         raise TypeError("Endpoint no reconocido: %s" % type(ep).__name__)
 
+    def _reservar_endpoint(self) -> tuple[int, Any]:
+        """Reserva el siguiente endpoint round-robin de forma atómica."""
+        with self._idx_lock:
+            idx = self._idx % len(self.endpoints)
+            self._idx += 1
+        return idx, self.endpoints[idx]
+
     def _siguiente_endpoint(self) -> Any:
-        """Selecciona el siguiente endpoint round-robin."""
-        ep = self.endpoints[self._idx % len(self.endpoints)]
-        self._idx += 1
-        return ep
+        """Devuelve el siguiente endpoint round-robin."""
+        return self._reservar_endpoint()[1]
 
     def _headers_de_endpoint(self, spec: Dict[str, Any]) -> Optional[Dict[str, str]]:
         """Cabecera Authorization Bearer desde variable de entorno.
@@ -206,8 +212,7 @@ class LLMClient:
         `max_completion_tokens` permite fijar el presupuesto por petición
         (p. ej. una familia de fase 1); si es None se usa el del cliente.
         """
-        idx = self._idx % len(self.endpoints)
-        endpoint = self._siguiente_endpoint()
+        idx, _endpoint = self._reservar_endpoint()
         spec = self._specs[idx]
         url = "%s/chat/completions" % spec["url"]
         payload = {
@@ -380,6 +385,10 @@ class LLMClient:
                 data = self._extraer_json(texto)
                 validar(data)
                 return data
+            except RuntimeError:
+                # Error de configuración (p. ej. falta la clave del endpoint):
+                # reintentar no lo arregla y convertirlo en ValueError despista.
+                raise
             except Exception as e:
                 ultima_exc = e
                 # En el siguiente intento, añadir el error al prompt de usuario

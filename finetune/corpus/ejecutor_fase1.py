@@ -266,9 +266,27 @@ def tabla_existe(con):
     return r is not None
 
 
-def copiar_bd(db_path):
+def copiar_bd(db_path, con=None, maximo=5):
+    """Copia la BD solo si quedan pendientes y rota las últimas `maximo` copias."""
+    propia = con is None
+    if propia:
+        con = sqlite3.connect(str(db_path))
+    try:
+        pendientes = con.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status='pending'").fetchone()[0]
+    finally:
+        if propia:
+            con.close()
+    if not pendientes:
+        return None
     destino = Path(f"{db_path}.copia-{time.strftime('%Y%m%d-%H%M%S')}")
     shutil.copy2(db_path, destino)
+    copias = sorted(Path(db_path).parent.glob(Path(db_path).name + ".copia-*"))
+    for vieja in copias[:-max(int(maximo), 1)]:
+        try:
+            vieja.unlink()
+        except OSError:
+            pass
     return destino
 
 
@@ -476,8 +494,7 @@ def a_sharegpt(fila: dict) -> dict:
     }
     if fila.get("calculos"):
         fila_out["calculos"] = fila["calculos"]
-    if fila.get("generador"):
-        fila_out["generador"] = fila["generador"]
+    fila_out["generador"] = fila.get("generador") or GENERADOR_LOCAL
     return fila_out
 
 
@@ -491,9 +508,11 @@ def proteger_final(ruta):
 
 
 def _escribir_jsonl(ruta, registro):
+    """Añade una línea y fuerza su persistencia (append + fsync)."""
     with Path(ruta).open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(registro, ensure_ascii=False) + "\n")
         fh.flush()
+        os.fsync(fh.fileno())
 
 
 def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
@@ -502,6 +521,10 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
             formato="plano", backend=GENERADOR_LOCAL, reintentos_red=None,
             ventana_errores=VENTANA_ERRORES_DEFECTO,
             umbral_error=UMBRAL_ERROR_DEFECTO):
+    if backend not in (GENERADOR_LOCAL, GENERADOR_MERCURY):
+        raise ValueError(
+            f"backend no válido: {backend!r}; usa {GENERADOR_LOCAL!r} o "
+            f"{GENERADOR_MERCURY!r}")
     db_path = Path(db_path)
     if not db_path.exists():
         raise FileNotFoundError(f"no existe la BD: {db_path}")
@@ -511,15 +534,15 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
     aceptadas_path = out_dir / "aceptadas.jsonl"
     rechazadas_path = out_dir / "rechazadas.jsonl"
 
-    copia = copiar_bd(db_path)
     con = conectar(db_path)
     if not tabla_existe(con):
         con.close()
         raise ValueError(f"la BD no tiene la tabla jobs: {db_path}")
+    copia = copiar_bd(db_path, con)
     lock = threading.Lock()
     wid = f"{socket.gethostname()}:{os.getpid()}"
     resumen = {
-        "copia": str(copia),
+        "copia": str(copia) if copia else None,
         "huerfanas_recuperadas": 0,
         "pendientes": 0,
         "procesadas": 0,
@@ -539,20 +562,29 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
     def detenido():
         return parada.is_set() or (stop_event is not None and stop_event.is_set())
 
-    def anotar_resultado(hubo_error):
-        """Ventana móvil de errores: detiene la pasada si supera el umbral."""
-        ventana.append(1 if hubo_error else 0)
-        if len(ventana) < ventana_max:
+    def anotar_resultado(fallo, red=False):
+        """Ventana móvil de fallos (red o verificador) frente al umbral.
+
+        Con menos tareas que `ventana_errores` la muestra efectiva baja al
+        total de pendientes (si no, nunca se evaluaría). Los rechazos del
+        verificador se reportan en `parada` pero no abortan la pasada en
+        curso; los errores de red sí (el nodo puede estar caído).
+        """
+        ventana.append(2 if red else (1 if fallo else 0))
+        objetivo = min(ventana_max, max(1, resumen["pendientes"]))
+        if len(ventana) < objetivo:
             return
-        proporcion = sum(ventana) / len(ventana)
-        if proporcion > umbral_error and not parada.is_set():
+        fallos = sum(1 for x in ventana if x)
+        proporcion = fallos / len(ventana)
+        if proporcion > umbral_error and resumen["parada"] is None:
             resumen["parada"] = (
-                f"errores {sum(ventana)}/{len(ventana)} "
+                f"fallos {fallos}/{len(ventana)} "
                 f"({proporcion:.0%}) > {umbral_error:.0%}"
             )
-            parada.set()
-            if stop_event is not None:
-                stop_event.set()
+            if any(x == 2 for x in ventana):
+                parada.set()
+                if stop_event is not None:
+                    stop_event.set()
 
     ids = []
     try:
@@ -597,6 +629,7 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
                     })
                     resumen["procesadas"] += 1
                     resumen["rechazadas"] += 1
+                    anotar_resultado(True, red=False)
                 return
             with lock:
                 resumen["procesadas"] += 1
@@ -617,7 +650,8 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
                     marcar(con, job_id, "failed", "; ".join(registro["motivos"]))
                     _escribir_jsonl(rechazadas_path, registro)
                     resumen["rechazadas"] += 1
-                anotar_resultado(bool(registro.get("error")))
+                fallo = bool(registro.get("error")) or not registro.get("ok")
+                anotar_resultado(fallo, red=bool(registro.get("error")))
 
         if workers <= 1:
             for jid in ids:
@@ -640,8 +674,16 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
                 enviar()
                 while futuros:
                     for f in as_completed(list(futuros)):
-                        del futuros[f]
-                        f.result()
+                        jid = futuros.pop(f)
+                        try:
+                            f.result()
+                        except Exception as exc:
+                            with lock:
+                                marcar(con, jid, "failed",
+                                       f"excepcion:{type(exc).__name__}: {exc}")
+                                resumen["procesadas"] += 1
+                                resumen["rechazadas"] += 1
+                                anotar_resultado(True, red=False)
                         enviar()
                         break
     except KeyboardInterrupt:
@@ -652,8 +694,9 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
     finally:
         with lock:
             resumen["liberadas_al_interrumpir"] = liberar_vuelo(con, wid)
-            resumen["no_procesadas_por_parada"] = max(
-                0, len(ids) - resumen["procesadas"])
+            if resumen["parada"] or resumen["interrumpida"]:
+                resumen["no_procesadas_por_parada"] = max(
+                    0, len(ids) - resumen["procesadas"])
         con.close()
     return resumen
 
@@ -985,7 +1028,9 @@ def main(argv=None):
     ap.add_argument("--limite", type=int, default=0,
                     help="máximo de tareas a procesar en esta pasada (0 = sin límite)")
     ap.add_argument("--huerfano-minutos", type=float, default=30.0,
-                    help="running más antiguas que esto vuelven a pending")
+                    help="running más antiguas que esto vuelven a pending; "
+                         "0 recupera todas al reanudar (útil si ningún worker "
+                         "antiguo sigue vivo)")
     ap.add_argument("--simulado", action="store_true",
                     help="lector simulado determinista (sin red, no consume LLM)")
     ap.add_argument("--formato", choices=("plano", "sharegpt"), default="plano",

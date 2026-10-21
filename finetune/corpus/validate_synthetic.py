@@ -375,6 +375,18 @@ def grounding(prompt: str, answer: str, calculos: dict | None = None) -> bool:
     for nombre, _ in cartas:
         if not _menciona(na, _sin_articulo(norm(nombre))):
             return False
+    # Una carta que no existe en ninguno de los dos sistemas invalida la lectura,
+    # aunque la tirada se mencione correctamente (mismo control que el verificador).
+    try:
+        import cartas as _cartas
+        import fase1_prompts as _fp
+        universo = list(_cartas.CARTAS_TAROT) + list(_cartas.NAIPES_ESPANOLES)
+        dibujadas = {_fp._norm(_fp._sin_articulo(n)) for n, _ in cartas}
+        conocidos = _fp._nombres_conocidos(universo, dibujadas)
+        if _fp._cartas_inventadas(answer, conocidos):
+            return False
+    except ImportError:
+        pass
     if calculos:
         signos = signos_de_calculos(calculos)
         numeros = numeros_de_calculos(calculos)

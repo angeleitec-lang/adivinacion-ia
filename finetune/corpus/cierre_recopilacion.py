@@ -142,22 +142,36 @@ def _ejecutar(cmd, log_comandos):
 # Paso 1: dedupe del consenso
 # ---------------------------------------------------------------------------
 
+def _calidad_consenso(fila):
+    """Orden de preferencia al deduplicar: definitiva, con texto y más larga."""
+    texto = fila.get("texto") or fila.get("texto_consenso") or ""
+    return (
+        0 if fila.get("fallback") else 1,
+        1 if str(texto).strip() else 0,
+        len(str(texto)),
+    )
+
+
 def paso1_dedupe_consenso(ctx, log_comandos):
     ruta = ctx["consenso"]
     filas = _leer_jsonl(ruta)
     orden = []
-    ultima = {}
+    mejor = {}
     for fila in filas:
         clave = (fila.get("entidad_id"), fila.get("faceta"))
-        if clave not in ultima:
+        if clave not in mejor:
             orden.append(clave)
-        ultima[clave] = fila
+            mejor[clave] = fila
+            continue
+        # `>=` conserva la última aparición cuando la calidad empata.
+        if _calidad_consenso(fila) >= _calidad_consenso(mejor[clave]):
+            mejor[clave] = fila
     duplicadas = len(filas) - len(orden)
     if duplicadas == 0:
         return {"estado": "sin_cambio", "filas": len(filas), "unicas": len(orden),
                 "duplicadas": 0}
     backup = _copia_previa(ruta)
-    dedup = [ultima[c] for c in orden]
+    dedup = [mejor[c] for c in orden]
     _escribir_jsonl_atomico(ruta, dedup)
     # Comprobacion posterior: las unicas no bajan y ninguna clave se pierde.
     despues = _leer_jsonl(ruta)
