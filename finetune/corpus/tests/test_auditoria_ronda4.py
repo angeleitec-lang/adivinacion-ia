@@ -5,6 +5,7 @@ Los defectos confirmados por ejecución se documentan como expectedFailure
 comportamientos verificados como sanos se afirman directamente.
 Nada de esto toca red ni LLM. Ver docs/AUDITORIA_RONDA4.md.
 """
+import datetime
 import json
 import os
 import shutil
@@ -171,16 +172,49 @@ class TestPurgarErroresJuez(unittest.TestCase):
             lineas = [l for l in fh if l.strip()]
         self.assertEqual(len(lineas), 1)
 
-    @unittest.expectedFailure
-    def test_deberia_dejar_copia_previa(self):
+    def test_deja_copia_previa(self):
         clasicos_pd_a_evidencias.purgar_errores_juez(self.dir)
         respaldo = [n for n in os.listdir(self.dir) +
                     os.listdir(os.path.join(self.dir, "evidencias"))
                     if ".bak" in n]
         self.assertTrue(
             respaldo,
-            "DEFECTO A5: reescribe juicios.jsonl con open('w') sin copia; "
-            "un fallo a mitad destruye todos los juicios")
+            "A1 (T63): la purga debe dejar copia .bak antes de reescribir")
+
+    def test_sin_errores_no_deja_copia(self):
+        bueno = {"hash": "h1", "fuente_id": "f1", "titulo": "t",
+                 "candidatos": [], "juicio": {"tipo": "conocimiento"}}
+        with open(os.path.join(self.dir, "evidencias", "juicios.jsonl"),
+                  "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(bueno) + "\n")
+        ruta_respaldo = os.path.join(
+            self.dir, "evidencias", "juicios.jsonl.bak-" +
+            datetime.datetime.now().strftime("%Y%m%d"))
+        self.assertEqual(
+            clasicos_pd_a_evidencias.purgar_errores_juez(self.dir), 0)
+        self.assertFalse(os.path.exists(ruta_respaldo))
+
+    def test_copia_no_se_sobrescribe_el_mismo_dia(self):
+        purga = clasicos_pd_a_evidencias.purgar_errores_juez
+        ruta = os.path.join(self.dir, "evidencias", "juicios.jsonl")
+        self.assertEqual(purga(self.dir), 1)
+        baks = [n for n in os.listdir(os.path.join(self.dir, "evidencias"))
+                if ".bak" in n]
+        self.assertEqual(len(baks), 1)
+        with open(os.path.join(self.dir, "evidencias", baks[0]),
+                  encoding="utf-8") as fh:
+            self.assertEqual(len([l for l in fh if l.strip()]), 2)
+        malo = {"hash": "h3", "fuente_id": "f1", "titulo": "t",
+                "candidatos": [], "juicio": {"tipo": "error"}}
+        with open(ruta, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(malo) + "\n")
+        self.assertEqual(purga(self.dir), 1)
+        self.assertEqual(len([n for n in
+                              os.listdir(os.path.join(self.dir, "evidencias"))
+                              if ".bak" in n]), 1)
+        with open(os.path.join(self.dir, "evidencias", baks[0]),
+                  encoding="utf-8") as fh:
+            self.assertEqual(len([l for l in fh if l.strip()]), 2)
 
 
 class TestSaludDatosExclusiones(unittest.TestCase):
