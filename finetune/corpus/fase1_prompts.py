@@ -36,6 +36,12 @@ FAMILIAS = (
 
 FAMILIAS_ESPAÑOLA = ("espanola_1", "espanola_3", "espanola_5", "espanola_7")
 
+# Familias de tirada: si la reconstrucción no recupera las cartas, al menos se
+# revisan las cartas inventadas (cruz_celta y lectura_completa largas).
+FAMILIAS_TIRADA = ("tarot_1", "tarot_2", "tarot_3", "cruz_celta",
+                   "tarot_pregunta", "lectura_completa", "multiturno") \
+    + FAMILIAS_ESPAÑOLA
+
 # Familias sin tirada en las que Sol/Luna pueden ser astros, no cartas.
 FAMILIAS_ASTRO = ("astro_natal", "sinastria", "transitos", "revolucion_solar")
 FAMILIAS_SIN_CARTAS = ("astro_natal", "sinastria", "numerologia",
@@ -627,8 +633,17 @@ _CARTA_NOMBRE_RE = re.compile(
 _RANGO_CARTA_RE = re.compile(
     r"(?<![" + _LETRAS + r"])("
     r"(?i:As|Dos|Tres|Cuatro|Cinco|Seis|Siete|Ocho|Nueve|Diez|"
-    r"Sota|Caballero|Reina|Rey|Paje)\s+de\s+"
-    r"[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]+)"
+    r"Sota|Caballero|Reina|Rey|Paje)\s+(?i:de)\s+"
+    r"[A-Za-zÁÉÍÓÚÜÑáéíóúñ]+)"
+    r"(?![" + _LETRAS + r"])"
+)
+
+# Números fuera de los dos mazos (tarot llega a Diez; baraja, a Nueve).
+_NUMERO_FUERA_RE = re.compile(
+    r"(?<![" + _LETRAS + r"])("
+    r"(?i:Once|Doce|Trece|Catorce|Quince|Diecis[eé]is|Diecisiete|"
+    r"Dieciocho|Diecinueve|Veinte|Veintiuno|Veintid[oó]s|Treinta)"
+    r"\s+(?i:de)\s+[A-Za-zÁÉÍÓÚÜÑáéíóúñ]+)"
     r"(?![" + _LETRAS + r"])"
 )
 
@@ -636,6 +651,29 @@ _PALOS_CARTA = {
     "oros", "copas", "espadas", "bastos", "estrellas", "treboles",
     "corazones", "diamantes", "picas",
 }
+
+# Palos plausibles en otros idiomas: una construcción de carta con ellos
+# («Swords of Stars», «Nine of Cups») nunca pertenece a estos mazos.
+_PALOS_OTROS = {
+    "swords", "cups", "wands", "pentacles", "coins", "hearts", "diamonds",
+    "clubs", "spades", "stars", "chalices", "rods",
+}
+_RANGO_OTRO_RE = re.compile(
+    r"(?<![" + _LETRAS + r"])("
+    r"(?i:As|Dos|Tres|Cuatro|Cinco|Seis|Siete|Ocho|Nueve|Diez|Sota|"
+    r"Caballero|Reina|Rey|Paje|Ace|Two|Three|Four|Five|Six|Seven|Eight|"
+    r"Nine|Ten|Page|Knight|Queen|King|Jack)\s+(?i:de|of|di|von)\s+"
+    r"[A-Za-zÁÉÍÓÚÜÑáéíóúñ]+)"
+    r"(?![" + _LETRAS + r"])"
+)
+_PALO_DE_PALO_RE = re.compile(
+    r"(?<![" + _LETRAS + r"])("
+    r"(?i:Swords|Cups|Wands|Pentacles|Coins|Hearts|Diamonds|Clubs|Spades|"
+    r"Stars|Chalices|Rods)\s+(?i:of|de)\s+"
+    r"(?i:Swords|Cups|Wands|Pentacles|Coins|Hearts|Diamonds|Clubs|Spades|"
+    r"Stars|Chalices|Rods))"
+    r"(?![" + _LETRAS + r"])"
+)
 
 _GENERICOS_CARTA = {
     "carta", "cartas", "arcano", "arcanos", "tirada", "tiradas", "lectura",
@@ -690,13 +728,18 @@ def _es_posicion(base):
     return bool(tokens) and all(t in _POSICIONES_CARTA for t in tokens)
 
 
-def _cartas_inventadas(texto, conocidos):
+def _cartas_inventadas(texto, conocidos, incluir_nombres=True):
     """Nombres propios con artículo que no pertenecen al universo del sistema.
 
     Se aceptan las posiciones de la tirada («El Pasado», «El Futuro»), las
     formas cortas y cargos de la corte («La Rueda» → La Rueda de la Fortuna,
     «La Sota», «El Rey») y los nombres narrativos («El Mensaje»). Un nombre
     con palo que no exista («El Ocho de Estrellas») sigue rechazándose.
+
+    En lecturas largas sin cartas reconstruidas (cruz_celta, astro_natal) solo
+    se revisan las construcciones de carta (rango + palo, número + palo, palos
+    extranjeros): escanear nombres propios sueltos produce cientos de falsos
+    positivos («La Mente», «Los Sueños», «La Cruz»).
     """
     tokens_conocidos = {
         t for nombre in conocidos for t in nombre.split()
@@ -722,14 +765,33 @@ def _cartas_inventadas(texto, conocidos):
         inventadas.append(nombre)
 
     texto = texto or ""
-    for m in _CARTA_NOMBRE_RE.finditer(texto):
-        revisar(m.group(1))
+    if incluir_nombres:
+        for m in _CARTA_NOMBRE_RE.finditer(texto):
+            revisar(m.group(1))
     for m in _RANGO_CARTA_RE.finditer(texto):
         nombre = m.group(1)
         palo = _norm(nombre).split()[-1]
         if palo in _PALOS_CARTA:
             revisar(nombre)
+    for m in _NUMERO_FUERA_RE.finditer(texto):
+        nombre = m.group(1)
+        if _norm(nombre).split()[-1] in _PALOS_CARTA:
+            revisar(nombre)
+    for m in _RANGO_OTRO_RE.finditer(texto):
+        nombre = m.group(1)
+        if _norm(nombre).split()[-1] in _PALOS_CARTA | _PALOS_OTROS:
+            revisar(nombre)
+    for m in _PALO_DE_PALO_RE.finditer(texto):
+        revisar(m.group(1))
     return inventadas
+
+
+def _verif_cartas_inventadas(universo, texto, motivos, drawn_todo=None,
+                             incluir_nombres=True):
+    """Añade un motivo por cada carta que no existe en el sistema."""
+    conocidos = _nombres_conocidos(universo, drawn_todo or set())
+    for nombre in _cartas_inventadas(texto, conocidos, incluir_nombres):
+        motivos.append(f"Menciona una carta inexistente en el sistema: {nombre}")
 
 
 def _tokens_propios(nombre):
@@ -956,9 +1018,7 @@ def _verif_cartas(cartas, universo, texto, motivos, texto_ajenas=None):
             continue
         if nn and _mencion_carta(nombre, for_ajenas):
             motivos.append(f"Menciona carta ajena a la tirada: {nombre}")
-    conocidos = _nombres_conocidos(universo, drawn_todo)
-    for nombre in _cartas_inventadas(for_ajenas, conocidos):
-        motivos.append(f"Menciona una carta inexistente en el sistema: {nombre}")
+    _verif_cartas_inventadas(universo, for_ajenas, motivos, drawn_todo)
     hay_inv = any(c.get("invertida") for c in validas)
     marcas = _marcas_orientacion(validas, texto)
     inv = any(marcas.values())
@@ -1157,6 +1217,7 @@ def _verif_cartas_sin_tirada(universo, texto, motivos, astro):
     tarot, la carta que representa tu energía es El Colgado») no se rechazan:
     el dataset real las usa y no afirman que la carta esté en la lectura.
     """
+    _verif_cartas_inventadas(universo, texto, motivos, incluir_nombres=False)
     for elemento in universo:
         nombre = elemento.get("nombre") if isinstance(elemento, dict) else elemento
         if not nombre:
@@ -1185,6 +1246,11 @@ def verificar_lectura(tarea, texto):
     elif f in FAMILIAS_SIN_CARTAS and tarea.get("universo_cartas"):
         _verif_cartas_sin_tirada(tarea["universo_cartas"], texto, motivos,
                                  astro=f in FAMILIAS_ASTRO)
+    elif f in FAMILIAS_TIRADA and tarea.get("universo_cartas"):
+        # Sin cartas reconstruidas no se puede exigir presencia ni orientación,
+        # pero sí rechazar rangos y palos que no existen en el mazo.
+        _verif_cartas_inventadas(tarea["universo_cartas"], texto, motivos,
+                                 incluir_nombres=False)
     if f in FAMILIAS_ESQUEMA or f == "lectura_completa":
         _verif_esquema(tarea, texto, motivos)
     _verif_numeros(calc, texto, motivos)
