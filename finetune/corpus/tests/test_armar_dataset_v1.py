@@ -172,9 +172,9 @@ class TestFugaEvaluacion(BaseTuberia):
         descartes = merge_final.load_jsonl(
             Path(self.salida, "02_filtradas", "descartes.jsonl"))
         motivos = {d["motivo"] for d in descartes}
-        self.assertIn("fuga_evaluacion_contenido", motivos)
+        self.assertIn("fuga_evaluacion_contenido_qa", motivos)
         descartada = [d for d in descartes
-                     if d["motivo"] == "fuga_evaluacion_contenido"]
+                      if d["motivo"] == "fuga_evaluacion_contenido_qa"]
         self.assertEqual(len(descartada), 1)
         self.assertEqual(descartada[0]["id"], "tarot_2-0900")
         # y no aparece en ningun split final
