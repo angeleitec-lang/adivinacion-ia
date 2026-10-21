@@ -18,6 +18,7 @@ import ejecutor_fase1 as ef  # noqa: E402
 import fase1_prompts as fp  # noqa: E402
 import generate_tasks as gt  # noqa: E402
 from calculos import numerologia as calc_num  # noqa: E402
+from cartas import NAIPES_ESPANOLES  # noqa: E402
 from llm_client import LLMClient  # noqa: E402
 
 BUENA = "El Loco abre tu camino: es un comienzo lleno de posibilidad."
@@ -33,6 +34,37 @@ PAYLOAD_TAROT = json.dumps(
     {"carta": {"nombre": "El Loco", "invertida": False}, "contexto": "trabajo"},
     ensure_ascii=False,
 )
+
+CARTA_NATAL = {
+    "fecha": "1990-01-01",
+    "hora": "12:00",
+    "planetas": {
+        "Sol": {"signo": "Capricornio", "grados": "10°00'"},
+        "Luna": {"signo": "Acuario", "grados": "20°00'"},
+    },
+    "ascendente": {"signo": "Piscis", "grados": "15°00'"},
+}
+
+
+def naipe(nombre, invertida=False):
+    """Carta de baraja española como la deja generate_tasks en el payload."""
+    for c in NAIPES_ESPANOLES:
+        if c["nombre"] == nombre:
+            return {
+                "nombre": c["nombre"],
+                "invertida": invertida,
+                "sinonimos": list(c.get("sinonimos", [])),
+            }
+    raise KeyError(nombre)
+
+
+def pasada_sim(kb, bloque, payload, pregunta="¿Cómo va todo?"):
+    """tarea -> prompt -> lector simulado -> verificador. Devuelve todo."""
+    tarea = ef.tarea_desde_job(bloque, payload, pregunta, kb)
+    prompt = fp.construir_prompt(tarea, kb)
+    sim = ef.simulacion_fase1(prompt["system"], prompt["user"])
+    ok, motivos = fp.verificar_lectura(tarea, sim)
+    return tarea, prompt, sim, ok, motivos
 
 
 class ClienteGuion:
@@ -476,6 +508,227 @@ class TestSimEjesAstrales(unittest.TestCase):
         self.assertIn("Ascendente en Piscis", texto)
         ok, motivos = fp.verificar_lectura(tarea, texto)
         self.assertTrue(ok, motivos)
+
+
+CRUZ_POSICIONES = [
+    "situación", "obstáculo", "raíz", "pasado", "meta",
+    "futuro cercano", "actitud", "entorno", "esperanzas y miedos", "resultado",
+]
+CRUZ_CARTAS = [
+    ("El Loco", False), ("El Mago", False), ("La Sacerdotisa", True),
+    ("La Emperatriz", False), ("El Emperador", False), ("El Hierofante", True),
+    ("Los Enamorados", False), ("El Carro", False), ("La Fuerza", False),
+    ("El Ermitaño", False),
+]
+
+
+class TestBarajaEspanola(unittest.TestCase):
+    """T89: bloques espanola_1/3/5/7 con mazo, posiciones y universo de naipes."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.kb = ef.cargar_kb()
+
+    def test_kb_carga_baraja(self):
+        self.assertIn("baraja", self.kb)
+        self.assertEqual(len(self.kb["baraja"]["naipes"]), 40)
+
+    def test_universo_baraja_se_cachea(self):
+        u1 = ef.universo_baraja(self.kb)
+        u2 = ef.universo_baraja(self.kb)
+        self.assertIs(u1, u2)
+        self.assertGreaterEqual(len(u1), 40)
+        naipes = {u["nombre"] for u in u1 if isinstance(u, dict)}
+        self.assertIn("As de Oros", naipes)
+        extras = [u for u in u1 if isinstance(u, str)]
+        self.assertIn("El Colgado", extras)
+
+    def test_tarea_espanola_3(self):
+        payload = {
+            "cartas": [
+                naipe("As de Oros"),
+                naipe("Tres de Copas", True),
+                naipe("Siete de Espadas"),
+            ],
+            "contexto": "trabajo",
+            "mazo": "espanol",
+            "posiciones": list(fp.POSICIONES_ESPAÑOLA["espanola_3"]),
+        }
+        tarea = ef.tarea_desde_job("espanola_3", payload, "¿Cómo va?", self.kb)
+        self.assertEqual(tarea["familia"], "espanola_3")
+        self.assertEqual(tarea["mazo"], "espanol")
+        self.assertEqual(tarea["posiciones"], ["pasado", "presente", "futuro"])
+        self.assertEqual(len(tarea["cartas"]), 3)
+        self.assertTrue(tarea["cartas"][0]["sinonimos"])
+        self.assertEqual(tarea["calculos"], {})
+        self.assertTrue(tarea["universo_cartas"])
+
+    def test_tarea_espanola_1_sin_posiciones(self):
+        payload = {
+            "cartas": [naipe("As de Espadas", True)],
+            "contexto": "dinero",
+            "mazo": "espanol",
+        }
+        tarea = ef.tarea_desde_job("espanola_1", payload, "¿Cómo va?", self.kb)
+        self.assertNotIn("posiciones", tarea)
+        self.assertTrue(tarea["cartas"][0]["invertida"])
+
+    def test_sim_espanola_1_pasa_verificador(self):
+        payload = {
+            "cartas": [naipe("As de Espadas", True)],
+            "contexto": "dinero",
+            "mazo": "espanol",
+        }
+        _, _, sim, ok, motivos = pasada_sim(self.kb, "espanola_1", payload)
+        self.assertTrue(ok, motivos)
+        self.assertFalse(ef.respuesta_truncada(sim))
+
+    def test_sim_espanola_3_pasa_verificador(self):
+        payload = {
+            "cartas": [
+                naipe("As de Oros"),
+                naipe("Tres de Copas", True),
+                naipe("Siete de Espadas"),
+            ],
+            "contexto": "trabajo",
+            "mazo": "espanol",
+            "posiciones": list(fp.POSICIONES_ESPAÑOLA["espanola_3"]),
+        }
+        _, _, sim, ok, motivos = pasada_sim(self.kb, "espanola_3", payload)
+        self.assertTrue(ok, motivos)
+        self.assertFalse(ef.respuesta_truncada(sim))
+
+    def test_sim_espanola_5_con_esquema(self):
+        cartas = [
+            naipe("Rey de Copas"),
+            naipe("Caballo de Espadas", True),
+            naipe("Cuatro de Bastos"),
+            naipe("Sota de Oros"),
+            naipe("Siete de Copas", True),
+        ]
+        payload = {
+            "cartas": cartas,
+            "contexto": "salud",
+            "mazo": "espanol",
+            "posiciones": list(fp.POSICIONES_ESPAÑOLA["espanola_5"]),
+        }
+        _, prompt, sim, ok, motivos = pasada_sim(self.kb, "espanola_5", payload)
+        self.assertTrue(ok, motivos)
+        self.assertFalse(ef.respuesta_truncada(sim))
+        self.assertIn("## Síntesis", sim)
+        self.assertIn("## 1. situación — Rey de Copas (al derecho)", sim)
+        self.assertIn("## 2. obstáculo — Caballo de Espadas (invertida)", sim)
+        for num in range(1, 6):
+            self.assertIn(f"## {num}. ", sim)
+
+    def test_sim_espanola_7_con_esquema(self):
+        nombres = ["As de Bastos", "Dos de Copas", "Tres de Espadas",
+                   "Cuatro de Oros", "Sota de Bastos", "Caballo de Copas",
+                   "Rey de Espadas"]
+        cartas = [naipe(n, invertida=(i == 3)) for i, n in enumerate(nombres)]
+        payload = {
+            "cartas": cartas,
+            "contexto": "trabajo",
+            "mazo": "espanol",
+            "posiciones": list(fp.POSICIONES_ESPAÑOLA["espanola_7"]),
+        }
+        _, _, sim, ok, motivos = pasada_sim(self.kb, "espanola_7", payload)
+        self.assertTrue(ok, motivos)
+        self.assertFalse(ef.respuesta_truncada(sim))
+        self.assertIn("## 1. base — As de Bastos (al derecho)", sim)
+        self.assertIn("## 4. futuro — Cuatro de Oros (invertida)", sim)
+        self.assertIn("## Síntesis", sim)
+
+
+class TestSimulacionTiradasLargas(unittest.TestCase):
+    """T89: el lector simulado respeta el esquema obligatorio en tiradas largas."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.kb = ef.cargar_kb()
+
+    def _payload_cruz(self, todas_derechas=False):
+        return {
+            "cartas": [
+                {"nombre": n, "invertida": (False if todas_derechas else inv)}
+                for n, inv in CRUZ_CARTAS
+            ],
+            "contexto": "trabajo",
+            "posiciones": list(CRUZ_POSICIONES),
+        }
+
+    def test_cruz_celta_con_esquema(self):
+        _, prompt, sim, ok, motivos = pasada_sim(
+            self.kb, "cruz_celta", self._payload_cruz()
+        )
+        self.assertTrue(ok, motivos)
+        self.assertFalse(ef.respuesta_truncada(sim))
+        self.assertIn("ESQUEMA OBLIGATORIO", prompt["user"])
+        self.assertIn("## 1. situación — El Loco (al derecho)", sim)
+        self.assertIn("## 3. raíz — La Sacerdotisa (invertida)", sim)
+        self.assertIn("## 10. resultado — El Ermitaño (al derecho)", sim)
+        self.assertIn("## Síntesis", sim)
+
+    def test_cruz_celta_sin_invertidas_no_menciona_reves(self):
+        _, _, sim, ok, motivos = pasada_sim(
+            self.kb, "cruz_celta", self._payload_cruz(todas_derechas=True)
+        )
+        self.assertTrue(ok, motivos)
+        self.assertNotIn("invertida", sim)
+        self.assertNotIn("inversión", sim)
+
+    def test_cruz_celta_acepta_posiciones_del_payload(self):
+        payload = self._payload_cruz()
+        tarea = ef.tarea_desde_job("cruz_celta", payload, "¿Cómo va?", self.kb)
+        self.assertEqual(tarea["posiciones"], CRUZ_POSICIONES)
+
+    def test_lectura_completa_cuatro_secciones_en_orden(self):
+        payload = {
+            "carta": CARTA_NATAL,
+            "cartas": [
+                {"nombre": "El Loco", "invertida": False},
+                {"nombre": "La Estrella", "invertida": True},
+                {"nombre": "La Luna", "invertida": False},
+            ],
+            "fecha": "1990-01-01",
+            "nombre": "Marta Ruiz",
+            "contexto": "trabajo",
+            "ciudad": "Madrid",
+        }
+        _, _, sim, ok, motivos = pasada_sim(
+            self.kb, "lectura_completa", payload, "¿Qué camino tomo?"
+        )
+        self.assertTrue(ok, motivos)
+        self.assertFalse(ef.respuesta_truncada(sim))
+        posiciones = ["## Carta natal", "## Tirada de tres cartas",
+                      "## Numerología", "## Síntesis"]
+        indices = [sim.find(p) for p in posiciones]
+        self.assertTrue(all(i >= 0 for i in indices), sim)
+        self.assertEqual(indices, sorted(indices))
+
+
+class TestMaxTokensTabla(unittest.TestCase):
+    """T89: el máximo efectivo sale de RECOMENDACION_MAX_TOKENS sobre el piso."""
+
+    def test_espanola_7_sube_a_5120(self):
+        fila = {"bloque": "espanola_7", "max_tokens": 1024}
+        self.assertEqual(ef.max_tokens_efectivo(fila, ef.PISO_MAX_TOKENS), 5120)
+
+    def test_espanola_1_respeta_piso(self):
+        fila = {"bloque": "espanola_1", "max_tokens": 1024}
+        self.assertEqual(ef.max_tokens_efectivo(fila, ef.PISO_MAX_TOKENS), 4096)
+
+    def test_espanola_5_piso_e_igual(self):
+        fila = {"bloque": "espanola_5", "max_tokens": 1024}
+        self.assertEqual(ef.max_tokens_efectivo(fila, ef.PISO_MAX_TOKENS), 4096)
+
+    def test_bloque_sin_tabla_usa_piso(self):
+        fila = {"bloque": "runas", "max_tokens": 1024}
+        self.assertEqual(ef.max_tokens_efectivo(fila, ef.PISO_MAX_TOKENS), 4096)
+
+    def test_lectura_completa_6144(self):
+        fila = {"bloque": "lectura_completa", "max_tokens": 1024}
+        self.assertEqual(ef.max_tokens_efectivo(fila, ef.PISO_MAX_TOKENS), 6144)
 
 
 if __name__ == "__main__":
