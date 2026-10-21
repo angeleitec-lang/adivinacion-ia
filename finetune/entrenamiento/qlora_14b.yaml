@@ -10,6 +10,13 @@
 #
 # Este es el modelo principal de MODELO.md. El 7B sirve para iterar; el 14B
 # solo se entrena cuando el 7B demuestra que la receta y los datos funcionan.
+#
+# Longitudes REALES del dataset v1 parcial (5.205 filas train, estimación
+# caracteres/3,5; recálculo: finetune/entrenamiento/ajuste_config.py):
+#   p50 1.510 · p95 3.233 · p99 3.869 · máx 4.166 · media 1.611 tokens.
+#   Familia más larga: astro_natal (p99 4.131, máx 4.166).
+#   max_length 4096 cubre ≥99,8 % sin truncar (10 filas por encima, <0,01 %
+#   de tokens perdidos). Decisión T111; ver docs/PLAN_ENTRENAMIENTO.md.
 
 base: Qwen/Qwen2.5-14B-Instruct
 
@@ -21,7 +28,8 @@ data:
   # preparado, añadir `val:` solo después de verificar que la clave existe.
   format: chatml
   val_split: 0.05
-  max_length: 2048
+  # 4096: cubre p99 (3.869) con margen para el solape ChatML. Ver cabecera.
+  max_length: 4096
 
 training:
   epochs: 3
@@ -29,9 +37,13 @@ training:
   # sobreajustar o desestabilizarse. Si el loss baja muy despacio, subir a
   # 1.5e-4 antes que tocar otros hiperparámetros.
   lr: 0.0001
-  batch_size: 1
-  gradient_accumulation_steps: 16
-  # Lote efectivo = 1 × 16 = 16 ejemplos por paso.
+  # Memoria estimada 14B@4096 bs2 con checkpointing (ajuste_config.py):
+  # ~48 GB (pesos 7,8 + optimizador r=32 0,4 + activaciones 40,1; ±40 %
+  # → 29-68 GB). Cabe con margen ≥60 GB en los 128 GB unificados.
+  # Batch 2 × accum 8 = lote efectivo 16, igual que el 7B.
+  batch_size: 2
+  gradient_accumulation_steps: 8
+  # Lote efectivo = 2 × 8 = 16 ejemplos por paso.
   eval_steps: 50
   save_steps: 100
   warmup_ratio: 0.03
@@ -55,5 +67,13 @@ training:
   bnb_4bit_quant_type: nf4
   bnb_4bit_use_double_quant: true
   bnb_4bit_compute_dtype: bfloat16
+  # PÉRDIDA SOLO SOBRE LA RESPUESTA DEL ASISTENTE (T111): la pérdida debe
+  # calcularse en los tokens de los turnos "assistant"/"gpt" y enmascarar
+  # system y human. En ChatML es el comportamiento estándar de las
+  # implementaciones SFT habituales (mask sobre prompt), pero en Soup NO está
+  # verificado: comprobar con `soup --help` el nombre de la clave
+  # (p. ej. train_on_prompt: false / mask_user_system: true) y confirmarlo en
+  # la prueba corta antes de la tanda. Si no existe la clave, verificar en el
+  # log que las pérdidas de system/user no contribuyen.
 
 output: finetune/entrenamiento/salida/14b

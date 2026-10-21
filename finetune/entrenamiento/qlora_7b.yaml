@@ -11,6 +11,17 @@
 # Entrada: salida de
 #   python finetune/corpus/preparar_entrenamiento.py \
 #     --dataset finetune/corpus/final --formato chatml
+#
+# Longitudes REALES del dataset v1 parcial (5.205 filas train, estimación
+# caracteres/3,5; recálculo: finetune/entrenamiento/ajuste_config.py):
+#   p50 1.510 · p95 3.233 · p99 3.869 · máx 4.166 · media 1.611 tokens.
+#   Familia más larga: astro_natal (p99 4.131, máx 4.166).
+#   Con max_length 4096 se truncan solo 10 filas (0,19 %) y se pierde <0,01 %
+#   de los tokens; con 2048 (valor anterior) se truncaría ~15 % de las filas,
+#   incluida la mediana de astro_natal. 6144/8192 no aportan nada: ninguna
+#   fila los alcanza. El solape ChatML (~15 tokens por fila de 3 turnos) deja
+#   el máximo efectivo en ~4.184: siguen siendo ~12 filas afectadas.
+#   max_seq_len = 4096 cubre ≥99,8 % sin truncar. Decisión T111.
 
 base: Qwen/Qwen2.5-7B-Instruct
 
@@ -22,16 +33,22 @@ data:
   # preparado, añadir `val:` solo después de verificar que la clave existe.
   format: chatml
   val_split: 0.05
-  max_length: 2048
+  # 4096: cubre p99 (3.869) con margen para el solape ChatML. Ver cabecera.
+  max_length: 4096
 
 training:
   epochs: 3
   # QLoRA tolera un lr más alto que el fine-tune completo; 2e-4 es el valor
   # habitual para r=16. Si hay inestabilidad (loss con picos), bajar a 1e-4.
   lr: 0.0002
-  batch_size: 2
-  gradient_accumulation_steps: 8
-  # Lote efectivo = 2 × 8 = 16 ejemplos por paso.
+  # Memoria estimada 7B@4096 bs4 con checkpointing (ajuste_config.py):
+  # ~44 GB (pesos 3,9 + optimizador 0,2 + activaciones 40,1; ±40 % de error
+  # → 26-62 GB). Cabe con margen ≥66 GB en los 128 GB unificados. Batch 4 va
+  # holgado; si el backend ROCm no lo admite, volver a 2 con accum 8 (mismo
+  # lote efectivo).
+  batch_size: 4
+  gradient_accumulation_steps: 4
+  # Lote efectivo = 4 × 4 = 16 ejemplos por paso.
   eval_steps: 50
   save_steps: 100
   warmup_ratio: 0.03
@@ -55,5 +72,13 @@ training:
   bnb_4bit_quant_type: nf4
   bnb_4bit_use_double_quant: true
   bnb_4bit_compute_dtype: bfloat16
+  # PÉRDIDA SOLO SOBRE LA RESPUESTA DEL ASISTENTE (T111): la pérdida debe
+  # calcularse en los tokens de los turnos "assistant"/"gpt" y enmascarar
+  # system y human. En ChatML es el comportamiento estándar de las
+  # implementaciones SFT habituales (mask sobre prompt), pero en Soup NO está
+  # verificado: comprobar con `soup --help` el nombre de la clave
+  # (p. ej. train_on_prompt: false / mask_user_system: true) y confirmarlo en
+  # la prueba corta antes de la tanda. Si no existe la clave, verificar en el
+  # log que las pérdidas de system/user no contribuyen.
 
 output: finetune/entrenamiento/salida/7b
