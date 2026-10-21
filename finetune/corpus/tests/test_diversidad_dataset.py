@@ -95,7 +95,9 @@ class TestNgrams(unittest.TestCase):
         # textos cortos (<8 palabras) no generan apertura
         self.assertIsNone(dd.extremos(dd.tokenize("una dos tres")))
         cierres = dd.ranking_extremos(textos, primera=False)
-        self.assertTrue(all(c for c in cierres))
+        cierre8 = " ".join("palabra%d" % i for i in range(4, 12))
+        self.assertEqual(cierres[cierre8], 2)
+        self.assertNotIn(apertura8, cierres)
 
 
 class TestSimilitud(unittest.TestCase):

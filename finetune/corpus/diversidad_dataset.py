@@ -664,7 +664,8 @@ def analizar(jsonl_path, jobs_db=None, top=20):
             m["n_muletillas_%d" % n] = len(lista)
             mults[n] = lista
         ap = ranking_extremos(resps)
-        cie = ranking_extremos([r for r in (resps_final or resps)])
+        cie = ranking_extremos([r for r in (resps_final or resps)],
+                               primera=False)
         m["top_aperturas"] = [{"apertura": a, "n": c,
                                "frac": round(c / len(resps), 4) if resps else 0}
                               for a, c in ap.most_common(top)]
