@@ -654,8 +654,10 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
     """Juzga secciones y escribe `juicios.jsonl` y `evidencias.jsonl`.
 
     Reanudable: las secciones cuyo hash ya está en juicios.jsonl no vuelven
-    a llamarse; si sus evidencias faltan, se regeneran del juicio guardado.
-    `limite` recorta el número de secciones procesadas en esta pasada.
+    a llamarse; si sus evidencias faltan —total o parcialmente, por faceta
+    (entidad, faceta)— se completan desde el juicio guardado sin duplicar las
+    ya escritas. `limite` recorta el número de secciones procesadas en esta
+    pasada.
     Devuelve estadísticas {"juzgadas","llamadas","evidencias",
     "reaprovechadas","sin_candidatos","error"}.
     """
@@ -668,8 +670,12 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
     for registro in _leer_jsonl(ruta_juicios):
         if registro.get("hash"):
             hechos[registro["hash"]] = registro
-    hashes_ev = {e.get("hash_seccion")
-                 for e in _leer_jsonl(ruta_evidencias)}
+    hashes_ev = {}
+    for e in _leer_jsonl(ruta_evidencias):
+        h = e.get("hash_seccion")
+        if h is not None:
+            hashes_ev.setdefault(h, set()).add(
+                (e.get("entidad_id"), e.get("faceta")))
 
     stats = {"juzgadas": 0, "llamadas": 0, "evidencias": 0,
              "reaprovechadas": 0, "sin_candidatos": 0, "error": 0}
@@ -688,12 +694,17 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
             h = hash_seccion(seccion)
             if h in hechos:
                 stats["reaprovechadas"] += 1
-                if h not in hashes_ev:
-                    lineas = evidencias_de_seccion(
-                        seccion, hechos[h]["juicio"],
-                        fuente_de_seccion(seccion, meta))
-                    _escribir_ev(lineas)
-                    stats["evidencias"] += len(lineas)
+                lineas = evidencias_de_seccion(
+                    seccion, hechos[h]["juicio"],
+                    fuente_de_seccion(seccion, meta))
+                presentes = hashes_ev.setdefault(h, set())
+                faltan = [l for l in lineas
+                          if (l["entidad_id"], l["faceta"]) not in presentes]
+                if faltan:
+                    _escribir_ev(faltan)
+                    stats["evidencias"] += len(faltan)
+                presentes.update((l["entidad_id"], l["faceta"])
+                                 for l in lineas)
                 continue
             candidatos = candidatos_seccion(seccion)
             if not candidatos:
@@ -731,9 +742,12 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
             fh_juicios.flush()
             lineas = evidencias_de_seccion(
                 seccion, juicio, fuente_de_seccion(seccion, meta))
-            _escribir_ev(lineas)
-            stats["evidencias"] += len(lineas)
-            hashes_ev.add(h)
+            presentes = hashes_ev.setdefault(h, set())
+            faltan = [l for l in lineas
+                      if (l["entidad_id"], l["faceta"]) not in presentes]
+            _escribir_ev(faltan)
+            stats["evidencias"] += len(faltan)
+            presentes.update((l["entidad_id"], l["faceta"]) for l in lineas)
     finally:
         fh_juicios.close()
         fh_ev.close()

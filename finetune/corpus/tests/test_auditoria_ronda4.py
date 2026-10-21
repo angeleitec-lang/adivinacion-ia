@@ -281,5 +281,69 @@ class TestSaludDatosExclusiones(unittest.TestCase):
             self.assertEqual(len([l for l in fh if l.strip()]), 1)
 
 
+class TestJuezReanudacionFacetas(unittest.TestCase):
+    """juez.procesar_secciones: reanudar completa facetas parcial-escritas.
+
+    Arreglado en T67 (A3): el estado de evidencias se lleva por par
+    (entidad, faceta), no solo por hash de sección.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.seccion = {"id_libro": "l1", "seccion": 1, "titulo": "t",
+                        "texto": "x" * 60}
+        self.h = juez.hash_seccion(self.seccion)
+        self.juicio = {"tipo": "conocimiento", "idioma": "es", "calidad": 4,
+                       "entidades": [{"entidad_id": "tarot-mayor-18",
+                                      "facetas": ["faceta_uno",
+                                                  "faceta_dos"]}]}
+        self.esperadas = juez.evidencias_de_seccion(
+            self.seccion, self.juicio,
+            juez.fuente_de_seccion(self.seccion, {}))
+        self.assertEqual(len(self.esperadas), 2)
+        registro = {"hash": self.h, "fuente_id": "l1", "titulo": "t",
+                    "candidatos": ["tarot-mayor-18"], "juicio": self.juicio}
+        with open(os.path.join(self.dir, "juicios.jsonl"), "w",
+                  encoding="utf-8") as fh:
+            fh.write(json.dumps(registro) + "\n")
+
+    def _escribir_ev_parcial(self, hasta):
+        with open(os.path.join(self.dir, "evidencias.jsonl"), "w",
+                  encoding="utf-8") as fh:
+            for linea in self.esperadas[:hasta]:
+                fh.write(json.dumps(linea) + "\n")
+
+    def _lineas_ev(self):
+        with open(os.path.join(self.dir, "evidencias.jsonl"),
+                  encoding="utf-8") as fh:
+            return [l for l in fh if l.strip()]
+
+    def _relanzar(self):
+        return juez.procesar_secciones([self.seccion], object(), self.dir)
+
+    def test_completa_la_faceta_que_falta(self):
+        self._escribir_ev_parcial(1)
+        stats = self._relanzar()
+        self.assertEqual(stats["reaprovechadas"], 1)
+        self.assertEqual(stats["evidencias"], 1)
+        self.assertEqual(len(self._lineas_ev()), 2)
+
+    def test_relanzamiento_no_duplica(self):
+        self._escribir_ev_parcial(1)
+        self._relanzar()
+        stats = self._relanzar()
+        self.assertEqual(stats["evidencias"], 0)
+        self.assertEqual(len(self._lineas_ev()), 2)
+
+    def test_sin_evidencias_genera_todas(self):
+        with open(os.path.join(self.dir, "evidencias.jsonl"), "w",
+                  encoding="utf-8") as fh:
+            fh.write("")
+        stats = self._relanzar()
+        self.assertEqual(stats["evidencias"], 2)
+        self.assertEqual(len(self._lineas_ev()), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
