@@ -311,13 +311,14 @@ def parsear_respuesta(texto, candidatos):
     if tipo not in TIPOS_VALIDOS:
         raise ValueError("Campo «tipo» ausente o inválido: %r" % (tipo,))
     calidad = datos.get("calidad")
-    try:
-        if isinstance(calidad, bool):
-            raise TypeError
-        numero = float(calidad)
-    except (TypeError, ValueError):
+    # T67 (B2): `calidad` debe ser un entero 1-5; cadenas y flotantes no
+    # enteros se rechazan en lugar de aceptarse/truncarse silenciosamente.
+    if isinstance(calidad, bool) or not isinstance(calidad, (int, float)):
         raise ValueError("Campo «calidad» fuera de 1-5: %r" % (calidad,))
-    if not math.isfinite(numero) or not 1 <= numero <= 5:
+    numero = float(calidad)
+    if not math.isfinite(numero) or not numero.is_integer():
+        raise ValueError("Campo «calidad» fuera de 1-5: %r" % (calidad,))
+    if not 1 <= numero <= 5:
         raise ValueError("Campo «calidad» fuera de 1-5: %r" % (calidad,))
     calidad = int(numero)
     idioma = datos.get("idioma")
@@ -653,9 +654,12 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
                        limite=None):
     """Juzga secciones y escribe `juicios.jsonl` y `evidencias.jsonl`.
 
-    Reanudable: las secciones cuyo hash ya está en juicios.jsonl no vuelven
-    a llamarse; si sus evidencias faltan, se regeneran del juicio guardado.
-    `limite` recorta el número de secciones procesadas en esta pasada.
+    Reanudable: las secciones cuyo hash ya está en juicios.jsonl con un juicio
+    que no sea de tipo error no vuelven a llamarse; si sus evidencias faltan
+    —total o parcialmente, por faceta (entidad, faceta)— se completan desde el
+    juicio guardado sin duplicar las ya escritas. Los juicios de tipo error se
+    reintentan (T67, B5). `limite` recorta el número de secciones procesadas
+    en esta pasada.
     Devuelve estadísticas {"juzgadas","llamadas","evidencias",
     "reaprovechadas","sin_candidatos","error"}.
     """
@@ -666,10 +670,21 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
     ruta_evidencias = os.path.join(out_dir, "evidencias.jsonl")
     hechos = {}
     for registro in _leer_jsonl(ruta_juicios):
-        if registro.get("hash"):
-            hechos[registro["hash"]] = registro
-    hashes_ev = {e.get("hash_seccion")
-                 for e in _leer_jsonl(ruta_evidencias)}
+        if not registro.get("hash"):
+            continue
+        # T67 (B5): un juicio de tipo error no cuenta como sección terminada;
+        # al reanudar se reintenta (el registro bueno se añade después y es el
+        # que queda como último).
+        if (registro.get("juicio") or {}).get("tipo") == "error":
+            hechos.pop(registro["hash"], None)
+            continue
+        hechos[registro["hash"]] = registro
+    hashes_ev = {}
+    for e in _leer_jsonl(ruta_evidencias):
+        h = e.get("hash_seccion")
+        if h is not None:
+            hashes_ev.setdefault(h, set()).add(
+                (e.get("entidad_id"), e.get("faceta")))
 
     stats = {"juzgadas": 0, "llamadas": 0, "evidencias": 0,
              "reaprovechadas": 0, "sin_candidatos": 0, "error": 0}
@@ -688,12 +703,17 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
             h = hash_seccion(seccion)
             if h in hechos:
                 stats["reaprovechadas"] += 1
-                if h not in hashes_ev:
-                    lineas = evidencias_de_seccion(
-                        seccion, hechos[h]["juicio"],
-                        fuente_de_seccion(seccion, meta))
-                    _escribir_ev(lineas)
-                    stats["evidencias"] += len(lineas)
+                lineas = evidencias_de_seccion(
+                    seccion, hechos[h]["juicio"],
+                    fuente_de_seccion(seccion, meta))
+                presentes = hashes_ev.setdefault(h, set())
+                faltan = [l for l in lineas
+                          if (l["entidad_id"], l["faceta"]) not in presentes]
+                if faltan:
+                    _escribir_ev(faltan)
+                    stats["evidencias"] += len(faltan)
+                presentes.update((l["entidad_id"], l["faceta"])
+                                 for l in lineas)
                 continue
             candidatos = candidatos_seccion(seccion)
             if not candidatos:
@@ -731,9 +751,12 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
             fh_juicios.flush()
             lineas = evidencias_de_seccion(
                 seccion, juicio, fuente_de_seccion(seccion, meta))
-            _escribir_ev(lineas)
-            stats["evidencias"] += len(lineas)
-            hashes_ev.add(h)
+            presentes = hashes_ev.setdefault(h, set())
+            faltan = [l for l in lineas
+                      if (l["entidad_id"], l["faceta"]) not in presentes]
+            _escribir_ev(faltan)
+            stats["evidencias"] += len(faltan)
+            presentes.update((l["entidad_id"], l["faceta"]) for l in lineas)
     finally:
         fh_juicios.close()
         fh_ev.close()

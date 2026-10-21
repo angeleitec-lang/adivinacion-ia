@@ -25,30 +25,32 @@ import diagnostico_tarot_libros as diag
 # Tokens (normalizados, minusculas, sin tildes) que identifican la propia carta
 # mayor por su numero. Si el titulo contiene alguno, la evidencia es coherente y
 # se conserva, aunque el titulo nombre tambien otra carta. Cubre variantes reales
-# de los libros (judgement/judgment, hanged/hanging, priestess/papess...).
+# de los libros (judgement/judgment, hanged/hanging, priestess/papess...) y,
+# desde T67 (defecto A2), tambien los nombres en espanol. El primer token sigue
+# siendo el EN: es el que se pasa a clasificar_titulo como `esperado`.
 MAYOR_PROPIO = {
-    1: ["fool"],
-    2: ["magician", "magus", "mage"],
-    3: ["priestess", "papess"],
-    4: ["empress"],
-    5: ["emperor"],
-    6: ["hierophant", "pope"],
-    7: ["lovers"],
-    8: ["chariot"],
-    9: ["strength", "fortitude"],
-    10: ["hermit"],
-    11: ["wheel"],
-    12: ["justice"],
-    13: ["hanged", "hanging"],
-    14: ["death"],
-    15: ["temperance"],
-    16: ["devil"],
-    17: ["tower"],
-    18: ["star"],
-    19: ["moon"],
-    20: ["sun"],
-    21: ["judgement", "judgment", "resurrection"],
-    22: ["world"],
+    1: ["fool", "loco"],
+    2: ["magician", "magus", "mage", "mago"],
+    3: ["priestess", "papess", "sacerdotisa", "papisa"],
+    4: ["empress", "emperatriz"],
+    5: ["emperor", "emperador"],
+    6: ["hierophant", "pope", "hierofante", "papa"],
+    7: ["lovers", "enamorados"],
+    8: ["chariot", "carro"],
+    9: ["strength", "fortitude", "fuerza"],
+    10: ["hermit", "ermitano"],
+    11: ["wheel", "rueda"],
+    12: ["justice", "justicia"],
+    13: ["hanged", "hanging", "colgado"],
+    14: ["death", "muerte"],
+    15: ["temperance", "templanza"],
+    16: ["devil", "diablo"],
+    17: ["tower", "torre"],
+    18: ["star", "estrella"],
+    19: ["moon", "luna"],
+    20: ["sun", "sol"],
+    21: ["judgement", "judgment", "resurrection", "juicio", "resurreccion"],
+    22: ["world", "mundo"],
 }
 
 # Token primario que se pasa a `clasificar_titulo` para detectar otra carta.

@@ -15,6 +15,7 @@ tocar disco ni red; si un libro supera `UMBRAL_LLAMADAS` se recomienda
 procesarlo por tramos con `--max-llamadas`.
 """
 import argparse
+import datetime
 import json
 import os
 import shutil
@@ -251,9 +252,15 @@ def purgar_errores_juez(work_dir):
             else:
                 buenos.append(stripped)
     if errores:
-        with open(ruta, "w", encoding="utf-8") as fh:
+        sello = datetime.datetime.now().strftime("%Y%m%d")
+        respaldo = "%s.bak-%s" % (ruta, sello)
+        if not os.path.exists(respaldo):
+            shutil.copy2(ruta, respaldo)
+        tmp = ruta + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
             for linea in buenos:
                 fh.write(linea + "\n")
+        os.replace(tmp, ruta)
     return errores
 
 
