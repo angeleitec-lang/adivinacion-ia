@@ -9,8 +9,9 @@ la tubería **real** del repositorio, no la prevista. Se apoya en:
 - [`finetune/GUIA_REENTRENAMIENTO.md`](../finetune/GUIA_REENTRENAMIENTO.md): entrenamiento.
 
 Todo lo que sigue se comprobó con `--help`, con simulaciones (`--simulado`,
-`--dry-run`) o leyendo el código, el 2026-10-20. Las discrepancias encontradas
-están al final.
+`--dry-run`) o leyendo el código. Última revisión: 2026-10-21 (T77), que añade
+los módulos integrados entre T52 y T70. Las discrepancias encontradas están al
+final.
 
 ## Convenciones
 
@@ -32,14 +33,20 @@ FASE 0 · adquisición y curaduría
   ┌ web: índices/rejillas/Exa → web_pipeline/collect_corpus → fase0/web/<dominio>/*.md
   ├ libros: inventario → libros_pipeline / harvest_epubs / fetch_documents /
   │          docs_to_md / descarga_clasicos_pd → fase0/libros/{crudo,limpio,secciones}
+  │          └→ clasicos_pd_a_evidencias.py → fase0/libros_clasicos_pd/
+  │          └→ limpiar_evidencias_libros.py (propuesta de filtro, no aplica)
   └ YouTube: yt_discover → yt_fetch → yt_clean → yt_classify/yt_extract/yt_normalize
              → fase0/youtube/
                           │
                           ▼
-  juez.py (secciones + KB + cálculos, LLM) → evidencias.jsonl
+  juez.py / evidencias_incremental.py (secciones + KB + cálculos, LLM) → evidencias.jsonl
       ├→ cobertura.py → cobertura_total.json/md
       │      └→ recuperacion_dirigida.py → plan_recuperacion.jsonl
+      │             └→ recuperacion_descarga.py → fase0/web_recup{2,3}/
       ├→ afirmaciones_es.py (web, LLM) → afirmaciones.jsonl
+      ├→ afirmaciones_libros.py (libros, LLM) → afirmaciones_libros.jsonl
+      │      └→ consenso_kb.py (con --extra-afirmaciones) → consenso.jsonl
+      │             └→ kb_v2.py → kb_v2/{tarot,astrologia,numerologia,baraja_espanola}.json
       └→ lecturas_extraer.py (libros, LLM) → lecturas.jsonl
                           │
   muestras.py (3 %) → prerevision.py → revisor_local.py
@@ -47,17 +54,24 @@ FASE 0 · adquisición y curaduría
                           │
 FASE 1 · dataset
   generate_tasks.py → jobs.db
-      → generate_synthetic.py ─┐
-  fase1_prompts.py ────────────┼→ JSONL sintético → validate_synthetic.py
-  multiturno.py ───────────────┘        │
-                                        ├→ translate_dataset.py / prune_short_en.py
-                                        └→ merge_final.py → audit_dataset.py
-                                             → finetune/corpus/final/{train,val,test}.jsonl
+      → ejecutor_fase1.py (prompt + verificar_lectura, reintentos) ─┐
+      → generate_synthetic.py ──────────────────────────────────────┤
+  fase1_prompts.py ────────────────────────────────────────────────┼→ JSONL sintético
+  fase1_piloto.py (medición de familias) ──────────────────────────┤   → validate_synthetic.py
+  multiturno.py ───────────────────────────────────────────────────┘        │
+                                                                            ├→ translate_dataset.py / prune_short_en.py
+                                                                            └→ merge_final.py → audit_dataset.py
+                                                                                 → finetune/corpus/final/{train,val,test}.jsonl
+  ensayo_extremo.py: simulación de punta a punta sin red → informe de desajustes (T70)
                           │
 FASE 2 · modelo
   final/ → entrenamiento (QLoRA/Soup) → evaluacion_casos.py → respuestas
       → evaluar_modelo.py → informe y comparación entre modelos
 ```
+
+`comparar_backends.py` es auxiliar: mide cuánto aporta un backend externo
+(Mercury 3) frente a los nodos locales sobre las mismas evidencias; no forma
+parte de la tubería principal.
 
 Rutas alternativas, no usadas en la tubería principal: `build_dataset.py` y
 `build_scrapy_dataset.py` convierten Markdown de Firecrawl en ShareGPT y hacen el
@@ -80,6 +94,7 @@ llama a un modelo; las calculadoras y los conversores son deterministas.
 | `web_extraer.py` | HTML → Markdown con trafilatura | HTML | `.md` | `--html p.html --url … --out-dir …` | no | no | aux |
 | `web_calidad.py` | Auditoría determinista del corpus web | `web/` | informes | `--web-dir … --out-dir …` | no | no | prod |
 | `web_informe.py` | Informe de descargas desde manifest | manifest | Markdown | `--manifest … --out-dir …` | no | no | aux |
+| `recuperacion_descarga.py` | Segunda iteración de descarga sin LLM a partir del plan (T64/T74) | `plan_*.jsonl`, manifest previo | `fase0/web_recup2/`, `web_recup3/` + informe | `--plan …/plan_t74.jsonl --out-dir …/web_recup3 --manifest-previo …/web/manifest.jsonl --tope-por-dominio 40 --max-total 200 --matriz …/cobertura_total_v2.json` | no | sí (omite ya descargadas) | prod |
 | `web_fetch.py` | Cliente HTTP educado | URL | HTML | sin CLI | no | — | aux |
 
 ### 2.2 Libros y clásicos
@@ -97,6 +112,8 @@ llama a un modelo; las calculadoras y los conversores son deterministas.
 | `fetch_documents.py` | Descarga PDF/EPUB de archive.org | inventario | ficheros + manifest | `--only … --max-size-mb 80` | no | parcial | piloto |
 | `docs_to_md.py` | PDF/EPUB → Markdown | documentos | `.md` | `--docs … --out …` | no | sí (`--force` rehace) | aux |
 | `descarga_clasicos_pd.py` | Descarga clásicos de dominio público (T55) | inventario | `crudo/<id>.txt`, manifiesto | `--out-dir /Users/angelgonzalez/fase0/libros` | no | sí | piloto |
+| `clasicos_pd_a_evidencias.py` | Limpieza, segmentación y juez de los clásicos descargados (T57) | `libros_clasicos_pd/` | `fase0/libros_clasicos_pd/{secciones,juicios,evidencias}` | `--work-dir …/libros_clasicos_pd --hasta juez` | en etapa juez | sí (por etapa) | prod |
+| `limpiar_evidencias_libros.py` | Propone un filtro de evidencias de «mayores» sin tocar producción (T53) | evidencias + secciones | `evidencias_filtradas.jsonl`, `informe_filtro.md` | `--evidencias … --secciones-dir … --out-dir …` | no | no | aux |
 
 ### 2.3 Evidencias, afirmaciones, lecturas y cobertura
 
@@ -106,7 +123,12 @@ llama a un modelo; las calculadoras y los conversores son deterministas.
 | `cobertura.py` | Matriz entidad × faceta | evidencias JSONL | `cobertura.json/md` | `--evidencias … --out-json … --out-md …` | no | no (recalcula) | prod |
 | `cobertura_dataset.py` | Cobertura de un dataset | JSONL | matriz | `--in … --minimo 5` | no | no | aux |
 | `recuperacion_dirigida.py` | Convierte huecos en plan de recuperación | `cobertura_total.json` | `plan_recuperacion.jsonl`, informe | `--matriz … --out-plan …` | no | no | prod |
+| `evidencias_incremental.py` | Lleva páginas web nuevas hasta evidencias con juez, en append (T47) | `web/`, `evidencias.jsonl` previas | append a `evidencias.jsonl` + `.bak` | `--web-dir …/web --evidencias …/evidencias.jsonl --dominios … --limite 500` | sí | sí (hash de sección) | prod |
 | `afirmaciones_es.py` | Extrae afirmaciones atómicas de evidencias web (T29) | evidencias + `web/` | `afirmaciones.jsonl`, procesados | `--limite 200 --workers 2` | sí | sí (`procesados.jsonl`) | prod |
+| `afirmaciones_libros.py` | Extrae afirmaciones con cita verbatim de evidencias de libros (T38) | evidencias + secciones | `afirmaciones_libros.jsonl`, procesados | `--evidencias … --secciones-dir … --out-dir … --limite 200` | sí | sí (procesados) | prod |
+| `consenso_kb.py` | Vota por celda (entidad × faceta) agrupando afirmaciones por fuente; dedup por fuente, no por extractor (T38/T73) | afirmaciones web y libros (+ `--extra-afirmaciones`) | `consenso_kb/consenso.jsonl` + informes | `--web-afirmaciones … --libros-afirmaciones … --out-dir …/consenso_kb --workers 6` | no | sí (cache de equivalencia) | prod |
+| `kb_v2.py` | Construye la KB v2 desde el consenso y la compara con `kb/*.json` (T66) | `consenso.jsonl`, KB v1 | `kb_v2/*.json`, `diff_vs_kb_v1.md` | `--consenso …/consenso.jsonl --out-dir …/kb_v2 --kb-v1 finetune/corpus/kb` | no | no (determinista) | prod |
+| `afirmaciones_rapido` (worktree T69) | Pasada de afirmaciones con backend rápido Mercury 3 (T69, en su worktree) | evidencias web/libros + procesados | `fase0/afirmaciones_rapido/{web,libros}/` | `--web-evidencias … --libros-evidencias … --cobertura … --workers 3` | sí (API) | sí (procesados) | piloto (sin integrar) |
 | `lecturas_extraer.py` | Detecta y clasifica lecturas trabajadas (T37/F0.5) | secciones + juicios | `lecturas.jsonl` | `--limite 50 --workers 2` | sí | parcial | piloto |
 | `build_kb.py` | Construye/valida la KB de significados | `kb/*.json` | KB validada | `--validate --out …` | no | no | prod |
 | `cartas.py` | Catálogo y normalización de 78 tarot + 40 españolas | texto | JSON | `texto --mazo español` | no | — | prod |
@@ -118,13 +140,16 @@ llama a un modelo; las calculadoras y los conversores son deterministas.
 | Módulo | Qué hace | Entrada | Salida | Comando típico | LLM | Reanudable | Estado |
 |---|---|---|---|---|---|---|---|
 | `generate_tasks.py` | Crea la matriz de trabajos | semilla, escala | `corpus/jobs.db` | `--scale 1.0` | no | sí (`--replace-pending`) | prod |
-| `generate_synthetic.py` | Reclama jobs y genera lecturas | `jobs.db` | `synthetic/*.jsonl` | `--endpoint http://10.0.0.3:8000/v1 --workers 4` | sí | sí (estado en DB) | prod |
+| `generate_synthetic.py` | Reclama jobs y genera lecturas (prompts antiguos) | `jobs.db` | `synthetic/*.jsonl` | `--endpoint http://10.0.0.3:8000/v1 --workers 4` | sí | sí (estado en DB) | legado: no reanudar |
+| `ejecutor_fase1.py` | Runner de fase 1 sobre `jobs.db`: prompt actual, `verificar_lectura`, reintento con causa, reclamo atómico y copia previa de la BD (T62) | `jobs.db`, `fase1_prompts`, KB | `aceptadas.jsonl`, `rechazadas.jsonl`; estados `done`/`failed` | `--db …/jobs.db --out-dir …/fase1_run --workers 4 --max-tokens-piso 6144 --dry-run` | sí | sí (estado en DB + huérfanos) | prod |
+| `fase1_piloto.py` | Piloto por familias con el LLM real para medir aceptación y latencia (T49) | semillas reservadas | `fase0/piloto_fase1/{piloto.jsonl,informe_piloto.md,errores}` | `--n-por-familia 3 --workers 3 --model … --endpoints …` | sí | sí (semilla) | prod |
 | `fase1_prompts.py` | Construye prompts con KB y cálculos | KB, recetas | JSONL de ejemplos | `--n 10 --out /tmp/ejemplos.jsonl` | no | no | prod |
 | `multiturno.py` | Conversaciones de 2 fases (T45) | semilla | JSONL multiturno | `--n 5 --out /tmp/t45/ejemplos.jsonl` | sí | sí (por semilla) | piloto |
 | `validate_synthetic.py` | Puertas de idioma, longitud, repetición, eco, coherencia y duplicados | `synthetic/` | `synthetic_clean.jsonl` + informe | `--dir corpus/synthetic` | no | no | prod |
 | `translate_dataset.py` | Traduce EN→ES con el nodo | JSONL | JSONL traducido + `.progress` | `--train … --val … --resume` | sí | sí (`--resume`) | piloto |
 | `prune_short_en.py` | Elimina pares ingleses demasiado cortos | raw/datasets | JSONL podado | `--raw … --datasets …` | no | no | aux |
 | `merge_final.py` | Fusiona real + sintético, deduplica y divide | `train_final`, `synthetic_clean` | `final/{train,val,test}.jsonl`, `report.json` | `--real-train … --synth …` | no | no (rehace) | prod |
+| `ensayo_extremo.py` | Ensayo de punta a punta con N tareas simuladas (sin red) y informe de desajustes entre etapas (T70) | `jobs.db` (solo lectura) | informe + salidas temporales del ensayo | `--db …/jobs.db --n 200 --base-dir /tmp/t70 --informe …/ensayo.md` | no | no | aux |
 | `audit_dataset.py` | Auditoría final y filtro de licencia | datasets | informe | `--in … --out-dir …` | no | no | prod |
 | `build_dataset.py` | Markdown Firecrawl → ShareGPT | `corpus/raw` | train/val | `--raw … --out …` | no | no | aux |
 | `build_scrapy_dataset.py` | Scrapy JSONL → ShareGPT | `raw_scrapy` | train/val | `--raw … --out …` | no | no | aux |
@@ -141,6 +166,7 @@ llama a un modelo; las calculadoras y los conversores son deterministas.
 | `evaluacion_casos.py` | 240 casos fijos, 20 por familia (T56) | semillas reservadas | `eval_casos.jsonl` | `--salida /tmp/eval_casos.jsonl` | no | no | prod |
 | `evaluar_modelo.py` | Comprueba respuestas y compara modelos (T56) | casos + respuestas | informe JSON/MD | `--casos … --respuestas … --salida …` | opcional (`--juez-llm`) | caché del juez | prod |
 | `salud_datos.py` | Integridad, vigilancia, reparación opt-in y copias (T59) | `fase0/` | informe + copia `.tar.gz` con SHA-256 | `--copia --backups …/fase0_backups` | no | — | prod |
+| `comparar_backends.py` | Compara la extracción de afirmaciones del nodo local con Mercury 3 sobre las mismas evidencias (T65/T68) | evidencias ya procesadas + `INCEPTION_API_KEY` en el entorno | `fase0/comparativa_backends_v2.md` | `INCEPTION_API_KEY=… $PY finetune/corpus/comparar_backends.py` (sin argparse) | sí (API) | no | piloto |
 
 ### 2.6 YouTube
 
@@ -268,20 +294,29 @@ no incluye metadatos por fila (se pierden al fusionar).
 
 ## 4. Rutas y volumen
 
-### `/Users/angelgonzalez/fase0/` (~206 MB, 2026-10-20)
+### `/Users/angelgonzalez/fase0/` (~308 MB, 2026-10-21)
+
+Cifras medidas con los procesos de fondo aún escribiendo; los ficheros en
+crecimiento (`evidencias.jsonl`, `afirmaciones*.jsonl`, `consenso.jsonl`) pueden
+haber aumentado desde entonces.
 
 | Ruta | Contenido | Tamaño |
 |---|---|---|
-| `web/` | Markdown por dominio (3.574 ficheros) | 29 MB |
-| `evidencias_web/` | `evidencias.jsonl` (14.010), juicios, informes y copias `.bak` | 12 MB |
-| `libros/` | `crudo/`, `limpio/`, `secciones/`, `evidencias/` (17.449), `fetch.jsonl`, `errores.jsonl`, `informe.md` | 116 MB |
+| `web/` | Markdown por dominio (3.568 `.md`) | 36 MB |
+| `evidencias_web/` | `evidencias.jsonl` (18.142), juicios, informes y copias `.bak` | 19 MB |
+| `libros/` | `crudo/`, `limpio/`, `secciones/`, `evidencias/` (18.230), `fetch.jsonl`, `errores.jsonl`, `informe.md` | 126 MB |
+| `libros_clasicos_pd/` | Clásicos de dominio público (T57): secciones, juicios y evidencias | 7,6 MB |
 | `afirmaciones/` | Salida por tandas de T29 | 2 MB |
-| `afirmaciones_full/` | `afirmaciones.jsonl` (52.845 líneas de varias tandas) | 16 MB |
-| `afirmaciones_libros/` | `afirmaciones_libros.jsonl` (19.461) | 9 MB |
-| `lecturas/` | `lecturas.jsonl` (231) | 2 MB |
-| `muestras/` | `muestras.jsonl`, `prerevision.jsonl`, `revisor.html` (2.712) | 9 MB |
-| `youtube/` | catálogo, fetch, VTT, clasificación | 5 MB |
-| `piloto_fase1/` | `piloto.jsonl` (23) e informe | 0,2 MB |
+| `afirmaciones_full/` | `afirmaciones.jsonl` (100.401 líneas de varias tandas) | 30 MB |
+| `afirmaciones_libros/` | `afirmaciones_libros.jsonl` (30.283) | 17 MB |
+| `afirmaciones_rapido/` | Pasada con Mercury (T69): `web/` y `libros/` | 15 MB |
+| `consenso_kb/` | `consenso.jsonl` (1.958 celdas y creciendo), caché de equivalencia | 8,9 MB |
+| `kb_v2/` | `astrologia.json`, `numerologia.json`, `baraja_espanola.json`, `diff_vs_kb_v1.md` | 4,8 MB |
+| `lecturas/` | `lecturas.jsonl` (231) | 2,4 MB |
+| `muestras/` | `muestras.jsonl`, `prerevision.jsonl`, `revisor.html` (2.712) | 8,6 MB |
+| `youtube/` | catálogo, fetch, VTT, clasificación | 4,7 MB |
+| `piloto_fase1/` | `piloto.jsonl` (33 lecturas) e informe | 0,2 MB |
+| `web_recup2/`, `web_recup3/` | Descargas de la recuperación 2 y 3 (T64/T74), sin fusionar | 0,5 / 2,6 MB |
 | `cobertura_total.json/md` | Matriz completa | 2,3 MB |
 | `plan_recuperacion.jsonl` | 660 entidades bajo mínimo | 2,8 MB |
 
@@ -465,7 +500,7 @@ de 6,1 MB. `--accion oro` produce `oro.jsonl`, `rechazados.jsonl` e
 
 ## 7. Verificación y discrepancias
 
-Comprobado el 2026-10-20:
+Comprobado el 2026-10-20 y ampliado el 2026-10-21:
 
 - `--help` devuelve 0 en todos los módulos con argparse, salvo
   `libros_extraer.py` (rc=1; interpreta `--help` como ruta). Sin argparse y sin
@@ -481,14 +516,24 @@ Comprobado el 2026-10-20:
   rc=0.
 - `evaluacion_casos.py --salida /tmp/t60_eval.jsonl` → rc=0, 240 líneas.
 - `salud_datos.py --copia` con un `fase0` mínimo → rc=0, copia y SHA-256.
+- `--help` → rc=0 en `ejecutor_fase1.py`, `fase1_piloto.py`, `ensayo_extremo.py`,
+  `evidencias_incremental.py`, `clasicos_pd_a_evidencias.py`,
+  `limpiar_evidencias_libros.py`, `recuperacion_descarga.py`, `kb_v2.py`,
+  `consenso_kb.py` y `afirmaciones_libros.py`.
+- `ejecutor_fase1.py --db …/jobs.db --dry-run` → rc=0: 10.270 pendientes y
+  121,2 h estimadas con 4 workers a 169,9 s/lectura. Con `--simulado` completó
+  10.226/10.226 aceptadas (el resto eran trabajos no reclamables).
+- `ensayo_extremo.py --n 200` (simulado) → 200/200 aceptadas, pero
+  `validate_synthetic` conservó 68 y `merge_final` dejó 58/6/15; el valor está
+  en el informe de desajustes, no en el «éxito» de la generación.
 
 Discrepancias encontradas:
 
-1. **Módulos citados que no existen:** `afirmaciones_libros.py`, `consenso_kb.py`
-   y `evidencias_incremental.py` no están en el repositorio. Solo existe
-   `afirmaciones_es.py` (web). La carpeta `fase0/afirmaciones_libros/` sí existe
-   con datos, pero no hay script que la genere en este árbol. No inventar comandos
-   para esos nombres.
+1. **Corregido en T77:** la revisión anterior decía que `afirmaciones_libros.py`,
+   `consenso_kb.py` y `evidencias_incremental.py` no existían. Ya están en
+   `main` (merges de T38/T47), junto con los demás módulos de las tablas 2.2–2.5.
+   `afirmaciones_rapido` sigue **solo** en el worktree de T69: no citarlo como
+   si estuviera integrado.
 2. **`web_pipeline.py` exige `--work-dir`.** Sin él termina con rc=2; los ejemplos
    que lo omiten están incompletos.
 3. **`build_dataset.py --dry-run` falla con rc=1** si no existe `corpus/raw`
@@ -507,3 +552,18 @@ Discrepancias encontradas:
    `/tmp/t45/ejemplos.jsonl` y `/tmp/eval_casos.jsonl`. Si se limpia `/tmp`, hay
    que regenerarlos (`multiturno.py --n 5`, `evaluacion_casos.py`) antes de
    citarlos.
+8. **`comparar_backends.py` no tiene argparse.** Exige `INCEPTION_API_KEY` en el
+   entorno; sin ella sale con rc=1 y el mensaje «[comparativa] Falta
+   'INCEPTION_API_KEY' en el entorno.». No se pudo verificar `--help`: con una
+   clave ficticia el proceso se quedó bloqueado más de 120 s (import o trabajo
+   real). La clave no se documenta ni se escribe en el repo.
+9. **El consenso está en vivo:** `consenso.jsonl` y los ficheros de afirmaciones
+   crecen mientras corren los procesos de fondo. Las cifras de este documento son
+   una foto de 2026-10-21, no un total cerrado; `kb_v2/tarot.json` aún no existe
+   porque el consenso de tarot no había llegado.
+10. **`fase1_piloto.py` no cubre baraja española:** sus familias son tarot
+    (`tarot_1/2/3`, `tarot_pregunta`), astro (`astro_natal`, `sinastria`),
+    numerología, multiturno y ética. La familia de baraja llega con T72.
+11. **Los ejemplos de `fase1_piloto` con `max_tokens 2048`** hacen que
+    `cruz_celta` y `lectura_completa` fallen por truncado; el ejecutor sube el
+    piso a 6144 para esas familias.

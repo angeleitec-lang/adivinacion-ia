@@ -202,3 +202,128 @@ En curso: T38 (afirmaciones de libros y consenso con la KB), T45 (multi-turno; s
 Hallazgos que condicionan el plan: (1) la cobertura completa es muy baja (3,5 % de celdas); bajar del 10 % bajo mínimo exigiría ~24.700 fuentes nuevas, por lo que el hito debe redefinirse (cobertura completa solo en tarot; mínimos menores en el resto). (2) La pasada de afirmaciones web va a ~500 evidencias/hora con los nodos compartidos: no cabe entera; se acota con `--orden calidad --min-calidad 4`. (3) El 3 % a revisar por el usuario son 2.712 fichas: conviene decidir si se reduce al 1 % o a las de mayor calidad. (4) YouTube sigue bloqueado por 429.
 Decisiones del usuario pendientes: respuesta de Hugging Face (`Pepere45/spanish-esotericism-corpus`); compra de libros (prioridad baraja española: Salas; ver `finetune/knowledge/libros_faltantes_legal.md`); revisión del 3 %; redefinir el hito de cobertura.
 Operativa: pestañas 2–7 de Warp para las IAs (6 DeepSeek solo 10:00–24:00; 7 Qwen de pago), 8 y 9 del usuario (no tocar). El vigilante busca `TRACK COMPLETO` en cualquier posición de la línea.
+
+## 8g. Actualización 2026-10-21 (T77): estado real, procesos y decisiones abiertas
+
+Esta sección sustituye, para el estado vivo, a la lista de procesos de §6 y a las
+cifras de §7/§8e. Las secciones anteriores se conservan como histórico.
+
+### Pistas integradas en `main` (con `check.sh` = CHECK OK)
+
+Desde el corte de §8f se han integrado: T52 (prerevisión), T53 (cartas en inglés
+y reproceso de Waite), T54 (revisor local), T55 (19 clásicos de astrología, 5 de
+numerología y baraja de dominio público, con hashes), T56 (240 casos de
+evaluación y evaluador con línea base), T57 (clásicos PD convertidos a
+evidencias), T58 (auditoría ronda 3), T59 (salud de datos y copias SHA-256), T60
+(mapa del pipeline), T61 (`preparar_entrenamiento`), T62 (`ejecutor_fase1`),
+T63 (auditoría ronda 4), T64 (recuperación 2), T65 y T68 (backend rápido
+Mercury), T66 (`kb_v2`), T67 (arreglos de la ronda 4), T70 (ensayo extremo de
+punta a punta) y T73 (consenso rápido con dedup por fuente). También quedaron
+cerradas T38 (afirmaciones de libros), T41, T45, T46, T47, T48, T49, T50 y T51
+que §8f daba como en curso.
+
+En curso, **sin merge todavía**: T69 (pasada rápida de afirmaciones con Mercury),
+T71 (limpieza de libros en copia `libros_limpio/`), T72 (prompts de tiradas
+largas y familia de baraja española), T74 (fuentes nuevas de baraja y
+numerología), T75 (alinear fase 1 con los desajustes D1/D2/D3/D7 del ensayo) y
+T76 (consenso Mercury frente a nodos, 40 celdas, acuerdo ≥ 85 %). T69 conserva
+su script en el worktree: no está en `main`.
+
+### Procesos vivos y logs (medido el 2026-10-21)
+
+- **Consenso de la KB**: dos procesos `consenso_kb.py` escriben a la vez en
+  `/Users/angelgonzalez/fase0/consenso_kb/` (PID 3552 con `--workers 2` y PID
+  96681 con `--workers 6`). Logs: `run_consenso.log` y `run_consenso2.log`.
+  Riesgo real de carrera sobre `consenso.jsonl`; conviene dejar uno solo y
+  conservar la copia `.bak-0858`.
+- **Pasada rápida de afirmaciones (T69)**: PID 81434, `afirmaciones_rapido.py
+  --workers 3`, log `afirmaciones_rapido/pasada.log`. Aproximadamente 6.225 de
+  14.188 evidencias, 35.527 afirmaciones aceptadas y 17.057 descartadas, a 59,3
+  evidencias/min (ETA ~134 min en el momento de la medida).
+- **Recuperación 2/3 (T74)**: PID 14273, `recuperacion_descarga.py` con
+  `plan_t74.jsonl` y `web_recup3/`, sin LLM, tope 40 por dominio y 200 en total.
+- **Piloto de tiradas largas (T72)**: PID 6474, `/tmp/opencode/t72_piloto_v2.py`,
+  salida `fase0/piloto_fase1_v2/prueba.jsonl` (12 lecturas).
+- **Generadores antiguos**: PID 66101 (nodo1) y 66396 (nodo2) siguen
+  suspendidos. **No reanudar**: usan prompts viejos sin tildes. Tampoco se debe
+  relanzar `generate_synthetic.py` sobre `jobs.db` sin copia previa.
+- Logs de referencia: `afirmaciones_full/run_k5.log`,
+  `afirmaciones_libros/run_nuevas.log` (y `run_full.log`, `run_k5.log`),
+  `evidencias_web/run_incremental1.log`, `libros_clasicos_pd/run_resto.log`,
+  `libros_reproceso_waite/run.log`, `consenso_kb/run_consenso*.log` y
+  `afirmaciones_rapido/pasada.log`.
+
+### Cifras reales (foto de 2026-10-21, con procesos aún escribiendo)
+
+| Dato | Valor |
+|---|---|
+| Evidencias web (`evidencias_web/evidencias.jsonl`) | 18.142 |
+| Evidencias de libros (`libros/evidencias/evidencias.jsonl`) | 18.230 |
+| Afirmaciones web (`afirmaciones_full/afirmaciones.jsonl`) | 100.401 |
+| Afirmaciones de libros (`afirmaciones_libros/afirmaciones_libros.jsonl`) | 30.283 |
+| Afirmaciones rápidas (Mercury, `afirmaciones_rapido/`) | 30.796 web + 4.384 libros |
+| Celdas de consenso (`consenso_kb/consenso.jsonl`) | 1.958 y creciendo |
+| Lecturas trabajadas | 231 |
+| Muestras del 3 % | 2.712 |
+| `jobs.db` | 10.636: 360 `done`, 10.270 `pending`, 6 `running` |
+| Corpus web | 3.568 `.md` |
+| `fase0` completo | ~308 MB |
+
+`kb_v2/` tiene ya `astrologia.json` (930 celdas, 282 con núcleo; 164 alta, 644
+media, 122 baja), `numerologia.json` (471/152; 100/351/20) y
+`baraja_espanola.json` (239/76; 25/199/15). `tarot.json` no existe todavía
+porque el consenso de tarot no había llegado. El diff contra la KB v1 detecta 103
+contradicciones y 777 celdas nuevas; la cobertura «con núcleo» es 30,3 % en
+astrología, 32,3 % en numerología y 31,8 % en baraja, y 0 % en tarot.
+
+La matriz `cobertura_total_v2.md` sigue en 259 de 7.455 celdas completas (3,5 %):
+Tarot 173/936 (18,5 %), Astrología 79/5.247 (1,5 %), Numerología 5/792 (0,6 %) y
+Baraja 2/480 (0,4 %), con 372 evidencias ignoradas. La recuperación 2 no se
+fusionó: 150 URLs en `web_recup2/`, de las que fallaron por completo biddytarot y
+labyrinthos y tarot.com dejó 8 errores. El pool de baraja y numerología está
+agotado; hacen falta fuentes nuevas (T74).
+
+### Infraestructura
+
+- nodo1 `10.0.0.3:8000/v1` y nodo2 `10.0.0.4:8000/v1`, ambos con **halogen
+  0.18.13** desde el 2026-10-21. Nodo1 admite concurrencia; nodo2 va más justo.
+- Mini `10.0.0.1`: Postgres y Ollama en `127.0.0.1:11434` (embeddings).
+- Firecrawl en `localhost:3002` (Docker).
+- **Mercury 3** (Inception, `https://api.inceptionlabs.ai/v1`, modelo
+  `mercury-3`) con tokens gratuitos: uso **complementario**, no sustituye a los
+  nodos. La clave vive solo en el entorno (o en la auth de opencode); nunca en el
+  repo, en informes ni en logs. En la comparativa T68: 0 errores, 1,08 s por
+  petición, 1.607 tokens por evidencia y solo 1,5 % de solape exacto con el nodo
+  local; sirve para pasadas rápidas y para contraste, no como generador único.
+
+### Decisiones abiertas del usuario
+
+1. **Revisión del 3 %**: son 2.712 fichas; decidir si se reduce al 1 %, a las de
+   mayor calidad o se hace por muestreo estratificado.
+2. **Libros no españoles**: el 55,7 % de la muestra de libros no es español;
+   decidir si se traducen, se filtran o se conservan como evidencia de tradición.
+3. **Hito de cobertura**: asumir que la cobertura completa solo es viable en tarot
+   y fijar mínimos menores para astrología, numerología y baraja (bajar del 10 %
+   exigiría ~24.700 fuentes nuevas).
+4. **Compra de libros**: prioridad baraja española (Salas); sin precios
+   verificables de forma automática y con presupuesto muy limitado.
+5. **Respuesta de Hugging Face** sobre `Pepere45/spanish-esotericism-corpus`.
+6. **Esqueleto del backend de la app** (FastAPI) y del frontend: todavía no hay
+   código en el repo.
+7. **Generación completa de fase 1**: con qué modelo y en qué nodo; el piloto T49
+   midió ~64 s por lectura (169,9 s con reintentos), es decir, ~59 h para 10.000
+   lecturas con 3 workers. Hasta decidirlo, `jobs.db` no se toca.
+
+### Riesgos
+
+- Dos procesos de consenso concurrentes sobre el mismo `consenso.jsonl`.
+- Nodos saturados: las pasadas reales de evidencias (T47) devolvieron 0 juicios
+  por falta de capacidad; no lanzar trabajo LLM nuevo sin comprobar carga.
+- Ficheros en crecimiento sin cifra cerrada; las tablas de §4 y de esta sección
+  son una foto, no un total.
+- `jobs.db` conserva prompts viejos y 10.270 pendientes: cualquier reanudación
+  debe pasar por `ejecutor_fase1.py` y por una copia previa de la BD.
+- Tarot sigue sin KB v2 y la baraja/numerología no tienen fuentes suficientes;
+  el riesgo de cerrar la fase 0 con la cobertura actual es alto.
+- Presupuesto: Mercury es gratuito por ahora, pero no hay que asumir que lo sea
+  siempre; medir consumo antes de tandas grandes.
