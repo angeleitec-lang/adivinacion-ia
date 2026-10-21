@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Comparativa de backends para extracción de afirmaciones (T65).
+"""Comparativa de backends v2 para extracción de afirmaciones (T68).
 
-Toma evidencias ya procesadas por el nodo local (60 web + 40 libros) y
-reejecuta la extracción con el backend rápido (Inception Mercury 3), usando
-EXACTAMENTE los mismos prompts y validadores de afirmaciones_es.py /
-afirmaciones_libros.py (importados, sin modificar). Compara número de
-afirmaciones, solapamiento (equivalencia aproximada por entidad + faceta +
-texto normalizado), tasa de descartes por los validadores existentes
-(otra_carta, vocabulario, exceso, …), JSON inválido, latencia media y tokens.
-Escribe /Users/angelgonzalez/fase0/comparativa_backends.md.
+Segunda comparativa sobre las mismas 100 evidencias (60 web + 40 libros) ya
+procesadas por el nodo local. Respecto a T65:
+
+* Se reduce el razonamiento del backend rápido (`reasoning_effort="instant"`)
+  y se sube el presupuesto de tokens (`max_completion_tokens`) SOLO en esta
+  comparativa, sin tocar los extractores (`afirmaciones_es.py` /
+  `afirmaciones_libros.py`).
+* Se reintenta ante respuesta vacía (`content=None`), que era la causa
+  dominante del 51 % de errores de T65.
+* Se sustituye el solapamiento exacto por una similitud aproximada de tokens
+  (Jaccard sobre raíces truncadas, umbral documentado) y se mide cobertura de
+  ambos lados, más la tasa de afirmaciones que superan los validadores.
+
+Escribe /Users/angelgonzalez/fase0/comparativa_backends_v2.md.
 
 La clave de la API se lee en tiempo de ejecución de la variable de entorno
 `INCEPTION_API_KEY`; nunca se escribe en este fichero.
@@ -20,8 +26,9 @@ import json
 import os
 import sys
 from collections import Counter
+from statistics import mean, median
 
-WORKTREE = "/Users/angelgonzalez/adivinacion-ia/.worktrees/t65-backend-rapido"
+WORKTREE = "/Users/angelgonzalez/adivinacion-ia/.worktrees/t68-backend-rapido-2"
 CORPUS = os.path.join(WORKTREE, "finetune/corpus")
 CORPUS_LIBROS = (
     "/Users/angelgonzalez/adivinacion-ia/.worktrees/"
@@ -42,6 +49,12 @@ BACKEND_URL = "https://api.inceptionlabs.ai/v1"
 BACKEND_MODEL = "mercury-3"
 API_KEY_ENV = "INCEPTION_API_KEY"
 
+# Parámetros del backend SOLO para esta comparativa (no modifican los
+# extractores; se aplican vía los valores por defecto del cliente).
+REASONING_EFFORT = "instant"
+MAX_COMPLETION_TOKENS = 8192
+MAX_TOKENS_DEFAULT = 4096
+
 FASE0 = "/Users/angelgonzalez/fase0"
 WEB_EVIDENCIAS = os.path.join(FASE0, "evidencias_web/evidencias.jsonl")
 WEB_PROCESADOS = os.path.join(FASE0, "afirmaciones_full/procesados.jsonl")
@@ -52,14 +65,87 @@ LIBROS_PROCESADOS = os.path.join(FASE0, "afirmaciones_libros/procesados.jsonl")
 LIBROS_AFIRMACIONES = os.path.join(
     FASE0, "afirmaciones_libros/afirmaciones_libros.jsonl")
 LIBROS_SECCIONES = os.path.join(FASE0, "libros/secciones")
-INFORME = os.path.join(FASE0, "comparativa_backends.md")
+INFORME = os.path.join(FASE0, "comparativa_backends_v2.md")
 
 N_WEB = 60
 N_LIBROS = 40
 CONCURRENCIA = 3
 TASA_MAX_POR_MINUTO = 60
-MAX_DISCREPANCIAS = 5
 
+# Umbral de similitud (Jaccard) para considerar dos afirmaciones equivalentes.
+UMBRAL_JACCARD = 0.5
+
+
+# ---------------------------------------------------------------------------
+# Similitud aproximada de tokens (sin LLM)
+# ---------------------------------------------------------------------------
+
+_PARARUELAS = set(
+    "a al ante bajo cabe con contra de del desde durante e el en entre hacia "
+    "hasta la las le les lo los mas mas mediante mi mis muy ni no nos o os "
+    "para pero por porque que quien se segun si sin so sobre su sus sus te "
+    "tambien tan tanto tras tu tus un una uno unas unos y ya yo me nos"
+    .split())
+
+
+def _raiz_corta(p):
+    """Raíz truncada: quita flexión mínima y corta a 6 caracteres."""
+    if len(p) > 5 and (p.endswith("as") or p.endswith("os")):
+        p = p[:-2]
+    elif len(p) > 4 and p.endswith("es"):
+        p = p[:-2]
+    elif len(p) > 4 and p.endswith("s"):
+        p = p[:-1]
+    return p[:6]
+
+
+def _tokens_raiz(texto):
+    """Conjunto de raíces truncadas de un texto (normalizado a minúsculas)."""
+    norm = cartas.norm(texto)
+    raices = set()
+    for t in norm.split():
+        if len(t) >= 3 and t not in _PARARUELAS:
+            raices.add(_raiz_corta(t))
+    return raices
+
+
+def _jaccard(conj_a, conj_b):
+    """Coeficiente de Jaccard entre dos conjuntos de raíces."""
+    if not conj_a or not conj_b:
+        return 0.0
+    union = len(conj_a | conj_b)
+    if not union:
+        return 0.0
+    return len(conj_a & conj_b) / union
+
+
+def _conjuntos(textos):
+    """Lista de conjuntos de raíces para cada texto."""
+    if not textos:
+        return []
+    return [_tokens_raiz(t) for t in textos if t]
+
+
+def _cobertura_conjuntos(conj_a, conj_b, umbral=UMBRAL_JACCARD):
+    """Fracción de textos de A con al menos un equivalente en B (umbral)."""
+    if not conj_a:
+        return 0.0
+    aciertos = 0
+    for x in conj_a:
+        if max((_jaccard(x, y) for y in conj_b), default=0.0) >= umbral:
+            aciertos += 1
+    return aciertos / len(conj_a)
+
+
+def _cobertura(textos_a, textos_b, umbral=UMBRAL_JACCARD):
+    """Igual que `_cobertura_conjuntos` pero sobre listas de texto."""
+    return _cobertura_conjuntos(_conjuntos(textos_a),
+                                _conjuntos(textos_b), umbral)
+
+
+# ---------------------------------------------------------------------------
+# Carga y selección
+# ---------------------------------------------------------------------------
 
 def cargar_jsonl(ruta):
     filas = []
@@ -89,17 +175,21 @@ def seleccionar(evidencias, procesados, limite):
 
 
 def indice_local(afirmaciones):
-    """entidad+faceta+fuente -> lista de afirmaciones normalizadas."""
+    """entidad+faceta+fuente -> lista de afirmaciones originales."""
     idx = {}
     for r in afirmaciones:
         k = (r.get("entidad_id"), r.get("faceta"), r.get("fuente_id"))
-        idx.setdefault(k, []).append(cartas.norm(r.get("afirmacion") or ""))
+        idx.setdefault(k, []).append(r.get("afirmacion") or "")
     return idx
 
 
 def norm_set(textos):
     return {cartas.norm(t) for t in textos if t and cartas.norm(t)}
 
+
+# ---------------------------------------------------------------------------
+# Procesado de una evidencia
+# ---------------------------------------------------------------------------
 
 def procesar_evidencia(ev, tipo, cliente, indice_web, indice_libros, corr,
                        local_refs):
@@ -115,33 +205,56 @@ def procesar_evidencia(ev, tipo, cliente, indice_web, indice_libros, corr,
         sec = indice_libros.seccion(ev.get("fuente_id"),
                                     ev.get("hash_seccion"))
         texto = (sec or {}).get("texto")
+
+    local_textos = [t for t in local_refs if t and str(t).strip()]
     res = {"tipo": tipo, "entidad_id": entidad, "faceta": faceta,
            "fuente_id": ev.get("fuente_id"), "dominio": ev.get("dominio"),
-           "n_local": len(local_refs), "estado": "sin_texto"}
+           "n_local": len(local_textos), "estado": "sin_texto",
+           "local_textos": local_textos}
     if texto is None or not str(texto).strip():
         return res
+
     if tipo == "web":
         ext = es.extraer_afirmaciones(cliente, entidad, faceta, texto)
         crudas = ext.get("afirmaciones") or []
-        fast_norm = norm_set(crudas)
+        fast_textos = [a for a in crudas if a and str(a).strip()]
     else:
         ext = extraer_afirmaciones_libros(cliente, entidad, faceta, texto,
                                           idioma, corr)
-        crudas = [a.get("afirmacion", "") for a in ext.get("afirmaciones") or []]
-        fast_norm = norm_set(crudas)
-    local_norm = norm_set(local_refs)
+        fast_textos = [a.get("afirmacion", "")
+                       for a in ext.get("afirmaciones") or []
+                       if a.get("afirmacion")]
+
+    descartadas = ext.get("descartadas") or []
     res["estado"] = ext.get("estado")
-    res["n_fast"] = len(fast_norm)
-    res["fast_norm"] = fast_norm
-    res["local_norm"] = local_norm
-    res["solape"] = len(fast_norm & local_norm)
-    res["descartadas"] = ext.get("descartadas") or []
+    res["n_fast"] = len(fast_textos)
+    res["fast_textos"] = fast_textos
+    res["n_descartadas"] = len(descartadas)
+    res["descartadas"] = descartadas
+    res["solape_exacto"] = len(norm_set(fast_textos) & norm_set(local_textos))
+    res["cobertura_local"] = _cobertura(local_textos, fast_textos)
+    res["cobertura_fast"] = _cobertura(fast_textos, local_textos)
     return res
 
 
-def _ratio(solape, base):
-    return (solape / base) if base else 0.0
+def _snapshot(metricas):
+    return (metricas.get("peticiones", 0),
+            metricas.get("latencia_total", 0.0),
+            metricas.get("prompt_tokens", 0),
+            metricas.get("completion_tokens", 0))
 
+
+def _delta(metricas, antes):
+    p, l, pt, ct = antes
+    return {"peticiones": metricas.get("peticiones", 0) - p,
+            "latencia": metricas.get("latencia_total", 0.0) - l,
+            "tokens": ((metricas.get("prompt_tokens", 0) - pt)
+                       + (metricas.get("completion_tokens", 0) - ct))}
+
+
+# ---------------------------------------------------------------------------
+# Lógica principal
+# ---------------------------------------------------------------------------
 
 def main():
     if not os.environ.get(API_KEY_ENV):
@@ -168,7 +281,10 @@ def main():
         "model": BACKEND_MODEL,
         "api_key_env": API_KEY_ENV,
     }], max_concurrencia=CONCURRENCIA,
-       tasa_max_por_minuto=TASA_MAX_POR_MINUTO, metricas=metricas)
+       tasa_max_por_minuto=TASA_MAX_POR_MINUTO, metricas=metricas,
+       reasoning_effort=REASONING_EFFORT,
+       max_completion_tokens=MAX_COMPLETION_TOKENS,
+       max_tokens_default=MAX_TOKENS_DEFAULT)
 
     resultados = []
     for tipo, sel, local in (("web", web_sel, web_local),
@@ -177,20 +293,30 @@ def main():
             clave_local = (ev.get("entidad_id"), ev.get("faceta"),
                            ev.get("fuente_id"))
             refs = local.get(clave_local, [])
-            resultados.append(procesar_evidencia(
-                ev, tipo, cliente, indice_web, indice_libros, corr, refs))
+            antes = _snapshot(metricas)
+            res = procesar_evidencia(
+                ev, tipo, cliente, indice_web, indice_libros, corr, refs)
+            res.update(_delta(metricas, antes))
+            resultados.append(res)
 
     # Agregados
     def _nueva_stat():
         return {"procesadas": 0, "sin_texto": 0, "errores": 0,
-                "n_local": 0, "n_fast": 0, "solape_abs": 0,
-                "descartadas": Counter()}
+                "n_local": 0, "n_fast": 0, "n_descartadas": 0,
+                "solape_exacto": 0, "cobertura_local": 0.0,
+                "cobertura_fast": 0.0, "celdas_cob_local": 0,
+                "celdas_cob_fast": 0, "peticiones": 0,
+                "latencia": 0.0, "tokens": 0, "descartadas": Counter()}
+
     ag = {"web": _nueva_stat(), "libros": _nueva_stat(),
           "total": _nueva_stat()}
     for r in resultados:
         t = r["tipo"]
         s = ag[t]
         s["procesadas"] += 1
+        s["peticiones"] += r["peticiones"]
+        s["latencia"] += r["latencia"]
+        s["tokens"] += r["tokens"]
         if r["estado"] == "sin_texto":
             s["sin_texto"] += 1
             continue
@@ -199,7 +325,14 @@ def main():
         else:
             s["n_local"] += r["n_local"]
             s["n_fast"] += r["n_fast"]
-            s["solape_abs"] += r["solape"]
+            s["n_descartadas"] += r["n_descartadas"]
+            s["solape_exacto"] += r["solape_exacto"]
+            if r["n_local"]:
+                s["cobertura_local"] += r["cobertura_local"]
+                s["celdas_cob_local"] += 1
+            if r["n_fast"]:
+                s["cobertura_fast"] += r["cobertura_fast"]
+                s["celdas_cob_fast"] += 1
         for _, motivo in r.get("descartadas", []):
             s["descartadas"][motivo] += 1
 
@@ -209,69 +342,109 @@ def main():
     err = sum(ag[t]["errores"] for t in ("web", "libros"))
     n_loc = sum(ag[t]["n_local"] for t in ("web", "libros"))
     n_fast = sum(ag[t]["n_fast"] for t in ("web", "libros"))
-    solape = sum(ag[t]["solape_abs"] for t in ("web", "libros"))
+    n_desc = sum(ag[t]["n_descartadas"] for t in ("web", "libros"))
+    validadas = n_fast
+    tasa_validacion = (validadas / (validadas + n_desc)
+                       if (validadas + n_desc) else 0.0)
+    solape = sum(ag[t]["solape_exacto"] for t in ("web", "libros"))
+    cob_local = sum(ag[t]["cobertura_local"] for t in ("web", "libros"))
+    cob_fast = sum(ag[t]["cobertura_fast"] for t in ("web", "libros"))
+    celdas_cob_local = sum(ag[t]["celdas_cob_local"]
+                           for t in ("web", "libros"))
+    celdas_cob_fast = sum(ag[t]["celdas_cob_fast"]
+                          for t in ("web", "libros"))
+    cob_local_media = (cob_local / celdas_cob_local
+                       if celdas_cob_local else 0.0)
+    cob_fast_media = (cob_fast / celdas_cob_fast
+                      if celdas_cob_fast else 0.0)
+
+    peticiones = sum(ag[t]["peticiones"] for t in ("web", "libros"))
+    latencia_total = sum(ag[t]["latencia"] for t in ("web", "libros"))
+    tokens_total = sum(ag[t]["tokens"] for t in ("web", "libros"))
+
+    def _media(valor, base):
+        return (valor / base) if base else 0.0
+
+    lat_por_pet = _media(latencia_total, peticiones)
+    tokens_por_ev = _media(tokens_total, proc)
+    lat_por_ev = _media(latencia_total, proc)
+    error_rate = _media(err, proc)
+    solape_si = _media(solape, n_loc)
+
     descartes = Counter()
     for t in ("web", "libros"):
         descartes.update(ag[t]["descartadas"])
 
-    peticiones = metricas["peticiones"]
-    lat_media = (metricas["latencia_total"] / peticiones) if peticiones else 0.0
-    tokens_total = metricas["prompt_tokens"] + metricas["completion_tokens"]
-
-    solape_si = _ratio(solape, n_loc) if n_loc else 0.0
-    solape_fast = _ratio(solape, n_fast) if n_fast else 0.0
-    error_rate = _ratio(err, proc) if proc else 0.0
-
-    # Discrepancias representativas
-    discrepancias = []
-    for r in resultados:
-        if r["estado"] == "sin_texto":
-            continue
-        if r["estado"] == "error":
-            discrepancias.append((2.0, r, "error de extracción / JSON inválido"))
-        else:
-            rsi = _ratio(r["solape"], r["n_local"]) if r["n_local"] else 0.0
-            if rsi < 0.6:
-                discrepancias.append((1.0 - rsi, r, "solapamiento bajo"))
-            elif abs(r["n_fast"] - r["n_local"]) >= 3:
-                discrepancias.append(
-                    (0.5, r, "diferencia de nº de afirmaciones"))
-    discrepancias.sort(key=lambda x: -x[0])
+    # Ejemplos
+    buenos = _ejemplos_buenos(resultados, 5)
+    malos = _ejemplos_malos(resultados, 5)
 
     _escribir_informe(resultados, ag, web_sel, libros_sel,
-                       lat_media, tokens_total, peticiones,
-                       solape_si, solape_fast, error_rate,
-                       n_loc, n_fast, solape, total_sel, proc,
-                       sin_t, err, descartes,
-                       discrepancias[:MAX_DISCREPANCIAS])
+                       lat_por_pet, lat_por_ev, tokens_por_ev,
+                       tokens_total, peticiones, total_sel, proc,
+                       sin_t, err, error_rate, n_loc, n_fast,
+                       solape, solape_si, validadas, n_desc,
+                       tasa_validacion, cob_local_media, cob_fast_media,
+                       descartes, buenos, malos)
     return 0
 
 
-def _fila_discrepancia(r, comentario):
+def _ejemplos_buenos(resultados, limite):
+    """Las celdas donde el backend cubre mejor al nodo local y viceversa."""
+    candidatos = [r for r in resultados
+                  if r["estado"] == "ok"
+                  and r["n_local"] > 0 and r["n_fast"] > 0]
+    candidatos.sort(key=lambda r: -min(r["cobertura_local"],
+                                       r["cobertura_fast"]))
+    return candidatos[:limite]
+
+
+def _ejemplos_malos(resultados, limite):
+    """Errores primero, luego las celdas con peor cobertura."""
+    errores = [r for r in resultados if r["estado"] == "error"]
+    bajos = [r for r in resultados
+             if r["estado"] == "ok" and r["n_local"] > 0]
+    bajos.sort(key=lambda r: r["cobertura_local"])
+    return (errores + bajos)[:limite]
+
+
+# ---------------------------------------------------------------------------
+# Informe
+# ---------------------------------------------------------------------------
+
+def _truncar(texto, n=110):
+    texto = " ".join(str(texto).split())
+    return texto if len(texto) <= n else texto[:n - 1] + "…"
+
+
+def _fila_ejemplo(r, nota, etiqueta_texto="afirmación local"):
     n_loc = r.get("n_local", 0)
     n_fast = r.get("n_fast", 0)
     if r["estado"] == "error":
-        detalle = "-"
+        cob = "-"
+        texto = "-"
     else:
-        solape = r.get("solape", 0)
-        base = max(n_loc, 1)
-        detalle = "%d/%d (%.0f%%)" % (solape, n_loc, 100.0 * solape / base)
-    return ("| %s | %s | %s | %d | %d | %s | %s |"
+        cob = "L %.0f%% / F %.0f%%" % (
+            100.0 * r["cobertura_local"], 100.0 * r["cobertura_fast"])
+        texto = _truncar((r.get("local_textos") or [""])[0])
+    return ("| %s | %s | %s | %d | %d | %s | %s | %s |"
             % (r["tipo"], r["entidad_id"], r["faceta"],
-               n_loc, n_fast, detalle, comentario))
+               n_loc, n_fast, cob, texto, nota))
 
 
 def _escribir_informe(resultados, ag, web_sel, libros_sel,
-                       lat_media, tokens_total, peticiones,
-                       solape_si, solape_fast, error_rate,
-                       n_loc, n_fast, solape, total_sel, proc,
-                       sin_t, err, descartes, discrepancias):
+                       lat_por_pet, lat_por_ev, tokens_por_ev,
+                       tokens_total, peticiones, total_sel, proc,
+                       sin_t, err, error_rate, n_loc, n_fast,
+                       solape, solape_si, validadas, n_desc,
+                       tasa_validacion, cob_local_media, cob_fast_media,
+                       descartes, buenos, malos):
     lineas = []
-    lineas.append("# Comparativa de backends para extracción de afirmaciones (T65)")
+    lineas.append("# Comparativa de backends v2 (T68)")
     lineas.append("")
-    lineas.append("Backend rápido: Inception Mercury 3 (`mercury-3`) en `%s`, "
-                  "autenticado con `Authorization: Bearer` desde la variable "
-                  "de entorno `%s`." % (BACKEND_URL, API_KEY_ENV))
+    lineas.append("Backend rápido: Inception Mercury 3 (`mercury-3`) en "
+                  "`%s`, autenticado con `Authorization: Bearer` desde la "
+                  "variable de entorno `%s`." % (BACKEND_URL, API_KEY_ENV))
     lineas.append("")
     lineas.append("## Metodología")
     lineas.append("")
@@ -283,8 +456,22 @@ def _escribir_informe(resultados, ag, web_sel, libros_sel,
                   "EXACTAMENTE el mismo prompt y los mismos validadores de "
                   "`afirmaciones_es.py` / `afirmaciones_libros.py` "
                   "(importados, sin modificar).")
-    lineas.append("- Equivalencia aproximada: entidad + faceta + texto "
-                  "normalizado (`cartas.norm`).")
+    lineas.append("- Para reducir el 51%% de errores de T65 (respuesta vacía "
+                  "por agotar `max_tokens=1024` en razonamiento), en esta "
+                  "comparativa se usa únicamente `reasoning_effort=%s` y "
+                  "`max_completion_tokens=%d` (y `max_tokens_default=%d`) a "
+                  "nivel de cliente; los extractores no se tocan. Además se "
+                  "reintenta ante `content=None`."
+                  % (REASONING_EFFORT, MAX_COMPLETION_TOKENS,
+                     MAX_TOKENS_DEFAULT))
+    lineas.append("- Similitud aproximada sin LLM: Jaccard sobre raíces "
+                  "truncadas (minúsculas, sin tildes, sin signos, sin "
+                  "palabras vacías y raíz truncada a 6 caracteres) con "
+                  "umbral `%.2f`. Se mide cobertura en ambos sentidos: "
+                  "fracción de afirmaciones del nodo local con un equivalente "
+                  "del backend y viceversa." % UMBRAL_JACCARD)
+    lineas.append("- Nota: la API fuerza `temperature>=0.5` (el extractor "
+                  "pide 0.2, el proveedor la sube a 1).")
     lineas.append("")
     lineas.append("## Resultados globales")
     lineas.append("")
@@ -297,14 +484,37 @@ def _escribir_informe(resultados, ag, web_sel, libros_sel,
                   % (err, 100.0 * error_rate))
     lineas.append("| Afirmaciones del nodo local (total) | %d |" % n_loc)
     lineas.append("| Afirmaciones del backend rápido (total) | %d |" % n_fast)
-    lineas.append("| Solapamiento (coincidencias normalizadas) | %d |" % solape)
-    lineas.append("| Solapamiento respecto al nodo local | %.1f%% |"
-                  % (100.0 * solape_si))
-    lineas.append("| Solapamiento respecto al backend rápido | %.1f%% |"
-                  % (100.0 * solape_fast))
+    lineas.append("| Solapamiento exacto (normalizado) | %d (%.1f%% de n_local) |"
+                  % (solape, 100.0 * solape_si))
+    lineas.append("| Cobertura media del nodo local por el backend | %.1f%% |"
+                  % (100.0 * cob_local_media))
+    lineas.append("| Cobertura media del backend por el nodo local | %.1f%% |"
+                  % (100.0 * cob_fast_media))
+    lineas.append("| Tasa de superación de validadores | %d/%d (%.1f%%) |"
+                  % (validadas, validadas + n_desc, 100.0 * tasa_validacion))
     lineas.append("| Peticiones de red | %d |" % peticiones)
-    lineas.append("| Latencia media por petición | %.2f s |" % lat_media)
-    lineas.append("| Tokens totales (prompt + completion) | %d |" % tokens_total)
+    lineas.append("| Latencia media por petición | %.2f s |" % lat_por_pet)
+    lineas.append("| Latencia media por evidencia | %.2f s |" % lat_por_ev)
+    lineas.append("| Tokens totales (prompt + completion) | %d |"
+                  % tokens_total)
+    lineas.append("| Tokens por evidencia (media) | %d |" % tokens_por_ev)
+    lineas.append("")
+
+    lineas.append("### Desglose por tipo")
+    lineas.append("")
+    lineas.append("| Tipo | Procesadas | sin_texto | Errores | n_local | "
+                  "n_fast | Solape exacto | Cobertura local | Cobertura fast |")
+    lineas.append("|---|---|---|---|---|---|---|---|---|")
+    for t in ("web", "libros"):
+        s = ag[t]
+        cob_loc = (100.0 * s["cobertura_local"] / s["celdas_cob_local"]
+                   if s["celdas_cob_local"] else 0.0)
+        cob_fast = (100.0 * s["cobertura_fast"] / s["celdas_cob_fast"]
+                    if s["celdas_cob_fast"] else 0.0)
+        lineas.append("| %s | %d | %d | %d | %d | %d | %d | %.1f%% | %.1f%% |"
+                      % (t, s["procesadas"], s["sin_texto"], s["errores"],
+                         s["n_local"], s["n_fast"], s["solape_exacto"],
+                         cob_loc, cob_fast))
     lineas.append("")
 
     lineas.append("### Descartes por validador (backend rápido)")
@@ -318,69 +528,84 @@ def _escribir_informe(resultados, ag, web_sel, libros_sel,
         lineas.append("(ninguno)")
     lineas.append("")
 
-    lineas.append("### Desglose por tipo")
+    lineas.append("## Ejemplos buenos (el backend capta bien la afirmación)")
     lineas.append("")
-    lineas.append("| Tipo | Procesadas | sin_texto | Errores | n_local | "
-                  "n_fast | Solape |")
-    lineas.append("|---|---|---|---|---|---|---|")
-    for t in ("web", "libros"):
-        s = ag[t]
-        lineas.append("| %s | %d | %d | %d | %d | %d | %d |"
-                      % (t, s["procesadas"], s["sin_texto"], s["errores"],
-                         s["n_local"], s["n_fast"], s["solape_abs"]))
+    lineas.append("| Tipo | Entidad | Faceta | n_local | n_fast | Cobertura "
+                  "L/F | Afirmación local (inicio) | Nota |")
+    lineas.append("|---|---|---|---|---|---|---|---|")
+    for r in buenos:
+        lineas.append(_fila_ejemplo(r, "buena cobertura"))
     lineas.append("")
 
-    lineas.append("## Ejemplos de discrepancias")
+    lineas.append("## Ejemplos malos (errores o cobertura baja)")
     lineas.append("")
-    if discrepancias:
-        lineas.append("| Tipo | Entidad | Faceta | n_local | n_fast | "
-                      "Solape | Comentario |")
-        lineas.append("|---|---|---|---|---|---|---|")
-        for _, r, comentario in discrepancias:
-            lineas.append(_fila_discrepancia(r, comentario))
-    else:
-        lineas.append("No se registraron discrepancias significativas.")
+    lineas.append("| Tipo | Entidad | Faceta | n_local | n_fast | Cobertura "
+                  "L/F | Afirmación local (inicio) | Nota |")
+    lineas.append("|---|---|---|---|---|---|---|---|")
+    for r in malos:
+        nota = "error de extracción" if r["estado"] == "error" else \
+            "cobertura baja"
+        lineas.append(_fila_ejemplo(r, nota))
     lineas.append("")
 
     # Conclusión
-    conclusiones = []
-    conclusiones.append("## Conclusión")
-    conclusiones.append("")
-    if error_rate > 0.3:
-        conclusiones.append("El backend rápido **no es fiable** para la "
-                            "extracción: %.0f%% de las evidencias acabaron en "
-                            "error o JSON inválido." % (100.0 * error_rate))
-    elif solape_si >= 0.7:
-        conclusiones.append(
-            "El backend rápido **sirve para extracción, con reservas**. "
-            "Recupera un %.0f%% de las afirmaciones del nodo local "
-            "(equivalencia normalizada) con una tasa de error baja (%.1f%%). "
-            "Las reservas: (1) el número de afirmaciones extraídas difiere a "
-            "veces del nodo local; (2) el solapamiento no es total, por lo "
-            "que hay que conservar la deduplicación/consenso existente; "
-            "(3) la latencia por petición (%.2f s) y el consumo de tokens son "
-            "los costes a vigilar si se escala." % (
-                100.0 * solape_si, 100.0 * error_rate, lat_media))
-    elif solape_si >= 0.4:
-        conclusiones.append(
-            "El backend rápido **sirve de forma parcial**. El solapamiento "
-            "con el nodo local es de un %.0f%%: capta una parte relevante "
-            "pero no suficiente para sustituir al nodo local sin pérdida de "
-            "cobertura. Conviene usarlo como segundo extractor y fusionar, "
-            "no como sustituto." % (100.0 * solape_si))
-    else:
-        conclusiones.append(
-            "El backend rápido **no sirve** para esta extracción: el "
-            "solapamiento con el nodo local es de un %.0f%% y/o la tasa de "
-            "errores es alta (%.1f%%)." % (
-                100.0 * solape_si, 100.0 * error_rate))
-
-    lineas.extend(conclusiones)
+    lineas.append("## Conclusión")
+    lineas.append("")
+    lineas.append("**¿Sirve para extracción masiva?** %s"
+                  % _conclusion_viable(error_rate, cob_local_media,
+                                       cob_fast_media))
+    lineas.append("")
+    lineas.append("- **Parámetros usados:** `reasoning_effort=%s`, "
+                  "`max_completion_tokens=%d`. Con `max_tokens=1024` (T65) "
+                  "el error era del 51%%; ahora es del %.1f%%."
+                  % (REASONING_EFFORT, MAX_COMPLETION_TOKENS,
+                     100.0 * error_rate))
+    lineas.append("- **Cobertura / precisión relativa al nodo local:** "
+                  "%.1f%% de las afirmaciones locales tienen un equivalente en "
+                  "el backend (contra %.1f%% en sentido contrario)."
+                  % (100.0 * cob_local_media, 100.0 * cob_fast_media))
+    lineas.append("- **Coste:** %.2f s y %d tokens por evidencia (media); con "
+                  "concurrencia %d." % (lat_por_ev, tokens_por_ev,
+                                        CONCURRENCIA))
+    lineas.append("")
+    lineas.append(_estimacion_horas(tokens_por_ev, lat_por_ev, n_loc))
     lineas.append("")
 
     with open(INFORME, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lineas))
     print("[comparativa] Informe escrito en %s" % INFORME)
+
+
+def _conclusion_viable(error_rate, cob_local_media, cob_fast_media):
+    if error_rate > 0.3:
+        return ("**No**, de momento: la tasa de errores (%.1f%%) sigue siendo "
+                "alta." % (100.0 * error_rate))
+    if cob_local_media >= 0.7 and cob_fast_media >= 0.7:
+        return ("**Sí**, con reservas: alta cobertura en ambos sentidos "
+                "(%.0f%% / %.0f%%) y error bajo." % (
+                    100.0 * cob_local_media, 100.0 * cob_fast_media))
+    if cob_local_media >= 0.5:
+        return ("**Parcialmente**: ~ cobertura del nodo local (%.0f%%), pero "
+                "no suficiente para sustituirlo sin pérdida; útil como "
+                "segundo extractor o para fusión." % (
+                    100.0 * cob_local_media))
+    return ("**No** para sustituir al nodo local: cobertura baja "
+            "(%.0f%% local, %.0f%% fast)." % (
+                100.0 * cob_local_media, 100.0 * cob_fast_media))
+
+
+def _estimacion_horas(tokens_por_ev, lat_por_ev, n_loc):
+    pendientes = 6000
+    lat_total_seg = pendientes * lat_por_ev / CONCURRENCIA
+    horas = lat_total_seg / 3600.0
+    tokens_total = pendientes * tokens_por_ev
+    return ("**Estimación de esfuerzo para las ~%d evidencias pendientes:** "
+            "a %d tokens y %.2f s por evidencia, con concurrencia %d, el "
+            "tiempo de pared sería ≈ %.1f h (dominado por la latencia), y el "
+            "consumo ≈ %d M tokens. Es una cota inferior: no incluye "
+            "reintentos ni el coste de la fusión/deduplicación con el nodo "
+            "local." % (pendientes, tokens_por_ev, lat_por_ev,
+                        CONCURRENCIA, horas, tokens_total // 1000000))
 
 
 if __name__ == "__main__":
