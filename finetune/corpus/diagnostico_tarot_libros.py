@@ -30,6 +30,64 @@ _MAYORES_EN = [
 
 _MENORES_EN = ["%s of %s" % (r, s) for r in _RANGOS_EN for s in _PALOS_EN]
 
+# Tokens en espanol (ya normalizados: minusculas, sin tildes) por arcano mayor,
+# en el mismo orden marselles que cartas._MAYORES (1..22). Defecto A2 de la
+# auditoria ronda 4: sin esto los titulos en Espanol nunca se reconocian.
+_GRUPOS_MAYORES = [
+    (("the fool",), ("loco",)),
+    (("the magician",), ("mago",)),
+    (("the high priestess",), ("sacerdotisa", "papisa")),
+    (("the empress",), ("emperatriz",)),
+    (("the emperor",), ("emperador",)),
+    (("the hierofante", "the hierophant"), ("hierofante", "papa")),
+    (("the lovers",), ("enamorados",)),
+    (("the chariot",), ("carro",)),
+    (("strength",), ("fuerza",)),
+    (("the hermit",), ("ermitano",)),
+    (("wheel of fortune",), ("rueda",)),
+    (("justice",), ("justicia",)),
+    (("the hanged man",), ("colgado",)),
+    (("death",), ("muerte",)),
+    (("temperance",), ("templanza",)),
+    (("the devil",), ("diablo",)),
+    (("the tower",), ("torre",)),
+    (("the star",), ("estrella",)),
+    (("the moon",), ("luna",)),
+    (("the sun",), ("sol",)),
+    (("judgement", "judgment"), ("juicio", "resurreccion")),
+    (("the world",), ("mundo",)),
+]
+
+_GRUPO_TOKENS = [_en + _es for _en, _es in _GRUPOS_MAYORES]
+
+_TOKEN_A_GRUPO = {}
+for _i, _toks in enumerate(_GRUPO_TOKENS):
+    for _tok in _toks:
+        _TOKEN_A_GRUPO.setdefault(_tok, _i)
+
+
+def _grupo_de(esperado):
+    """Indice de _GRUPO_TOKENS al que pertenece un token esperado (EN o ES),
+    admitiendo formas sueltas como 'star' o 'wheel' dentro de 'the star' o
+    'wheel of fortune'. None si no se asocia a ninguna carta."""
+    idx = _TOKEN_A_GRUPO.get(esperado)
+    if idx is not None:
+        return idx
+    for i, toks in enumerate(_GRUPO_TOKENS):
+        for tok in toks:
+            if re.search(r"(?<![a-z])" + re.escape(esperado) + r"(?![a-z])", tok):
+                return i
+    return None
+
+
+_RANGOS_ES = [
+    "as", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho",
+    "nueve", "diez", "sota", "caballo", "caballero", "rey", "reina",
+]
+_PALOS_ES = ["oros", "copas", "espadas", "bastos"]
+
+_MENORES_ES = ["%s de %s" % (r, s) for r in _RANGOS_ES for s in _PALOS_ES]
+
 _MENOR_EN_RE = re.compile(
     r"\b(" + "|".join(_RANGOS_EN) + r")\s+of\s+(" + "|".join(_PALOS_EN) + r")\b"
 )
@@ -79,22 +137,37 @@ def cartas_sin_clasica(evidencias):
     return sorted(faltan)
 
 
+def _nombra(t, tok):
+    return re.search(r"(?<![a-z])" + re.escape(tok) + r"(?![a-z])", t)
+
+
 def clasificar_titulo(titulo, esperado):
     """'real' si el titulo nombra la carta esperada; 'otra' si nombra otra carta
     del tarot; 'neutro' si no nombra ninguna (OCR, leccion, genericos).
 
     `esperado` es un token en minusculas sin acentos (p. ej. 'sun', 'moon').
+    Reconoce nombres en ingles y en espanol (arreglo T67 del defecto A2).
     """
     t = cartas.norm(titulo or "")
-    if esperado and re.search(r"(?<![a-z])" + re.escape(esperado) + r"(?![a-z])", t):
+    g = _grupo_de(esperado) if esperado else None
+    if esperado and _nombra(t, esperado):
         return "real"
-    for otra in _MAYORES_EN:
-        if otra == esperado:
-            continue
-        if re.search(r"(?<![a-z])" + re.escape(otra) + r"(?![a-z])", t):
-            return "otra"
-    for otra in _MENORES_EN:
-        if re.search(r"(?<![a-z])" + re.escape(otra) + r"(?![a-z])", t):
+    if g is not None:
+        if any(_nombra(t, tok) for tok in _GRUPO_TOKENS[g]):
+            return "real"
+        for j, toks in enumerate(_GRUPO_TOKENS):
+            if j == g:
+                continue
+            if any(_nombra(t, tok) for tok in toks):
+                return "otra"
+    else:
+        for otra in _MAYORES_EN:
+            if otra == esperado:
+                continue
+            if _nombra(t, otra):
+                return "otra"
+    for otra in _MENORES_EN + _MENORES_ES:
+        if _nombra(t, otra):
             return "otra"
     return "neutro"
 

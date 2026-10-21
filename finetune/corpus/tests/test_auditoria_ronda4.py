@@ -50,7 +50,11 @@ class TestEvaluarNumerologia(unittest.TestCase):
 
 
 class TestLimpiarEvidenciasTitulosES(unittest.TestCase):
-    """limpiar_evidencias_libros: propuesta_filtro solo funciona con EN."""
+    """limpiar_evidencias_libros/diagnostico: títulos de mayores en español.
+
+    Arreglado en T67 (A2): `clasificar_titulo` y `MAYOR_PROPIO` reconocen
+    también los nombres españoles (norm, sin tildes), no solo los ingleses.
+    """
 
     def _filtro(self, titulo):
         seccion = {"id_libro": "l1", "seccion": 1, "titulo": titulo,
@@ -65,17 +69,45 @@ class TestLimpiarEvidenciasTitulosES(unittest.TestCase):
         resultado = self._filtro("Death")
         self.assertEqual(resultado["n_quitadas"], 1)
 
-    @unittest.expectedFailure
     def test_titulo_espanol_debe_quitar(self):
         resultado = self._filtro("La Muerte")
         self.assertEqual(
             resultado["n_quitadas"], 1,
-            "DEFECTO A4: clasificar_titulo y _nombra_propio solo conocen "
-            "tokens en inglés; con corpus español el filtro es inoperante")
+            "el filtro debe retirar evidencias de La Estrella en una sección "
+            "titulada La Muerte también cuando el título está en español")
 
-    def test_clasificar_titulo_es_neutro(self):
+    def test_titulo_propio_en_espanol_se_conserva(self):
+        resultado = self._filtro("La Estrella")
+        self.assertEqual(resultado["n_quitadas"], 0)
+
+    def test_clasificar_titulo_es_otra(self):
         self.assertEqual(
             diagnostico_tarot_libros.clasificar_titulo("La Muerte", "moon"),
+            "otra")
+
+    def test_clasificar_titulo_es_real(self):
+        self.assertEqual(
+            diagnostico_tarot_libros.clasificar_titulo("La Luna", "moon"),
+            "real")
+
+    def test_clasificar_titulo_es_real_variante_token(self):
+        self.assertEqual(
+            diagnostico_tarot_libros.clasificar_titulo("La Estrella", "star"),
+            "real")
+
+    def test_clasificar_titulo_menor_espanol_otra(self):
+        self.assertEqual(
+            diagnostico_tarot_libros.clasificar_titulo("Rey de Copas", "sun"),
+            "otra")
+
+    def test_clasificar_titulo_regresion_ingles(self):
+        self.assertEqual(
+            diagnostico_tarot_libros.clasificar_titulo("The Moon", "sun"),
+            "otra")
+
+    def test_clasificar_titulo_neutro_sigue_neutro(self):
+        self.assertEqual(
+            diagnostico_tarot_libros.clasificar_titulo("LESSON THREE", "sun"),
             "neutro")
 
 
