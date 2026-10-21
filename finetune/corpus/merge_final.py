@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import re
 import sys
@@ -109,10 +110,20 @@ def load_meta(path: Path) -> list[dict]:
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
+    """Escribe JSONL de forma atomica: un crash no trunca el destino."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    os.replace(tmp, path)
+
+
+def write_text_atomico(path: Path, texto: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(texto, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def split_block(rows: list[dict], block: str, seed: int, r_train: float, r_val: float):
@@ -332,7 +343,8 @@ def main(argv=None) -> int:
     write_jsonl(out / "train.jsonl", train)
     write_jsonl(out / "val.jsonl", val)
     write_jsonl(out / "test.jsonl", test)
-    (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_text_atomico(out / "report.json",
+                       json.dumps(report, ensure_ascii=False, indent=2))
 
     d = report["descartes"]
     print(f"[merge] real train {report['real_train_in']}→{report['real_train_kept']} · "
