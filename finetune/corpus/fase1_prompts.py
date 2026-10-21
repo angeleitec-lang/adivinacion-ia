@@ -36,6 +36,11 @@ FAMILIAS = (
 
 FAMILIAS_ESPAÑOLA = ("espanola_1", "espanola_3", "espanola_5", "espanola_7")
 
+# Familias sin tirada en las que Sol/Luna pueden ser astros, no cartas.
+FAMILIAS_ASTRO = ("astro_natal", "sinastria", "transitos", "revolucion_solar")
+FAMILIAS_SIN_CARTAS = ("astro_natal", "sinastria", "numerologia",
+                       "transitos", "revolucion_solar", "biorritmos")
+
 # Familias de tirada larga con esquema duro por posiciones (diagnóstico T72:
 # sin límite por sección el modelo se extendía en las primeras posiciones y
 # truncaba antes de cubrir la tirada; el esquema acota y obliga a cerrar).
@@ -146,6 +151,22 @@ _PROMESAS_VEDADAS = [
     r"\bno\s+necesitar[aá]s\s+(?:el\s+)?"
     r"(?:m[eé]dico|tratamiento|medicaci[oó]n|ir\s+al\s+m[eé]dico)",
     r"\bno\s+necesitas\s+(el\s+)?(m[eé]dico|ir\s+al\s+m[eé]dico)",
+    r"\b(?:deber[ií]as|tienes\s+que|debes|deber[ií]ais|ten[eé]is\s+que)\s+"
+    r"(?:dejar|abandonar|suspender)\s+(?:el|la|tu|su)?\s*"
+    r"(?:tratamiento|medicaci[oó]n|medicamentos?)",
+    r"\bdeja\s+(?:el|tu)\s+tratamiento\b",
+    # Diagnósticos médicos y certezas sobre terceros.
+    r"\btienes\s+(?:una\s+)?(?:depresi[oó]n|ansiedad|c[aá]ncer|diabetes|"
+    r"trastorno\s+\w+|enfermedad\s+(?:grave|terminal))",
+    r"\b(?:padeces|sufres)\s+(?:de\s+)?(?:depresi[oó]n|ansiedad|c[aá]ncer|"
+    r"diabetes|trastorno\s+\w+)",
+    r"\best[aá]s\s+embarazada\b",
+    r"\b(?:tu|su)\s+pareja\s+(?:te|le)\s+enga[ñn]a\s+"
+    r"(?:seguro|fijo|con\s+seguridad)\b",
+    r"\b(?:seguro|sin\s+duda|con\s+seguridad)\s+que\s+(?:tu|su)\s+pareja\s+"
+    r"(?:te|le)\s+enga[ñn]a\b",
+    r"\bvas\s+a\s+divorciarte\b",
+    r"\b(?:os\s+vais|se\s+van)\s+a\s+divorciar\b",
     r"vas\s+a\s+morir",
     r"\bmorir[aá]s\b",
     r"fecha\s+de\s+(tu|su)\s+muerte",
@@ -594,12 +615,27 @@ def _negado(texto, inicio):
     return bool(re.search(r"\bno\b(?:\s+\w+){0,6}\s*$", pre, re.IGNORECASE))
 
 
+# Nombre propio con artículo en mayúscula. Las cartas con rango y palo
+# («el Ocho de Estrellas») las cubre `_RANGO_CARTA_RE` sin depender del artículo.
 _CARTA_NOMBRE_RE = re.compile(
     r"(?<![" + _LETRAS + r"])"
     r"((?:El|La|Los|Las)\s+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]+"
     r"(?:\s+(?:de|del)\s+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]+)?)"
     r"(?![" + _LETRAS + r"])"
 )
+
+_RANGO_CARTA_RE = re.compile(
+    r"(?<![" + _LETRAS + r"])("
+    r"(?i:As|Dos|Tres|Cuatro|Cinco|Seis|Siete|Ocho|Nueve|Diez|"
+    r"Sota|Caballero|Reina|Rey|Paje)\s+de\s+"
+    r"[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]+)"
+    r"(?![" + _LETRAS + r"])"
+)
+
+_PALOS_CARTA = {
+    "oros", "copas", "espadas", "bastos", "estrellas", "treboles",
+    "corazones", "diamantes", "picas",
+}
 
 _GENERICOS_CARTA = {
     "carta", "cartas", "arcano", "arcanos", "tirada", "tiradas", "lectura",
@@ -667,22 +703,32 @@ def _cartas_inventadas(texto, conocidos):
         if t not in _ARTICULOS and t not in _PREPOS
     }
     inventadas = []
-    for m in _CARTA_NOMBRE_RE.finditer(texto or ""):
-        nombre = m.group(1)
+    vistas = set()
+
+    def revisar(nombre):
         base = _norm(_sin_articulo(nombre))
-        if not base:
-            continue
+        if not base or base in vistas:
+            return
         if base in conocidos:
-            continue
+            return
         if base.split()[0] in _GENERICOS_CARTA or _es_posicion(base):
-            continue
+            return
         # Forma corta de una carta conocida: «La Rueda», «La Sota», «El Rey».
         if len(base.split()) == 1 and base in tokens_conocidos:
-            continue
+            return
         if any(k.startswith(base + " ") for k in conocidos):
-            continue
-        if nombre not in inventadas:
-            inventadas.append(nombre)
+            return
+        vistas.add(base)
+        inventadas.append(nombre)
+
+    texto = texto or ""
+    for m in _CARTA_NOMBRE_RE.finditer(texto):
+        revisar(m.group(1))
+    for m in _RANGO_CARTA_RE.finditer(texto):
+        nombre = m.group(1)
+        palo = _norm(nombre).split()[-1]
+        if palo in _PALOS_CARTA:
+            revisar(nombre)
     return inventadas
 
 
@@ -1071,6 +1117,58 @@ def _verif_esquema(tarea, texto, motivos):
             )
 
 
+_RE_PRESENCIA_TIRADA = re.compile(
+    r"(?:sali[oó]|salieron|ha[n]?\s+salido|te\s+ha[n]?\s+salido|"
+    r"en\s+la\s+mesa|en\s+(?:tu\s+)?tirada)",
+    re.IGNORECASE)
+
+
+def _mencion_explicita_carta(nombre, texto):
+    """True si el texto dice «carta/arcano de X» (frente a un astro homónimo)."""
+    base = re.escape(_sin_articulo(nombre))
+    return bool(re.search(
+        r"(?:cartas?|arcanos?)\s+(?:mayor\s+|menor\s+)?"
+        r"(?:de\s+(?:la|el|los|las)\s+|del\s+|de\s+)?" + base, texto,
+        re.IGNORECASE))
+
+
+def _tiene_presencia_tirada(nombre, texto):
+    """True si hay una marca de «carta sacada» cerca del nombre."""
+    pat = re.compile(
+        r"(?<![" + _LETRAS + r"])" + re.escape(str(nombre))
+        + r"(?![" + _LETRAS + r"])", re.IGNORECASE)
+    for m in pat.finditer(texto):
+        if _RE_PRESENCIA_TIRADA.search(texto[max(0, m.start() - 40):m.end() + 80]):
+            return True
+    return False
+
+
+def _mencion_como_tirada(nombre, texto):
+    """True si la carta se presenta como sacada («carta de X», «estaba en la mesa»)."""
+    return (_mencion_explicita_carta(nombre, texto)
+            or _tiene_presencia_tirada(nombre, texto))
+
+
+def _verif_cartas_sin_tirada(universo, texto, motivos, astro):
+    """Una lectura sin tirada no debe colar cartas ajenas presentadas como sacadas.
+
+    En astro/sinastría, «El Sol» y «La Luna» se permiten como astros salvo que
+    el texto las presente explícitamente como carta. Las analogías («en el
+    tarot, la carta que representa tu energía es El Colgado») no se rechazan:
+    el dataset real las usa y no afirman que la carta esté en la lectura.
+    """
+    for elemento in universo:
+        nombre = elemento.get("nombre") if isinstance(elemento, dict) else elemento
+        if not nombre:
+            continue
+        if astro and _norm(nombre) in {"el sol", "la luna"} \
+                and not _tiene_presencia_tirada(nombre, texto):
+            continue
+        if _mencion_como_tirada(nombre, texto):
+            motivos.append(
+                f"Menciona carta de tarot en una lectura sin tirada: {nombre}")
+
+
 def verificar_lectura(tarea, texto):
     """Comprueba presencia, no invención, coherencia con lo calculado y vedados."""
     motivos = []
@@ -1079,11 +1177,14 @@ def verificar_lectura(tarea, texto):
     texto = "" if texto is None else texto if isinstance(texto, str) else str(texto)
     calc = tarea.get("calculos") or {}
     cartas = tarea.get("cartas") or []
+    f = tarea.get("familia", "")
     if cartas:
         texto_ajenas = _mascara_astros(texto) if "carta_natal" in calc else None
         _verif_cartas(cartas, tarea.get("universo_cartas") or [], texto, motivos,
                       texto_ajenas=texto_ajenas)
-    f = tarea.get("familia", "")
+    elif f in FAMILIAS_SIN_CARTAS and tarea.get("universo_cartas"):
+        _verif_cartas_sin_tirada(tarea["universo_cartas"], texto, motivos,
+                                 astro=f in FAMILIAS_ASTRO)
     if f in FAMILIAS_ESQUEMA or f == "lectura_completa":
         _verif_esquema(tarea, texto, motivos)
     _verif_numeros(calc, texto, motivos)

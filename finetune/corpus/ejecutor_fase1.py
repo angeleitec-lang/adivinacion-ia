@@ -228,6 +228,9 @@ def tarea_desde_job(bloque, payload, pregunta, kb):
         tarea["calculos"] = {}
     else:
         raise ValueError(f"bloque desconocido: {bloque}")
+    if "universo_cartas" not in tarea:
+        # Lecturas sin tirada: cualquier carta de tarot mencionada es ajena.
+        tarea["universo_cartas"] = universo_tarot(kb)
     return tarea
 
 
