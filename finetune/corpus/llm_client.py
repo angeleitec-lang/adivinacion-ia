@@ -2,57 +2,188 @@
 """Cliente LLM local para nodos de inferencia (A4.4).
 
 Round-robin entre endpoints, reintentos con backoff exponencial,
-y extracción robusta de JSON.
+y extracción robusta de JSON. Ampliación T65: soporta, además de
+endpoints locales, un backend en la nube con cabecera Authorization
+Bearer tomada de una variable de entorno, modelo propio por endpoint y
+límite de concurrencia/tasa configurable (reintenta con backoff ante 429).
 """
 
 from __future__ import annotations
 
+import collections
 import json
-import random
+import os
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
 import requests
 
 
+class RateLimitError(Exception):
+    """HTTP 429: se superó el límite de tasa del proveedor."""
+
+    def __init__(self, retry_after: Optional[str] = None):
+        super().__init__("Límite de tasa HTTP 429")
+        self.retry_after = retry_after
+
+    @property
+    def backoff(self) -> Optional[float]:
+        """Segundos a esperar según `Retry-After`, o None si no aplica."""
+        if self.retry_after is None:
+            return None
+        try:
+            return max(float(self.retry_after), 0.0)
+        except ValueError:
+            return None
+
+
+class _LimitadorTasa:
+    """Limita las peticiones a `max_por_minuto` por ventana de 60 s.
+
+    Thread-safe: si se excede la tasa, `esperar()` bloquea hasta que hay
+    hueco. Con `max_por_minuto <= 0` no limita (comportamiento por defecto).
+    """
+
+    def __init__(self, max_por_minuto: int):
+        self.maximo = max(int(max_por_minuto), 0)
+        self._lock = threading.Lock()
+        self._marcas = collections.deque()
+
+    def esperar(self) -> None:
+        if self.maximo <= 0:
+            return
+        while True:
+            with self._lock:
+                ahora = time.time()
+                while self._marcas and ahora - self._marcas[0] > 60:
+                    self._marcas.popleft()
+                if len(self._marcas) < self.maximo:
+                    self._marcas.append(ahora)
+                    return
+                espera = self._marcas[0] + 60 - ahora
+            time.sleep(max(espera, 0.01))
+
+
 class LLMClient:
-    """Cliente para LLM local (OpenAI-compatible) con round-robin y reintentos."""
+    """Cliente para LLM (OpenAI-compatible) con round-robin y reintentos.
+
+    Ampliación T65: cada endpoint puede ser una cadena (local, sin auth), un
+    `(url, modelo)` o un dict con `url`, `model` (opcional) y `api_key_env`
+    (opcional, nombre de la variable de entorno con la clave para el Bearer).
+    La clave se lee de la variable en tiempo de ejecución y nunca se registra.
+    """
 
     def __init__(
         self,
-        endpoints: Optional[List[str]] = None,
+        endpoints: Optional[List[Any]] = None,
         model: str = "halogen-qwen3.8-flash-next",
         timeout: float = 60.0,
         simulado: Optional[Callable[[str, str], str]] = None,
+        api_key_env: Optional[str] = None,
+        max_concurrencia: int = 1,
+        tasa_max_por_minuto: int = 0,
+        metricas: Optional[Dict[str, float]] = None,
     ):
         """
         Args:
-            endpoints: URLs base de los endpoints (ej. ["http://10.0.0.3:8000/v1", "http://10.0.0.4:8000/v1"])
-            model: Nombre del modelo a usar
-            timeout: Timeout por petición en segundos
-            simulado: Función (sistema, usuario) -> respuesta para tests (inyectable)
+            endpoints: URLs base o especificaciones (ver doc de clase). Por
+                defecto los nodos locales 10.0.0.3 / 10.0.0.4.
+            model: Nombre del modelo por defecto (se usa si el endpoint no da
+                el suyo propio).
+            timeout: Timeout por petición en segundos.
+            simulado: Función (sistema, usuario) -> respuesta (inyectable).
+            api_key_env: Nombre de la variable de entorno con la clave para
+                cabecera `Authorization: Bearer`. Se aplica a los endpoints que
+                no la especifiquen. None = sin autenticación.
+            max_concurrencia: Máximo de peticiones de red simultáneas.
+            tasa_max_por_minuto: Máximo de peticiones por minuto; 0 = sin
+                límite de tasa.
+            metricas: Dict opcional donde se acumulan latencia y tokens
+                (peticiones, latencia_total, max_latencia, prompt_tokens,
+                completion_tokens). None = no registrar.
         """
-        self.endpoints = endpoints or [
+        self.endpoints = list(endpoints or [
             "http://10.0.0.3:8000/v1",
             "http://10.0.0.4:8000/v1",
-        ]
+        ])
         self.model = model
         self.timeout = timeout
         self.simulado = simulado
+        self.api_key_env = api_key_env
+        self.metricas = metricas
         self._idx = 0  # round-robin index
+        self._specs = [self._normalizar_endpoint(ep) for ep in self.endpoints]
+        self._sem = threading.BoundedSemaphore(max(int(max_concurrencia), 1))
+        self._tasa = _LimitadorTasa(tasa_max_por_minuto)
 
-    def _siguiente_endpoint(self) -> str:
+    def _normalizar_endpoint(self, ep: Any) -> Dict[str, Any]:
+        """Convierte una especificación de endpoint en un dict normalizado."""
+        if isinstance(ep, str):
+            return {"url": ep, "model": self.model,
+                    "api_key_env": self.api_key_env}
+        if isinstance(ep, tuple):
+            url, m = ep
+            return {"url": url, "model": m,
+                    "api_key_env": self.api_key_env}
+        if isinstance(ep, dict):
+            spec = dict(ep)
+            spec.setdefault("model", self.model)
+            spec.setdefault("api_key_env", self.api_key_env)
+            if not spec.get("url"):
+                raise ValueError("Endpoint sin 'url'")
+            return spec
+        raise TypeError("Endpoint no reconocido: %s" % type(ep).__name__)
+
+    def _siguiente_endpoint(self) -> Any:
         """Selecciona el siguiente endpoint round-robin."""
         ep = self.endpoints[self._idx % len(self.endpoints)]
         self._idx += 1
         return ep
 
-    def _chat_real(self, sistema: str, usuario: str, max_tokens: int, temperature: float) -> str:
+    def _headers_de_endpoint(self, spec: Dict[str, Any]) -> Optional[Dict[str, str]]:
+        """Cabecera Authorization Bearer desde variable de entorno.
+
+        Si el endpoint no pide clave, devuelve None. Si la pide y la variable
+        no existe, lanza un error claro que nombra la variable sin filtrar
+        ningún secreto.
+        """
+        env = spec.get("api_key_env")
+        if not env:
+            return None
+        clave = os.environ.get(env)
+        if not clave:
+            raise RuntimeError(
+                "No se encontró la variable de entorno %r para autenticar "
+                "el endpoint %s; defínela antes de usar este backend."
+                % (env, spec["url"]))
+        return {"Authorization": "Bearer %s" % clave}
+
+    def _registrar_metricas(self, latencia: float, data: Dict[str, Any]) -> None:
+        if self.metricas is None:
+            return
+        uso = data.get("usage") or {}
+        self.metricas["peticiones"] = self.metricas.get("peticiones", 0) + 1
+        self.metricas["latencia_total"] = (
+            self.metricas.get("latencia_total", 0.0) + latencia)
+        self.metricas["max_latencia"] = max(
+            self.metricas.get("max_latencia", 0.0), latencia)
+        self.metricas["prompt_tokens"] = (
+            self.metricas.get("prompt_tokens", 0)
+            + int(uso.get("prompt_tokens") or 0))
+        self.metricas["completion_tokens"] = (
+            self.metricas.get("completion_tokens", 0)
+            + int(uso.get("completion_tokens") or 0))
+
+    def _chat_real(self, sistema: str, usuario: str, max_tokens: int,
+                   temperature: float) -> str:
         """Ejecuta una petición real al endpoint."""
+        idx = self._idx % len(self.endpoints)
         endpoint = self._siguiente_endpoint()
-        url = f"{endpoint}/chat/completions"
+        spec = self._specs[idx]
+        url = "%s/chat/completions" % spec["url"]
         payload = {
-            "model": self.model,
+            "model": spec["model"],
             "messages": [
                 {"role": "system", "content": sistema},
                 {"role": "user", "content": usuario},
@@ -60,9 +191,20 @@ class LLMClient:
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
-        resp = requests.post(url, json=payload, timeout=self.timeout)
+        headers = self._headers_de_endpoint(spec)
+        kwargs: Dict[str, Any] = {"json": payload, "timeout": self.timeout}
+        if headers:
+            kwargs["headers"] = headers
+        inicio = time.time()
+        with self._sem:
+            self._tasa.esperar()
+            resp = requests.post(url, **kwargs)
+        latencia = time.time() - inicio
+        if resp.status_code == 429:
+            raise RateLimitError(resp.headers.get("Retry-After"))
         resp.raise_for_status()
         data = resp.json()
+        self._registrar_metricas(latencia, data)
         return data["choices"][0]["message"]["content"]
 
     def chat(
@@ -74,6 +216,9 @@ class LLMClient:
         max_reintentos: int = 3,
     ) -> str:
         """Envía una petición de chat con reintentos y backoff exponencial.
+
+        Ante HTTP 429 se espera según `Retry-After` si el servidor lo indica;
+        en caso contrario se usa el backoff exponencial habitual.
 
         Args:
             sistema: Prompt de sistema
@@ -96,6 +241,14 @@ class LLMClient:
         for intento in range(max_reintentos + 1):
             try:
                 return self._chat_real(sistema, usuario, max_tokens, temperature)
+            except RateLimitError as e:
+                ultima_exc = e
+                if intento < max_reintentos:
+                    bo = e.backoff
+                    time.sleep(bo if bo is not None else espera)
+                    espera *= 2  # backoff exponencial
+                else:
+                    raise
             except Exception as e:
                 ultima_exc = e
                 if intento < max_reintentos:
