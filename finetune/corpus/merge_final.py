@@ -73,7 +73,17 @@ def _par_es_junk(human: str, answer: str, min_terms: int) -> bool:
 
 
 def is_junk_pair(row: dict, min_terms: int = 2) -> bool:
-    """Descarta prompts genericos: si CUALQUIER par de la fila es basura."""
+    """Descarta prompts genericos: si CUALQUIER par de la fila es basura.
+
+    Exencion D3 (T75): las filas del bloque `etica` no se juzgan por terminos
+    de dominio. Su materia (duelo, menores, urgencias, salud) puede no citar
+    tarot, astrologia ni numerologia y aun asi ser dato valido: el filtro de
+    dominio esta pensado para el corpus tematico, no para los casos eticos,
+    que ya se controlan en `validate_synthetic` (skips de eco/ia_meta) y en
+    el verificador del ejecutor (promesas y juego vedados).
+    """
+    if str(row.get("bloque", "")) == "etica":
+        min_terms = 0
     return any(_par_es_junk(h, a, min_terms) for h, a in _pares_o_fallback(row))
 
 
