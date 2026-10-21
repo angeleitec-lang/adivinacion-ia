@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import time
+import unicodedata
 import unittest
 from pathlib import Path
 
@@ -384,6 +385,97 @@ class TestDryRun(unittest.TestCase):
         res = ef.estimar_dry_run(self.db, workers=2)
         esperado = 100 * ef.LATENCIA_PILOTO_S / 3600.0 / 2
         self.assertAlmostEqual(res["horas_estimadas"], esperado, places=6)
+
+
+class TestFormatoShareGPT(unittest.TestCase):
+    """D1 (T75): el ejecutor puede emitir ShareGPT consumible por validate_synthetic."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.kb = ef.cargar_kb()
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = str(Path(self.tmp.name) / "jobs.db")
+        self.out = str(Path(self.tmp.name) / "salida")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_a_sharegpt_roles_y_nfc(self):
+        fila = {
+            "id": 7,
+            "bloque": "tarot_1",
+            "prompt_system": unicodedata.normalize("NFD", "Sistema de lectura áéíóú"),
+            "prompt_user": unicodedata.normalize("NFD", "Carta: El Loco (al derecho)."),
+            "respuesta": unicodedata.normalize("NFD", "El Loco abre tu camino."),
+        }
+        out = ef.a_sharegpt(fila)
+        self.assertEqual([c["from"] for c in out["conversations"]], ["system", "human", "gpt"])
+        for c in out["conversations"]:
+            self.assertEqual(c["value"], unicodedata.normalize("NFC", c["value"]))
+        self.assertEqual(out["id"], 7)
+        self.assertEqual(out["bloque"], "tarot_1")
+        self.assertNotIn("respuesta", out)
+
+    def test_a_sharegpt_sin_system(self):
+        out = ef.a_sharegpt(
+            {"id": 1, "bloque": "etica", "prompt_user": "¿Qué hago?", "respuesta": "Con calma."}
+        )
+        self.assertEqual([c["from"] for c in out["conversations"]], ["human", "gpt"])
+
+    def test_a_sharegpt_conserva_calculos(self):
+        calculos = {"numerologia": {"camino_de_vida": 7}}
+        out = ef.a_sharegpt(
+            {"id": 2, "bloque": "numerologia", "prompt_user": "p", "respuesta": "r", "calculos": calculos}
+        )
+        self.assertEqual(out["calculos"], calculos)
+
+    def test_ejecutar_formato_sharegpt(self):
+        crear_db(self.db, [("tarot_1", "sys", PROMPT_TAROT, PAYLOAD_TAROT, 1024, "pending", None)])
+        res = ef.ejecutar(
+            self.db, ClienteGuion([BUENA]), self.kb, workers=1, out_dir=self.out, formato="sharegpt"
+        )
+        self.assertEqual(res["aceptadas"], 1)
+        ace = lineas_jsonl(Path(self.out) / "aceptadas.jsonl")
+        self.assertEqual(len(ace), 1)
+        self.assertEqual([c["from"] for c in ace[0]["conversations"]], ["system", "human", "gpt"])
+        self.assertEqual(ace[0]["bloque"], "tarot_1")
+        self.assertNotIn("respuesta", ace[0])
+
+    def test_ejecutar_default_sigue_plano(self):
+        crear_db(self.db, [("tarot_1", "sys", PROMPT_TAROT, PAYLOAD_TAROT, 1024, "pending", None)])
+        ef.ejecutar(self.db, ClienteGuion([BUENA]), self.kb, workers=1, out_dir=self.out)
+        ace = lineas_jsonl(Path(self.out) / "aceptadas.jsonl")
+        self.assertIn("respuesta", ace[0])
+        self.assertNotIn("conversations", ace[0])
+
+
+class TestSimEjesAstrales(unittest.TestCase):
+    """T75 (apoya D7): el lector simulado menciona los ejes astrales del prompt."""
+
+    CARTA = {
+        "fecha": "1990-01-01",
+        "hora": "12:00",
+        "planetas": {
+            "Sol": {"signo": "Capricornio", "grados": "10°00'"},
+            "Luna": {"signo": "Acuario", "grados": "20°00'"},
+        },
+        "ascendente": {"signo": "Piscis", "grados": "15°00'"},
+    }
+
+    def test_sim_menciona_ejes_y_pasa_verificador(self):
+        kb = ef.cargar_kb()
+        tarea = ef.tarea_desde_job(
+            "astro_natal", {"carta": self.CARTA, "ciudad": "Madrid"}, "¿Quién soy?", kb
+        )
+        pr = fp.construir_prompt(tarea, kb)
+        texto = ef.simulacion_fase1(pr["system"], pr["user"])
+        self.assertIn("Sol en Capricornio", texto)
+        self.assertIn("Luna en Acuario", texto)
+        self.assertIn("Ascendente en Piscis", texto)
+        ok, motivos = fp.verificar_lectura(tarea, texto)
+        self.assertTrue(ok, motivos)
 
 
 if __name__ == "__main__":
