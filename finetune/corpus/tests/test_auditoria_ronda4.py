@@ -400,6 +400,38 @@ class TestJuezReanudacionFacetas(unittest.TestCase):
         self.assertEqual(stats["evidencias"], 2)
         self.assertEqual(len(self._lineas_ev()), 2)
 
+    def test_juicio_error_se_reintenta(self):
+        """B5 (T63) arreglado en T67: tipo=error no es sección terminada."""
+        import llm_client
+        seccion = {"id_libro": "l1", "seccion": 2, "titulo": "The Fool",
+                   "texto": "the fool card opens the journey of the trump"}
+        h = juez.hash_seccion(seccion)
+        registro = {"hash": h, "fuente_id": "l1", "titulo": "The Fool",
+                    "candidatos": ["tarot-mayor-01"],
+                    "juicio": {"tipo": "error", "error": "respuesta_no_parseable"}}
+        with open(os.path.join(self.dir, "juicios.jsonl"), "a",
+                  encoding="utf-8") as fh:
+            fh.write(json.dumps(registro) + "\n")
+        llamadas = []
+
+        def simulado(sistema, usuario):
+            llamadas.append(usuario)
+            return ("```json\n%s\n```" % json.dumps({
+                "tipo": "conocimiento", "calidad": 4, "idioma": "en",
+                "entidades": [{"entidad_id": "tarot-mayor-01",
+                               "facetas": ["significado_general"]}]}))
+        cliente = llm_client.LLMClient(simulado=simulado)
+        stats = juez.procesar_secciones([seccion], cliente, self.dir,
+                                        workers=1)
+        self.assertEqual(stats["reaprovechadas"], 0)
+        self.assertEqual(stats["juzgadas"], 1)
+        self.assertEqual(len(llamadas), 1)
+        # Segunda pasada: ya hay juicio bueno, no se vuelve a llamar.
+        stats2 = juez.procesar_secciones([seccion], cliente, self.dir,
+                                         workers=1)
+        self.assertEqual(stats2["reaprovechadas"], 1)
+        self.assertEqual(len(llamadas), 1)
+
 
 class TestEscribirCasosCopia(unittest.TestCase):
     """B3 (T63) arreglado en T67: el conjunto congelado no se destruye."""

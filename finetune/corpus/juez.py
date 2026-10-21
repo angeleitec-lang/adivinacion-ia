@@ -654,11 +654,12 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
                        limite=None):
     """Juzga secciones y escribe `juicios.jsonl` y `evidencias.jsonl`.
 
-    Reanudable: las secciones cuyo hash ya está en juicios.jsonl no vuelven
-    a llamarse; si sus evidencias faltan —total o parcialmente, por faceta
-    (entidad, faceta)— se completan desde el juicio guardado sin duplicar las
-    ya escritas. `limite` recorta el número de secciones procesadas en esta
-    pasada.
+    Reanudable: las secciones cuyo hash ya está en juicios.jsonl con un juicio
+    que no sea de tipo error no vuelven a llamarse; si sus evidencias faltan
+    —total o parcialmente, por faceta (entidad, faceta)— se completan desde el
+    juicio guardado sin duplicar las ya escritas. Los juicios de tipo error se
+    reintentan (T67, B5). `limite` recorta el número de secciones procesadas
+    en esta pasada.
     Devuelve estadísticas {"juzgadas","llamadas","evidencias",
     "reaprovechadas","sin_candidatos","error"}.
     """
@@ -669,8 +670,15 @@ def procesar_secciones(secciones, cliente, out_dir, meta=None, workers=1,
     ruta_evidencias = os.path.join(out_dir, "evidencias.jsonl")
     hechos = {}
     for registro in _leer_jsonl(ruta_juicios):
-        if registro.get("hash"):
-            hechos[registro["hash"]] = registro
+        if not registro.get("hash"):
+            continue
+        # T67 (B5): un juicio de tipo error no cuenta como sección terminada;
+        # al reanudar se reintenta (el registro bueno se añade después y es el
+        # que queda como último).
+        if (registro.get("juicio") or {}).get("tipo") == "error":
+            hechos.pop(registro["hash"], None)
+            continue
+        hechos[registro["hash"]] = registro
     hashes_ev = {}
     for e in _leer_jsonl(ruta_evidencias):
         h = e.get("hash_seccion")
