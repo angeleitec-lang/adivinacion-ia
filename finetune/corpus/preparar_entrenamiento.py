@@ -353,14 +353,16 @@ def _contar_tokens(textos: list[str], tokenizador: str | None) -> tuple[list[int
 
 def _resumen_numerico(valores: list[int]) -> dict:
     if not valores:
-        return {"n": 0, "media": 0.0, "mediana": 0.0, "p95": 0, "max": 0}
+        return {"n": 0, "media": 0.0, "mediana": 0.0, "p95": 0, "p99": 0, "max": 0}
     ordenados = sorted(valores)
     p95 = ordenados[min(len(ordenados) - 1, math.ceil(len(ordenados) * 0.95) - 1)]
+    p99 = ordenados[min(len(ordenados) - 1, math.ceil(len(ordenados) * 0.99) - 1)]
     return {
         "n": len(valores),
         "media": round(statistics.fmean(valores), 1),
         "mediana": round(statistics.median(valores), 1),
         "p95": p95,
+        "p99": p99,
         "max": max(valores),
     }
 
@@ -371,7 +373,7 @@ def calcular_estadisticas(
     invalidas: dict[str, int],
     tokenizador: str | None = None,
     epochs: float = 3,
-    max_longitud: int = 2048,
+    max_longitud: int = 4096,
 ) -> dict:
     """Calcula estadísticas del dataset a partir de las filas ya validadas."""
     familias: Counter = Counter()
@@ -498,12 +500,15 @@ def calcular_estadisticas(
             "orientaciones": orientaciones,
         },
         "horas_estimadas": {
-            "7b": horas(750.0),
-            "14b": horas(350.0),
+            "7b": horas(550.0),
+            "14b": horas(250.0),
             "supuestos": (
-                "QLoRA 4-bit, longitud máxima 2048, 3 épocas, lote efectivo 16, "
-                "15 % de sobrecarga y 750/350 tokens/s para 7B/14B en Strix Halo "
-                "128 GB. Valores orientativos, no medidos en este equipo."
+                "QLoRA 4-bit, longitud máxima 4096 (cubre p99 real del dataset "
+                "v1: p50 1.510, p95 3.233, p99 3.869, máx 4.166), 3 épocas, "
+                "lote efectivo 16, 15 % de sobrecarga y 400-750 / 180-350 "
+                "tokens/s para 7B/14B en Strix Halo 128 GB (punto medio "
+                "550/250). Rangos citados de la comunidad ROCm gfx1151: "
+                "suposiciones no verificadas en este equipo."
             ),
         },
     }
@@ -802,7 +807,7 @@ def preparar(
     eval_respuestas: Path | None = None,
     tokenizador: str | None = None,
     epochs: float = 3,
-    max_longitud: int = 2048,
+    max_longitud: int = 4096,
 ) -> dict:
     """Ejecuta la preparación y devuelve el informe y los datos calculados."""
     formato = _resolver_formato(formato)
@@ -899,8 +904,9 @@ def main(argv=None) -> int:
                         help="Ruta local a tokenizer.json o a un modelo con tokenizador")
     parser.add_argument("--epochs", type=float, default=3.0,
                         help="Épocas para la estimación de horas (por defecto 3)")
-    parser.add_argument("--max-longitud", type=int, default=2048,
-                        help="Longitud máxima de secuencia para la estimación")
+    parser.add_argument("--max-longitud", type=int, default=4096,
+                        help="Longitud máxima de secuencia para la estimación "
+                             "(4096 cubre p99 del dataset v1)")
     parser.add_argument("--estricto", action="store_true",
                         help="Devuelve error también con semáforo amarillo")
     args = parser.parse_args(argv)
