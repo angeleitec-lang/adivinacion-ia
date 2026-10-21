@@ -170,7 +170,7 @@ class TestFiltrarFugasEval(unittest.TestCase):
                   .replace("\"", "\u00ab\u00bb")).upper()
         fila_igual = fila(humano, RESP_OK, bloque="tarot_2", id_="t1")
         fila_ok = fila(situacion(9), RESP_OK, bloque="tarot_2", id_="t2")
-        mantenidas, descartes = ad.filtrar_fugas_eval(
+        mantenidas, descartes, _boiler = ad.filtrar_fugas_eval(
             [fila_igual, fila_ok], self.casos())
         self.assertEqual([d["id"] for d in descartes], ["t1"])
         self.assertEqual(descartes[0]["motivo"],
@@ -187,7 +187,8 @@ class TestFiltrarFugasEval(unittest.TestCase):
                 f"Contexto: {arrastre[5]}")
         casi = fila(base, RESP_OK, bloque="tarot_2", id_="c1")
         compartidos = None
-        mantenidas, descartes = ad.filtrar_fugas_eval([casi], self.casos())
+        mantenidas, descartes, _boiler = ad.filtrar_fugas_eval(
+            [casi], self.casos())
         ids_desc = [d["id"] for d in descartes]
         if "c1" in ids_desc:
             d = [x for x in descartes if x["id"] == "c1"][0]
@@ -206,7 +207,8 @@ class TestFiltrarFugasEval(unittest.TestCase):
                      self.HUM_EVAL.split("\n")[1] + "\n" +
                      self.HUM_EVAL.split("\n")[0] + "\n" + trozo)
         f = fila(replicado, RESP_OK, bloque="tarot_2", id_="n1")
-        mantenidas, descartes = ad.filtrar_fugas_eval([f], self.casos())
+        mantenidas, descartes, _boiler = ad.filtrar_fugas_eval(
+            [f], self.casos())
         self.assertEqual([d["id"] for d in descartes], ["n1"])
         self.assertEqual(descartes[0]["motivo"], "fuga_evaluacion_ngramas")
 

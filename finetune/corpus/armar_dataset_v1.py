@@ -167,14 +167,18 @@ class Registro:
 
 
 def filtrar_fugas_eval(filas: list[dict],
-                       casos_eval: dict) -> tuple[list[dict], list[dict]]:
+                       casos_eval: dict) -> tuple[list[dict], list[dict],
+                                                   set]:
     """Descarta (T112) filas cuyo prompt coincida con un caso de evaluacion.
 
     Usa qa_dataset (normalizacion sin plantilla + n-gramas de 12 palabras con
     umbral UMBRAL_NGRAMAS_FUGA), que detecta tambien coincidencias que la
     normalizacion antigua de merge_final pasaba por alto. Devuelve
-    (mantenidas, descartes) con el fragmento humano para los ejemplos.
+    (mantenidas, descartes, boiler) con el fragmento humano para los ejemplos
+    y la decision de plantilla (n-gramas df>=BOILERPLATE_DF sobre las validas),
+    que la puerta QA final reutiliza para auditar con el mismo criterio.
     """
+    boiler = qa.ngramas_boilerplate(filas)
     marcador = qa.fugas_eval([("", i, f) for i, f in enumerate(filas)],
                              casos_eval,
                              min_compartidos=qa.UMBRAL_NGRAMAS_FUGA)
@@ -195,7 +199,7 @@ def filtrar_fugas_eval(filas: list[dict],
                          "motivo": motivo,
                          "fragmento": nfc(qa.humano_de(fila))[:160],
                          "detalle": hs[0]["detalle"][:300]})
-    return mantenidas, descartes
+    return mantenidas, descartes, boiler
 
 
 class Tuberia:
@@ -325,7 +329,10 @@ class Tuberia:
         humanos_eval = merge_final.cargar_humanos_evaluacion([self.eval_sharegpt])
         humanos_eval.discard("")
         casos_eval = qa.cargar_eval(self.eval_dir)
-        validas, descartes_qa = filtrar_fugas_eval(validas, casos_eval)
+        validas, descartes_qa, boiler = filtrar_fugas_eval(validas,
+                                                           casos_eval)
+        (self.etapas_dir / "fugas_boiler.json").write_text(
+            json.dumps(sorted(boiler), ensure_ascii=False), encoding="utf-8")
         exactos: dict[str, set] = defaultdict(set)
         casi: dict[str, vs.IndiceCasiDuplicados] = defaultdict(
             vs.IndiceCasiDuplicados)
@@ -378,6 +385,7 @@ class Tuberia:
         conteo.update(m["motivo"] for m in descartes)
         return {"entrada": len(validas) + len(descartes_qa),
                "fugas_qa": len(descartes_qa),
+               "boiler_ngramas": len(boiler),
                "mantenidas": len(mantenidas),
                "descartes": dict(conteo)}
 
@@ -486,9 +494,13 @@ class Tuberia:
         evaluacion (umbral UMBRAL_NGRAMAS_FUGA) o solapes exactos de prompts
         entre splits.
         """
+        boiler_ruta = self.etapas_dir / "fugas_boiler.json"
+        boiler = frozenset(json.loads(boiler_ruta.read_text(encoding="utf-8"))
+                           if boiler_ruta.exists() else ())
         reporte = qa.run_qa(self.salida, out_dir=self.etapas_dir / "qa",
                             eval_dir=self.eval_dir, semilla=self.semilla,
-                            min_compartidos=qa.UMBRAL_NGRAMAS_FUGA)
+                            min_compartidos=qa.UMBRAL_NGRAMAS_FUGA,
+                            boiler_extra=boiler)
         fe = reporte["fugas_eval"]
         fs = reporte["fugas_splits"]
         res = fs["resumen"]

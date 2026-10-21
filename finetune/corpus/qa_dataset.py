@@ -272,8 +272,24 @@ def clave_situacion(fila: dict) -> str:
     return "|".join(("C" + ",".join(cartas), "F" + fecha, "P" + pregunta))
 
 
+def ngramas_boilerplate(filas: list, df_min: int = BOILERPLATE_DF) -> set:
+    """T112: md5 de los n-gramas de 12 palabras presentes en >= df_min filas.
+
+    La decision de plantilla se fija una vez (sobre las validas en etapa_filtro)
+    y se reutiliza en la puerta QA final, para que el cambio de base de filas
+    entre etapas no reactive n-gramas ya juzgados como plantilla.
+    """
+    df = collections.Counter()
+    for fila in filas:
+        if not isinstance(fila, dict) or "__error_json__" in fila:
+            continue
+        df.update(set(gramaturcas(propio_normalizado(fila))))
+    return {g for g, c in df.items() if c >= df_min}
+
+
 def fugas_eval(filas: list, casos_eval: dict,
-               min_compartidos: int = 1) -> dict:
+               min_compartidos: int = 1,
+               boiler_extra=frozenset()) -> dict:
     hallazgos = []
     df = collections.Counter()
     grams_fila = {}
@@ -292,7 +308,7 @@ def fugas_eval(filas: list, casos_eval: dict,
         propio = sin_plantilla(user)
         norm_eval[cid] = normalizar(propio)
         for g in set(gramaturcas(propio)):
-            if df[g] < BOILERPLATE_DF:
+            if df[g] < BOILERPLATE_DF and g not in boiler_extra:
                 gram_eval.setdefault(g, []).append(cid)
     ids_filas = collections.defaultdict(set)
     for key, gs in grams_fila.items():
@@ -523,7 +539,7 @@ def contar_filas(filas: list) -> dict:
 
 def run_qa(dataset_dir: Path, out_dir=None, eval_dir=None,
            semilla: int = 42, muestras: int = 15,
-           min_compartidos: int = 1) -> dict:
+           min_compartidos: int = 1, boiler_extra=frozenset()) -> dict:
     dataset_dir = Path(dataset_dir)
     eval_dir = Path(eval_dir) if eval_dir else dataset_dir / "_etapas" / "eval"
     filas = []
@@ -533,7 +549,8 @@ def run_qa(dataset_dir: Path, out_dir=None, eval_dir=None,
     formato = chequear_formato(filas)
     casos_eval = cargar_eval(eval_dir)
     leaks_eval = fugas_eval(filas, casos_eval,
-                          min_compartidos=min_compartidos)
+                          min_compartidos=min_compartidos,
+                          boiler_extra=boiler_extra)
     leaks_splits = fugas_splits(filas)
     sanidad = sanidad_muestreo(filas, semilla, muestras)
     report = {
