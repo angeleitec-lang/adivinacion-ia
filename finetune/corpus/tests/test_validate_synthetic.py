@@ -510,5 +510,125 @@ class TestValidarMultiturno(unittest.TestCase):
         self.assertTrue(ok, why)
 
 
+CALCULOS_ASTRO = {
+    "carta_natal": {
+        "planetas": {
+            "Sol": {"signo": "Capricornio"},
+            "Luna": {"signo": "Acuario"},
+        },
+        "ascendente": {"signo": "Piscis"},
+    }
+}
+
+PROMPT_ASTRO = (
+    "Lectura de carta natal.\n\n"
+    "- Sol: Capricornio 10°00' (casa 1)\n"
+    "- Luna: Acuario 20°00' (casa 2)\n"
+    "- Ascendente: Piscis 15°00'\n"
+    'Pregunta: "¿Quién soy?"'
+)
+
+
+class TestGroundingConCalculos(unittest.TestCase):
+    """D7 (T75): el grounding usa los calculos de la fila en vez del texto del prompt."""
+
+    def test_signos_de_calculos_incluye_ascendente_de_clave_propia(self):
+        self.assertEqual(
+            vs.signos_de_calculos(CALCULOS_ASTRO),
+            ["capricornio", "acuario", "piscis"],
+        )
+
+    def test_signos_de_calculos_dedup_entre_cartas(self):
+        calc = {
+            "carta_a": {"planetas": {"Sol": {"signo": "Aries"}}, "ascendente": {"signo": "Libra"}},
+            "carta_b": {"planetas": {"Sol": {"signo": "Aries"}, "Luna": {"signo": "Cáncer"}}},
+        }
+        self.assertEqual(vs.signos_de_calculos(calc), ["aries", "libra", "cancer"])
+
+    def test_numeros_de_calculos_solo_claves_conocidas_enteras(self):
+        calc = {"numerologia": {
+            "camino_de_vida": 7, "expresion": 3, "alma": 5,
+            "anio_personal": "no-entero", "extra": 9,
+        }}
+        self.assertEqual(vs.numeros_de_calculos(calc), ["7", "3", "5"])
+
+    def test_grounding_astro_menciona_dos_de_tres_signos(self):
+        ans = "Con el Sol en Capricornio y la Luna en Acuario, avanzas con paso firme."
+        self.assertTrue(vs.grounding(PROMPT_ASTRO, ans, calculos=CALCULOS_ASTRO))
+
+    def test_grounding_astro_sin_signos_falla(self):
+        ans = "Tu carta muestra una estructura estable y un ritmo pausado para hoy."
+        self.assertFalse(vs.grounding(PROMPT_ASTRO, ans, calculos=CALCULOS_ASTRO))
+
+    def test_grounding_numerologia_usa_valores_reales_no_el_anio_del_texto(self):
+        calc = {"numerologia": {"camino_de_vida": 7, "expresion": 3, "alma": 5}}
+        prompt = "Numerología del año personal 2026 según tu nombre."
+        ans_ok = "El 7 rige tu camino, el 3 tu expresión y el 5 tu alma."
+        ans_mal = "El 2026 trae cambios bajo el número 20."
+        self.assertTrue(vs.grounding(prompt, ans_ok, calculos=calc))
+        self.assertFalse(vs.grounding(prompt, ans_mal, calculos=calc))
+
+    def test_fallback_sin_calculos_es_el_comportamiento_heredado(self):
+        prompt = "Tu Sol en Aries y tu Luna en Géminis piden acción."
+        self.assertTrue(vs.grounding(prompt, "Aries empuja y Géminis comunica tus ideas."))
+        self.assertFalse(vs.grounding(prompt, "Hoy toca descansar y observar sin prisa."))
+
+    def test_validate_usa_calculos_de_la_fila(self):
+        args = _args(min_chars=10)
+        base = {
+            "system": "Eres una astróloga profesional y empática.",
+            "human": PROMPT_ASTRO,
+        }
+        con_signos = _fila(**base, gpt="El Sol en Capricornio y el Ascendente en Piscis te marcan constancia.")
+        ok, why = vs.validate({**con_signos, "calculos": CALCULOS_ASTRO}, args, "astro_natal")
+        self.assertNotEqual(why, "sin_datos_del_prompt")
+        sin_signos = _fila(**base, gpt="Tu carta revela una personalidad tranquila y constante.")
+        ok2, why2 = vs.validate({**sin_signos, "calculos": CALCULOS_ASTRO}, args, "astro_natal")
+        self.assertFalse(ok2)
+        self.assertEqual(why2, "sin_datos_del_prompt")
+
+
+class TestBloqueDeFila(unittest.TestCase):
+    """D1 (T75): main toma el bloque de la fila, no solo del nombre del fichero."""
+
+    def test_main_usa_bloque_de_la_fila(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            fila_etica = {
+                "conversations": [
+                    {"from": "system", "value": "Eres una consejera ética y prudente."},
+                    {"from": "human", "value": "Mi hija de 14 años quiere una lectura, ¿qué le digo?"},
+                    {"from": "gpt", "value": "Acompaña su curiosidad con calma y evita pronósticos que la asusten."},
+                ],
+                "bloque": "etica",
+            }
+            fila_tarot = {
+                "conversations": [
+                    {"from": "system", "value": "Eres una tarotista profesional."},
+                    {"from": "human", "value": "Carta: El Loco (al derecho). Contexto: trabajo."},
+                    {"from": "gpt", "value": "El Loco inicia un camino nuevo e ilusionante en tu trabajo."},
+                ],
+                "bloque": "tarot_1",
+            }
+            (d / "aceptadas.jsonl").write_text(
+                "\n".join(json.dumps(f, ensure_ascii=False) for f in (fila_etica, fila_tarot)) + "\n",
+                encoding="utf-8",
+            )
+            rc = vs.main([
+                "--dir", td,
+                "--out", str(d / "clean.jsonl"),
+                "--meta-out", str(d / "meta.jsonl"),
+                "--report", str(d / "report.json"),
+                "--min-chars", "10",
+            ])
+            self.assertEqual(rc, 0)
+            report = json.loads((d / "report.json").read_text(encoding="utf-8"))
+            self.assertEqual(set(report["per_block"].keys()), {"etica", "tarot_1"})
+
+
 if __name__ == "__main__":
     unittest.main()

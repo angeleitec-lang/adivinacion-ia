@@ -316,23 +316,75 @@ def _menciona(na: str, token_norm: str) -> bool:
     return bool(token_norm) and re.search(r"\b" + re.escape(token_norm) + r"\b", na) is not None
 
 
-def grounding(prompt: str, answer: str) -> bool:
-    """Exige que la respuesta mencione todos los datos reconocibles del prompt.
+EJES_ASTRALES = ("Sol", "Luna", "Ascendente")
+CALCULOS_NUM_CLAVES = (
+    "camino_de_vida", "expresion", "alma", "personalidad", "anio_personal",
+)
 
-    Cartas: todas. Signos astrológicos y números: al menos 2/3.
-    Sin datos reconocibles -> True (comportamiento heredado).
+
+def signos_de_calculos(calculos: dict) -> list:
+    """Signos de los ejes (Sol/Luna/Ascendente) de las cartas astrales en `calculos`.
+
+    Misma fuente canónica que `fase1_prompts.verificar_lectura` (carta_natal,
+    carta_a, carta_b), sin depender del texto del prompt (DESAJUSTE D7).
+    El Ascendente puede venir en `planetas["Ascendente"]` o en la clave
+    `ascendente` de la carta (estructura real de las cartas natales).
+    """
+    signos = []
+    for clave in ("carta_natal", "carta_a", "carta_b"):
+        carta = calculos.get(clave) or {}
+        planetas = carta.get("planetas") or {}
+        for eje in EJES_ASTRALES:
+            dato = planetas.get(eje)
+            if not dato and eje == "Ascendente":
+                dato = carta.get("ascendente")
+            signo = (dato or {}).get("signo")
+            if signo:
+                signos.append(norm(signo))
+    return list(dict.fromkeys(signos))
+
+
+def numeros_de_calculos(calculos: dict) -> list:
+    """Números de la tabla de numerología en `calculos` (fuente canónica, D7)."""
+    tabla = calculos.get("numerologia") or {}
+    out = []
+    for clave in CALCULOS_NUM_CLAVES:
+        valor = tabla.get(clave)
+        if isinstance(valor, int):
+            out.append(str(valor))
+    return list(dict.fromkeys(out))
+
+
+def grounding(prompt: str, answer: str, calculos: dict | None = None) -> bool:
+    """Exige que la respuesta mencione los datos de la tarea.
+
+    Fuente de signos y números (DESAJUSTE D7, alineado en T75):
+    - Si la fila trae `calculos` (los datos deterministas que consumió
+      `fase1_prompts.verificar_lectura`), signos y números se leen de ahí,
+      en vez de extraerse del texto del prompt, donde los regex pierden
+      formatos (p. ej. «Año personal 2026: 5» extraía «20») y el verificador
+      ni los mira.
+    - Sin `calculos` se mantiene el comportamiento heredado: extracción del
+      texto del prompt con SIGN_RE/NUM_RE.
+    Criterio invariable: cartas del prompt, todas; signos y números, al menos
+    2/3 mencionados. Las cartas se leen siempre del texto (la fila ShareGPT
+    no las trae en `calculos`).
     """
     na = norm(answer)
     cartas = extraer_cartas(prompt)
     for nombre, _ in cartas:
         if not _menciona(na, _sin_articulo(norm(nombre))):
             return False
-    signos = list(dict.fromkeys(norm(m.group(1)) for m in SIGN_RE.finditer(prompt)))
+    if calculos:
+        signos = signos_de_calculos(calculos)
+        numeros = numeros_de_calculos(calculos)
+    else:
+        signos = list(dict.fromkeys(norm(m.group(1)) for m in SIGN_RE.finditer(prompt)))
+        numeros = list(dict.fromkeys(m.group(1) for m in NUM_RE.finditer(prompt)))
     if signos:
         menc = sum(1 for s in signos if _menciona(na, s))
         if menc / len(signos) < 2 / 3:
             return False
-    numeros = list(dict.fromkeys(m.group(1) for m in NUM_RE.finditer(prompt)))
     if numeros:
         menc = sum(1 for n in numeros if _menciona(na, n))
         if menc / len(numeros) < 2 / 3:
@@ -340,7 +392,8 @@ def grounding(prompt: str, answer: str) -> bool:
     return True
 
 
-def _validar_multiturno(pares: list, args, bloque: str | None) -> tuple[bool, str]:
+def _validar_multiturno(pares: list, args, bloque: str | None,
+                       calculos: dict | None = None) -> tuple[bool, str]:
     for i, (humano, gpt) in enumerate(pares):
         if not humano or not gpt:
             return False, "sin_turnos"
@@ -364,7 +417,7 @@ def _validar_multiturno(pares: list, args, bloque: str | None) -> tuple[bool, st
         q = normalize(m.group(1))
         if len(q) > 25 and normalize(g1[:120]).startswith(q[:40]):
             return False, "eco_pregunta"
-    if not grounding(h1, g1):
+    if not grounding(h1, g1, calculos):
         return False, "sin_datos_del_prompt"
     if not orientacion_ok(h1, g1):
         return False, "orientacion"
@@ -387,8 +440,9 @@ def validate(row: dict, args, bloque: str | None = None) -> tuple[bool, str]:
     if any(marca in texto_prompt for marca in SIN_TILDES_MARCAS):
         return False, "prompt_sin_tildes"
     pares = turnos_de(row)
+    calculos = row.get("calculos") if isinstance(row.get("calculos"), dict) else None
     if len(pares) >= 2:
-        return _validar_multiturno(pares, args, bloque)
+        return _validar_multiturno(pares, args, bloque, calculos)
     if len(answer) < args.min_chars:
         return False, "corto"
     if len(answer) > args.max_chars:
@@ -406,7 +460,7 @@ def validate(row: dict, args, bloque: str | None = None) -> tuple[bool, str]:
         q = normalize(m.group(1))
         if len(q) > 25 and normalize(answer[:120]).startswith(q[:40]):
             return False, "eco_pregunta"
-    if not grounding(prompt, answer):
+    if not grounding(prompt, answer, calculos):
         return False, "sin_datos_del_prompt"
     if not orientacion_ok(prompt, answer):
         return False, "orientacion"
@@ -447,21 +501,28 @@ def main(argv=None) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as fh:
         for path in paths:
-            block = Path(path).name.split(".")[0]
-            stats = per_block.setdefault(block, {"total": 0, "ok": 0, "dup": 0, "bad": 0})
+            file_block = Path(path).name.split(".")[0]
             with open(path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
                         continue
                     total += 1
-                    stats["total"] += 1
                     try:
                         row = json.loads(line)
                     except json.JSONDecodeError:
+                        stats = per_block.setdefault(
+                            file_block, {"total": 0, "ok": 0, "dup": 0, "bad": 0})
+                        stats["total"] += 1
                         stats["bad"] += 1
                         reasons["json_invalido"] += 1
                         continue
+                    # Bloque: el de la fila si lo trae (salida del ejecutor, D1),
+                    # si no el del nombre de fichero (comportamiento heredado).
+                    block = str(row.get("bloque") or file_block)
+                    stats = per_block.setdefault(
+                        block, {"total": 0, "ok": 0, "dup": 0, "bad": 0})
+                    stats["total"] += 1
                     ok, why = validate(row, args, bloque=block)
                     if not ok:
                         stats["bad"] += 1
