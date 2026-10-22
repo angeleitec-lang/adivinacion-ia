@@ -80,7 +80,6 @@ class TestFalsosNegativos(unittest.TestCase):
         ok, _ = _aceptada(tarea, texto)
         self.assertFalse(ok, "el verificador solo mira Sol y Ascendente RS")
 
-    @unittest.expectedFailure
     def test_biorritmo_fase_y_dias_inventados(self):
         tarea = {
             "familia": "biorritmos",

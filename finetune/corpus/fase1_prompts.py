@@ -1500,6 +1500,8 @@ _RE_ASC_RS = re.compile(r"\bascendente\s+(?:rs|de la revolucion)\s+(?:en\s+)?([a
 
 _RE_PCT = re.compile(r"([+\-−–]?\d{1,3})\s*%")
 
+_RE_FASE = re.compile(r"\b(ascendente|descendente|critico)\b")
+
 
 def _pct_con_signo(m):
     """Devuelve (valor:int, tiene_signo:bool) del match de _RE_PCT."""
@@ -1834,6 +1836,70 @@ def _verif_biorritmos(calc, texto, motivos):
                     motivos.append(
                         f"Contradice el ciclo {clave} calculado "
                         f"({esperado}%): el texto dice {cercano.group(1)}%")
+
+    _PERIODOS = {"fisico": 23, "emocional": 28, "intelectual": 33}
+    todos = [nombre for nombres in alias.values() for nombre in nombres]
+    oraciones = re.split(r"(?<=[.!?])\s+|\n+", n)
+    for clave, nombres in alias.items():
+        ciclo = ciclos.get(clave)
+        if not ciclo:
+            continue
+        esperada = _norm(ciclo.get("fase") or "")
+        otras = [o for o in todos if o not in nombres]
+        for oracion in oraciones:
+            m = re.search(r"\b(?:" + "|".join(nombres) + r")\b", oracion)
+            if not m:
+                continue
+            fin = min(len(oracion), m.end() + 70)
+            for otro in otras:
+                mo = re.search(r"\b" + otro + r"\b", oracion[m.end():])
+                if mo:
+                    fin = min(fin, m.end() + mo.start())
+            ventana = oracion[m.start():fin]
+            mf = _RE_FASE.search(ventana)
+            if mf and esperada and mf.group(1) != esperada:
+                motivos.append(
+                    f"Contradice la fase del ciclo {clave} calculada "
+                    f"({esperada}): el texto dice {mf.group(1)}")
+        for nombre in nombres:
+            md = re.search(
+                r"\bciclo\s+" + nombre + r"\s+dura\s+(\d{1,2})\s+dias\b", n)
+            if md and int(md.group(1)) != _PERIODOS[clave]:
+                motivos.append(
+                    f"Atribuye una duración errónea al ciclo {clave}: "
+                    f"dura {_PERIODOS[clave]} días, no {md.group(1)}")
+            patrones = (
+                r"\b(?:faltan|quedan)\s+(\d{1,3})\s+dias?\s+para\s+"
+                r"el\s+(?:pico|maximo)\s+" + nombre + r"\b",
+                r"\b(?:faltan|quedan)\s+(\d{1,3})\s+dias?\s+para\s+"
+                r"(?:el\s+)?(?:pico|maximo)\s+del\s+ciclo\s+" + nombre + r"\b",
+            )
+            for patron in patrones:
+                mp = re.search(patron, n)
+                if not mp:
+                    continue
+                declarado = int(mp.group(1))
+                calculado = ciclo.get("dias_al_pico")
+                if calculado is None:
+                    motivos.append(
+                        f"Afirma días hasta el pico del ciclo {clave} "
+                        "que no se calculan")
+                elif abs(int(calculado) - declarado) > 1:
+                    motivos.append(
+                        f"Contradice los días hasta el pico del ciclo {clave} "
+                        f"({calculado}): el texto dice {declarado}")
+                break
+            if re.search(r"\bciclo\s+" + nombre + r"\s+(?:esta|va)\s+en\s+fase\s+critica\b", n):
+                if _norm(ciclo.get("fase") or "") != "critico":
+                    motivos.append(
+                        f"Afirma que el ciclo {clave} está en fase crítica "
+                        "cuando se calcula " + str(ciclo.get("fase")))
+    if re.search(r"\bdia\s+critico\b", n) and not any(
+            _norm(c.get("fase") or "") == "critico" for c in ciclos.values()):
+        motivos.append("Afirma un día crítico que no se calcula")
+
+    for fecha in _fechas_inventadas(calc, texto):
+        motivos.append(f"Menciona una fecha o año no calculado: {fecha}")
 
 
 def _es_negativa_alcance(tarea):
