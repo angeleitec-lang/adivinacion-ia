@@ -28,10 +28,9 @@ trozos sin celda se contabilizan en el informe.
 
 NUNCA se copia el PDF ni texto del libro al repositorio: todo el trabajo de
 datos vive en ``/Users/angelgonzalez/fase0/libros_comprados_greene/``. El LLM
-va fijado a nodo2 (nodo1 reservado); este track SOLO ejecuta etapas sin LLM
-(OCR es CPU local). Las etapas ``--juez``/``--afirmaciones`` se lanzan por CLI
-pero este main las bloquea por presupuesto: el comando exacto queda
-documentado en ``finetune/knowledge/libros_comprados_greene.md``.
+va fijado a nodo2 (nodo1 reservado). Las etapas ``--juez``/``--afirmaciones``
+se lanzan por CLI (T121 las desbloquea): comando exacto en
+``finetune/knowledge/libros_comprados_greene.md``.
 """
 import argparse
 import json
@@ -874,12 +873,31 @@ def main(argv=None):
         print(json.dumps(resumen, ensure_ascii=False, indent=1))
         return 0
 
-    if args.juez or args.afirmaciones:
-        print("error: T130 NO lanza etapas LLM (nodo2 ocupado por T125). "
-              "Comando exacto en "
-              "finetune/knowledge/libros_comprados_greene.md",
-              file=sys.stderr)
-        return 3
+    if args.juez:
+        cliente = None
+        if not args.simulado:
+            cliente = astro.construir_cliente_endpoints(args.endpoints,
+                                                      timeout=args.timeout)
+        stats = procesar_juez_greene(work_dir, workers=args.workers,
+                                    max_llamadas=args.max_llamadas,
+                                    cliente=cliente, simulado=args.simulado)
+        print("juez: %s" % json.dumps(stats, ensure_ascii=False))
+        return 0
+
+    if args.afirmaciones:
+        cliente = None
+        if not args.simulado:
+            cliente = astro.construir_cliente_endpoints(args.endpoints,
+                                                      timeout=args.timeout,
+                                                      acotar=False)
+        stats = procesar_afirmaciones_greene(work_dir, workers=args.workers,
+                                            limite=args.max_llamadas,
+                                            cliente=cliente,
+                                            simulado=args.simulado)
+        print("afirmaciones: %s" % json.dumps(
+            {k: v for k, v in stats.items() if k != "descartadas"},
+            ensure_ascii=False))
+        return 0
 
     parser.print_help()
     return 0
