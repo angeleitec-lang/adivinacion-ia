@@ -26,3 +26,4 @@ ESTADO.md
 
 # Datos de YouTube (subtítulos y derivados; pesados y con procedencia)
 finetune/knowledge/youtube/
+*.pdf
