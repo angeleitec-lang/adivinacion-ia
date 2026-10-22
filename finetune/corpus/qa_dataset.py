@@ -353,6 +353,41 @@ def fugas_eval(filas: list, casos_eval: dict,
                                       "chequeo": "fuga_eval_prompt_identico",
                                       "detalle": f"caso {cid}"})
                     break
+    def _oraciones(texto: str) -> list:
+        partes = re.split(r"(?<=[.!?])\s+|\n+", nfc(texto or ""))
+        return [normalizar(p) for p in partes if p.strip()]
+
+    orac_eval = {}
+    df_orac = collections.Counter()
+    for cid, caso in casos_eval.items():
+        ors = {o for o in _oraciones(str(caso.get("user", "")))
+               if len(o.split()) >= 6}
+        orac_eval[cid] = ors
+        df_orac.update(ors)
+    distintivas = {cid: {o for o in ors if df_orac[o] < BOILERPLATE_DF}
+                   for cid, ors in orac_eval.items()}
+    indice_orac = {}
+    for cid, ors in distintivas.items():
+        for o in ors:
+            indice_orac.setdefault(o, set()).add(cid)
+    for key, (split, ln, fila) in enumerate(filas):
+        if "__error_json__" in fila:
+            continue
+        propias = set(_oraciones(" ".join(valores_de(fila, "human"))))
+        golpes = collections.Counter()
+        for o in propias:
+            for cid in indice_orac.get(o, ()):
+                golpes[cid] += 1
+        for cid, cuenta in golpes.items():
+            total = len(distintivas.get(cid) or ())
+            if cuenta >= 5 and total and cuenta >= 0.5 * total:
+                hallazgos.append({
+                    "split": split, "fila": ln, "id": fila.get("id"),
+                    "bloque": fila.get("bloque") or "sin_bloque",
+                    "chequeo": "fuga_eval_reordenado",
+                    "detalle": f"caso {cid} · {cuenta}/{total} oraciones",
+                })
+                break
     return {"hallazgos": hallazgos,
             "casos_eval": len(casos_eval),
             "ngramas_eval_no_plantilla": len(gram_eval)}

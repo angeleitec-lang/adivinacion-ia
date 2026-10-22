@@ -40,7 +40,6 @@ def _aceptada(tarea, texto):
 
 
 class TestFalsosNegativos(unittest.TestCase):
-    @unittest.expectedFailure
     def test_transitos_posicion_y_fecha_inventadas(self):
         tarea = {
             "familia": "transitos",
@@ -60,7 +59,6 @@ class TestFalsosNegativos(unittest.TestCase):
         ok, _ = _aceptada(tarea, texto)
         self.assertFalse(ok, "el verificador acepta posiciones y fecha no calculadas")
 
-    @unittest.expectedFailure
     def test_revolucion_luna_y_medio_cielo_inventados(self):
         tarea = {
             "familia": "revolucion_solar",
@@ -81,7 +79,6 @@ class TestFalsosNegativos(unittest.TestCase):
         ok, _ = _aceptada(tarea, texto)
         self.assertFalse(ok, "el verificador solo mira Sol y Ascendente RS")
 
-    @unittest.expectedFailure
     def test_biorritmo_fase_y_dias_inventados(self):
         tarea = {
             "familia": "biorritmos",
@@ -96,7 +93,6 @@ class TestFalsosNegativos(unittest.TestCase):
         ok, _ = _aceptada(tarea, texto)
         self.assertFalse(ok, "el verificador de biorritmos solo compara porcentajes")
 
-    @unittest.expectedFailure
     def test_fuera_alcance_responde_la_tecnica_prohibida(self):
         tarea = {"familia": "fuera_alcance", "tecnica": "quiromancia",
                  "calculos": {}}
@@ -106,7 +102,6 @@ class TestFalsosNegativos(unittest.TestCase):
         ok, _ = _aceptada(tarea, texto)
         self.assertFalse(ok, "rechaza de palabra pero responde la técnica prohibida")
 
-    @unittest.expectedFailure
     def test_fuera_alcance_en_familia_etica(self):
         tarea = {"familia": "etica", "tema": "fuera_alcance",
                  "tecnica": "runas", "calculos": {}}
@@ -115,7 +110,6 @@ class TestFalsosNegativos(unittest.TestCase):
         ok, _ = _aceptada(tarea, texto)
         self.assertFalse(ok, "la verificación de alcance solo se aplica a familia fuera_alcance")
 
-    @unittest.expectedFailure
     def test_sinastria_aspecto_cruzado_inventado(self):
         tarea = {
             "familia": "sinastria",
@@ -136,7 +130,6 @@ class TestFalsosNegativos(unittest.TestCase):
 
 
 class TestFalsosPositivos(unittest.TestCase):
-    @unittest.expectedFailure
     def test_rechazo_valido_queda_fuera_de_lo_que_trabajo(self):
         tarea = {"familia": "fuera_alcance", "tecnica": "I Ching",
                  "calculos": {}}
@@ -145,7 +138,6 @@ class TestFalsosPositivos(unittest.TestCase):
         ok, motivos = _aceptada(tarea, texto)
         self.assertTrue(ok, f"rechazo válido rechazado: {motivos}")
 
-    @unittest.expectedFailure
     def test_alternativa_numerologica_con_tilde(self):
         tarea = {"familia": "fuera_alcance", "tecnica": "quiromancia",
                  "calculos": {}}
@@ -156,7 +148,6 @@ class TestFalsosPositivos(unittest.TestCase):
 
 
 class TestFugas(unittest.TestCase):
-    @unittest.expectedFailure
     def test_reordenacion_evade_fugas_eval(self):
         casos = ec.generar_casos(560056)
         caso = max(casos, key=lambda c: len(str(c.get("user", ""))))
@@ -169,7 +160,6 @@ class TestFugas(unittest.TestCase):
         self.assertTrue(res["hallazgos"],
                         "la puerta QA depende de n-gramas literales y no ve la reordenación")
 
-    @unittest.expectedFailure
     def test_merge_no_excluye_variante_sin_tildes(self):
         caso = ec.generar_casos(560056)[0]
         original = caso["user"]
@@ -228,7 +218,6 @@ class TestTraduccion(unittest.TestCase):
     def setUpClass(cls):
         cls.indice = ta.IndiceCartas(ta.cargar_glosario())
 
-    @unittest.expectedFailure
     def test_segunda_orientacion_invertida(self):
         original = ("Two of Swords reversed and Three of Cups reversed mark a "
                     "tense moment that softens.")
@@ -237,7 +226,6 @@ class TestTraduccion(unittest.TestCase):
         limpio, _ = ta.verificar_traduccion(original, traduccion, self.indice)
         self.assertIsNone(limpio, "no detecta la segunda orientación invertida")
 
-    @unittest.expectedFailure
     def test_marcador_portugues_con_tilde(self):
         original = "Two of Swords reversed signals a difficult choice."
         traduccion = "Dos de Espadas invertida não señala una elección difícil."

@@ -113,7 +113,7 @@ _NUM_ES: Dict[str, Tuple[str, ...]] = {
     "thousand": ("mil", "miles", "1000"),
 }
 
-_TOKEN_RE = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+")
+_TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _PREFIX_TRAD_RE = re.compile(
     r"^(?:Aqu[ií]\s+est[áa]\s+la\s+traducci[óo]n|Traducci[óo]n"
@@ -121,6 +121,11 @@ _PREFIX_TRAD_RE = re.compile(
 )
 _INVERT_RE = re.compile(r"\b(?:reversed|inverted|upside[-\s]down)\b", re.I)
 _UPRIGHT_RE = re.compile(r"\bupright\b", re.I)
+_ORIENT_INV_RE = re.compile(
+    r"\b(?:reversed|inverted|upside[-\s]down|invertid[ao]s?|"
+    r"al\s+rev[eé]s|rev[eé]s)\b", re.I)
+_ORIENT_DER_RE = re.compile(
+    r"\b(?:upright|derech[ao]s?|al\s+derecho)\b", re.I)
 _BASIC_EN_RE = re.compile(r"\b(?:the|and|of|is|are|to|with|that|for)\b", re.I)
 
 
@@ -229,6 +234,49 @@ def limpiar_salida(bruto: str) -> str:
     return texto
 
 
+def _orientaciones_original(original: str, indice: "IndiceCartas") -> Dict[str, str]:
+    """Orientación explícita de cada carta en el texto original."""
+    texto = original or ""
+    salida: Dict[str, str] = {}
+    menciones = list(indice._re.finditer(texto))
+    for i, m in enumerate(menciones):
+        es = indice.alias_es.get(m.group(1).lower())
+        if not es:
+            continue
+        fin = menciones[i + 1].start() if i + 1 < len(menciones) else len(texto)
+        ventana = texto[m.end():fin]
+        if _ORIENT_INV_RE.search(ventana):
+            salida.setdefault(es, "invertida")
+        elif _ORIENT_DER_RE.search(ventana):
+            salida.setdefault(es, "derecha")
+    return salida
+
+
+def _orientaciones_traduccion(texto: str,
+                              indice: "IndiceCartas") -> Dict[str, str]:
+    """Orientación explícita de cada carta en la traducción, por nombre ES."""
+    t = norm(texto or "")
+    encontrados = []
+    for es in indice.es_aceptadas:
+        mejor = -1
+        for forma in indice.es_aceptadas[es]:
+            p = t.find(forma)
+            if p != -1 and (mejor == -1 or p < mejor):
+                mejor = p
+        if mejor != -1:
+            encontrados.append((mejor, es))
+    encontrados.sort()
+    salida: Dict[str, str] = {}
+    for i, (pos, es) in enumerate(encontrados):
+        fin = encontrados[i + 1][0] if i + 1 < len(encontrados) else pos + 60
+        ventana = t[pos:fin]
+        if _ORIENT_INV_RE.search(ventana):
+            salida.setdefault(es, "invertida")
+        elif _ORIENT_DER_RE.search(ventana):
+            salida.setdefault(es, "derecha")
+    return salida
+
+
 def verificar_traduccion(original: str, traducida_bruta: str,
                          indice: IndiceCartas
                          ) -> Tuple[Optional[str], Optional[str]]:
@@ -285,6 +333,13 @@ def verificar_traduccion(original: str, traducida_bruta: str,
         return None, "no se conservó la inversión (invertida)"
     if _UPRIGHT_RE.search(original or "") and "derech" not in texto.lower():
         return None, "no se conservó la posición al derecho (derecha)"
+    orient_o = _orientaciones_original(original or "", indice)
+    if orient_o:
+        orient_t = _orientaciones_traduccion(texto, indice)
+        for es, esperada in orient_o.items():
+            if orient_t.get(es) != esperada:
+                return None, (f"no se conservó la orientación de «{es}» "
+                              f"({esperada})")
 
     # (e) gallego/portugués
     glpt = sorted(tokens_set & GLPT_MARKERS)

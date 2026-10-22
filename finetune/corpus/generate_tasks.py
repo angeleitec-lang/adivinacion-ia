@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from itertools import islice
 import random
 import sqlite3
 import unicodedata
@@ -974,7 +975,7 @@ class Builder:
 
     def fuera_alcance(self, n=400):
         out = []
-        for (tecnica, pregunta_base), arranque in zip(self._pares_fuera(), range(n)):
+        for (tecnica, pregunta_base), arranque in islice(self._pares_fuera(), n):
             pregunta = f"{arranque} {pregunta_base}"
             tarea = {
                 "familia": "fuera_alcance", "tecnica": tecnica,
@@ -982,7 +983,7 @@ class Builder:
                 "calculos": {},
             }
             prompt = fp.construir_prompt(tarea, self.kb_fp())["user"]
-            payload = {"tecnica": tecnica}
+            payload = {"tecnica": tecnica, "pregunta": pregunta}
             out.append(self.job("fuera_alcance", prompt, payload,
                                fp.RECOMENDACION_MAX_TOKENS["fuera_alcance"]))
         return out

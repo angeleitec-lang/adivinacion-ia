@@ -1500,6 +1500,8 @@ _RE_ASC_RS = re.compile(r"\bascendente\s+(?:rs|de la revolucion)\s+(?:en\s+)?([a
 
 _RE_PCT = re.compile(r"([+\-−–]?\d{1,3})\s*%")
 
+_RE_FASE = re.compile(r"\b(ascendente|descendente|critico)\b")
+
 
 def _pct_con_signo(m):
     """Devuelve (valor:int, tiene_signo:bool) del match de _RE_PCT."""
@@ -1522,19 +1524,228 @@ def _pct_contradice(c, esperado):
 
 _RECHAZO_ALCANCE = re.compile(
     r"no puedo|no voy a|no es posible|no estoy (para|en condiciones)|no forma parte|"
-    r"no entra dentro|queda fuera de mi alcance|no sustituye|no reemplaza|"
+    r"no entra dentro|queda fuera de (?:mi alcance|lo que (?:trabajo|hago|ofrezco))|"
+    r"no sustituye|no reemplaza|"
     r"no soy (?:m[ée]dico|profesional|sanador)|no doy|no hago|me niego|"
     r"no está en mi (?:alcance|mano)|no tengo (?:acceso|datos|forma)|no dispongo|"
     r"no es mi cometido|no corresponde|no puedo (?:garantizar|predecir|diagnosticar|asegurar|darte)",
     re.IGNORECASE)
 
 _ALTERNATIVA_TECNICAS = re.compile(
-    r"tarot|baraja|astrolog|numerolog|carta\s+natal|tr[aá]nsito|"
+    r"tarot|baraja|astrolog|numerol[oó]g|carta\s+natal|tr[aá]nsito|"
     r"revoluci[oó]n\s+solar|biorritmo", re.IGNORECASE)
 
 
+_PLANETAS_ASTRO = ("sol", "luna", "mercurio", "venus", "marte", "jupiter",
+                   "saturno", "urano", "neptuno", "pluton")
+_RE_PLANETA = r"(?:" + "|".join(_PLANETAS_ASTRO) + r")"
+
+_ANGULOS_ASPECTO = (
+    (0, "conjuncion", 6), (30, "semisextil", 3), (60, "sextil", 5),
+    (90, "cuadratura", 6), (120, "trigono", 6), (150, "quincuncio", 3),
+    (180, "oposicion", 7),
+)
+_NOMBRES_ASPECTO = {
+    "conjuncion": "conjuncion", "conjunto": "conjuncion",
+    "semisextil": "semisextil", "sextil": "sextil",
+    "cuadratura": "cuadratura", "cuadro": "cuadratura",
+    "trigono": "trigono", "quincuncio": "quincuncio", "quincunce": "quincuncio",
+    "oposicion": "oposicion", "opuesto": "oposicion", "opuesta": "oposicion",
+}
+
+_MESES_NUM = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+    "noviembre": 11, "diciembre": 12,
+}
+
+
+def _planetas_mapa(carta):
+    """Mapa nombre normalizado -> datos, acepte planetas en dict o en lista."""
+    planetas = (carta or {}).get("planetas") or {}
+    mapa = {}
+    if isinstance(planetas, dict):
+        for nombre, datos in planetas.items():
+            if isinstance(datos, dict):
+                mapa[_norm(nombre)] = datos
+        return mapa
+    for datos in planetas:
+        if isinstance(datos, dict):
+            mapa[_norm(datos.get("nombre", ""))] = datos
+    return mapa
+
+
+def _lon_de(datos):
+    """Longitud eclíptica de un planeta, o None si no está calculada."""
+    if not isinstance(datos, dict):
+        return None
+    lon = datos.get("lon")
+    if isinstance(lon, (int, float)):
+        return float(lon) % 360
+    signo = _norm(datos.get("signo", ""))
+    if signo in ZODIACO:
+        grados = datos.get("grados", datos.get("grado", 0)) or 0
+        try:
+            return (_signo_base(signo) + float(grados)) % 360
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _signo_base(signo):
+    orden = ("aries", "tauro", "gemini", "cancer", "leo", "virgo", "libra",
+             "escorpio", "sagitario", "capricornio", "acuario", "piscis")
+    signo = "gemini" if signo == "geminis" else signo
+    return orden.index(signo) * 30 if signo in orden else 0
+
+
+def _aspecto_entre(lon_a, lon_b):
+    """Aspecto que forma el par de longitudes (con orbe), o None."""
+    if lon_a is None or lon_b is None:
+        return None
+    diferencia = abs((lon_a - lon_b) % 360)
+    diferencia = min(diferencia, 360 - diferencia)
+    for angulo, nombre, orbe in _ANGULOS_ASPECTO:
+        if abs(diferencia - angulo) <= orbe:
+            return nombre
+    return None
+
+
+def _fechas_texto(texto):
+    """Fechas ISO y años de 4 cifras mencionados en el texto."""
+    n = _norm(texto)
+    fechas, anios = set(), set()
+    for m in re.finditer(
+            r"\b(\d{1,2})\s+de\s+([a-z]+)\s+(?:de\s+|del\s+)?(\d{4})\b", n):
+        mes = _MESES_NUM.get(m.group(2))
+        if mes and 1 <= int(m.group(1)) <= 31:
+            fechas.add(f"{int(m.group(3)):04d}-{mes:02d}-{int(m.group(1)):02d}")
+    for m in re.finditer(r"\b(\d{4})-(\d{2})-(\d{2})\b", n):
+        fechas.add(m.group(0))
+    for m in re.finditer(r"\b(?:19|20)\d{2}\b", n):
+        anios.add(int(m.group(0)))
+    return fechas, anios
+
+
+def _fechas_calculo(calc):
+    """Fechas ISO y años presentes en cualquier cadena del cálculo."""
+    fechas, anios = set(), set()
+
+    def recorrer(valor):
+        if isinstance(valor, dict):
+            for hijo in valor.values():
+                recorrer(hijo)
+        elif isinstance(valor, (list, tuple)):
+            for hijo in valor:
+                recorrer(hijo)
+        elif isinstance(valor, str):
+            for m in re.finditer(r"\b\d{4}-\d{2}-\d{2}\b", valor):
+                fechas.add(m.group(0))
+                anios.add(int(m.group(0)[:4]))
+            for m in re.finditer(r"\b(?:19|20)\d{2}\b", valor):
+                anios.add(int(m.group(0)))
+
+    recorrer(calc)
+    return fechas, anios
+
+
+def _fechas_inventadas(calc, texto):
+    """Fechas o años citados que no constan en el cálculo (no verificables)."""
+    fechas, anios = _fechas_texto(texto)
+    fechas_calc, anios_calc = _fechas_calculo(calc)
+    malas = []
+    for fecha in sorted(fechas):
+        if fechas_calc:
+            if fecha not in fechas_calc:
+                malas.append(fecha)
+        elif anios_calc:
+            if int(fecha[:4]) not in anios_calc:
+                malas.append(fecha)
+        else:
+            malas.append(fecha)
+    for anio in sorted(anios):
+        if anios_calc and anio not in anios_calc:
+            malas.append(str(anio))
+        elif not anios_calc:
+            malas.append(str(anio))
+    return malas
+
+
+_RE_SIN_ASTRO_DE = re.compile(
+    r"\b(" + _RE_PLANETA + r")\s+de\s+([ab])\s+"
+    r"(?:hace|forma)\s+([a-z]+)\s+(?:con|a|de)\s+"
+    r"(" + _RE_PLANETA + r")\s+de\s+([ab])\b")
+_RE_SIN_POSICION = re.compile(
+    r"\b(" + _RE_PLANETA + r")\s+de\s+([ab])\s+"
+    r"(?:esta\s+en|transita\s+por|en|por)\s+([a-z]+)\b")
+
+
+def _verif_sinastria(calc, texto, motivos):
+    """Sinastría: aspectos cruzados y posiciones deben salir del cálculo."""
+    calc = calc or {}
+    carta_a, carta_b = calc.get("carta_a"), calc.get("carta_b")
+    if not carta_a or not carta_b:
+        return
+    mapas = {"a": _planetas_mapa(carta_a), "b": _planetas_mapa(carta_b)}
+    n = _norm(texto)
+    for pl_a, lado_a, aspecto, pl_b, lado_b in _RE_SIN_ASTRO_DE.findall(n):
+        if lado_a == lado_b:
+            continue
+        datos_a = mapas[lado_a].get(pl_a)
+        datos_b = mapas[lado_b].get(pl_b)
+        if datos_a is None or datos_b is None:
+            motivos.append(
+                f"Menciona un aspecto cruzado con un planeta no calculado: "
+                f"{pl_a} de {lado_a.upper()} con {pl_b} de {lado_b.upper()}")
+            continue
+        esperado = _aspecto_entre(_lon_de(datos_a), _lon_de(datos_b))
+        pedido = _NOMBRES_ASPECTO.get(aspecto, aspecto)
+        if esperado is None:
+            motivos.append(
+                f"No se puede verificar el aspecto cruzado "
+                f"{pl_a} de {lado_a.upper()} con {pl_b} de {lado_b.upper()}: "
+                f"faltan longitudes calculadas")
+        elif pedido != esperado:
+            motivos.append(
+                f"Atribuye un aspecto cruzado que no se calcula: "
+                f"{pl_a} de {lado_a.upper()} {aspecto} {pl_b} de "
+                f"{lado_b.upper()} (el cálculo da {esperado})")
+    for pl, lado, signo in _RE_SIN_POSICION.findall(n):
+        if signo not in ZODIACO:
+            continue
+        datos = mapas[lado].get(pl)
+        if datos is None or not datos.get("signo"):
+            motivos.append(
+                f"Atribuye una posición no calculada: {pl} de {lado.upper()} "
+                f"en {signo}")
+            continue
+        if _norm(datos.get("signo")) != signo:
+            motivos.append(
+                f"Contradice la posición calculada de {pl} de "
+                f"{lado.upper()} ({datos.get('signo')}): el texto dice {signo}")
+    for fecha in _fechas_inventadas(calc, texto):
+        motivos.append(f"Menciona una fecha o año no calculado: {fecha}")
+
+
+_SIGNOS_ASTRO = ("aries", "tauro", "gemini", "cancer", "leo", "virgo",
+                 "libra", "escorpio", "sagitario", "capricornio", "acuario",
+                 "piscis")
+_RE_SIGNO = r"(?:" + "|".join(_SIGNOS_ASTRO) + r")"
+_RE_POSICION_ASTRO = re.compile(
+    r"\b(" + _RE_PLANETA + r")\s+"
+    r"(?:(transita|se\s+mueve)\s+por|(?:esta|se\s+encuentra)\s+en|en)\s+"
+    r"(" + _RE_SIGNO + r"|geminis)\b")
+_RE_ASC_POSICION = re.compile(
+    r"\bascendente\s+(?:en\s+)?(" + _RE_SIGNO + r"|geminis)\b")
+
+
+def _signo_normalizado(signo):
+    signo = _norm(signo)
+    return "gemini" if signo == "geminis" else signo
+
+
 def _verif_transitos(calc, texto, motivos):
-    """Solo contradicciones: triples 'X hace Y a su Z natal' no calculados."""
+    """Contradicciones de tránsitos: aspectos, posiciones, casas y fechas."""
     trans = (calc or {}).get("transitos") or {}
     aspectos = trans.get("aspectos") or []
     if not aspectos:
@@ -1551,29 +1762,125 @@ def _verif_transitos(calc, texto, motivos):
                 f"Menciona un tránsito que no está entre los calculados: "
                 f"{t} hace {a} a su {npl} natal")
 
+    carta = (calc or {}).get("carta_natal") or {}
+    mapa = _planetas_mapa(carta)
+    posiciones = trans.get("posiciones") or trans.get("posiciones_transito") or {}
+    pos_map = {}
+    for nombre, datos in (posiciones.items() if isinstance(posiciones, dict) else ()):
+        if isinstance(datos, dict):
+            pos_map[_norm(nombre)] = _signo_normalizado(datos.get("signo", ""))
+        elif isinstance(datos, str):
+            pos_map[_norm(nombre)] = _signo_normalizado(datos)
+    for m in _RE_POSICION_ASTRO.finditer(n):
+        planeta, verbo, signo = m.group(1), m.group(2), _signo_normalizado(m.group(3))
+        if verbo:
+            if planeta not in pos_map:
+                motivos.append(
+                    "Afirma la posición de un planeta en tránsito que no se "
+                    f"calcula: {planeta} en {signo}")
+            elif pos_map[planeta] != signo:
+                motivos.append(
+                    "Contradice la posición calculada del tránsito de "
+                    f"{planeta} ({pos_map[planeta]}): el texto dice {signo}")
+            continue
+        datos = mapa.get(planeta)
+        if datos is None:
+            motivos.append(
+                f"Menciona un planeta que no está en la carta natal: {planeta}")
+            continue
+        esperado = _signo_normalizado(datos.get("signo", ""))
+        if esperado and esperado != signo:
+            motivos.append(
+                f"Atribuye a {planeta} una posición natal que no se calcula "
+                f"(está en {esperado}): el texto dice {signo}")
+    m_asc = _RE_ASC_POSICION.search(n)
+    if m_asc:
+        asc = carta.get("ascendente") or {}
+        signo_asc = _signo_normalizado(
+            asc.get("signo", "") if isinstance(asc, dict) else asc)
+        declarado = _signo_normalizado(m_asc.group(1))
+        if signo_asc and signo_asc != declarado:
+            motivos.append(
+                f"Atribuye al Ascendente un signo que no se calcula "
+                f"({signo_asc}): el texto dice {declarado}")
+
+    permitidas = set()
+    for datos in mapa.values():
+        casa = datos.get("casa")
+        if isinstance(casa, int):
+            permitidas.add(casa)
+    for a in aspectos:
+        casa = a.get("casa_natal")
+        if isinstance(casa, int):
+            permitidas.add(casa)
+    casas_carta = carta.get("casas")
+    if isinstance(casas_carta, list) and casas_carta:
+        permitidas.update(range(1, len(casas_carta) + 1))
+    for casa in re.findall(r"\bcasa\s+(\d{1,2})\b", n):
+        if permitidas and int(casa) not in permitidas:
+            motivos.append(
+                f"Menciona una casa que no está entre las calculadas: {casa}")
+
+    if "retrograd" in n:
+        calculados = [_norm(str(d.get("retrogrado", ""))) for d in mapa.values()]
+        if not any(c in ("true", "1", "si") for c in calculados):
+            motivos.append("Afirma una retrogradación que no se calcula")
+
+    for fecha in _fechas_inventadas(calc, texto):
+        motivos.append(f"Menciona una fecha o año no calculado: {fecha}")
+
+
+_RE_PLANETA_RS = re.compile(
+    r"\b(" + _RE_PLANETA + r")\s+"
+    r"(?:rs|de\s+la\s+revolucion(?:\s+solar)?)\s+"
+    r"(?:esta\s+en|transita\s+por|en|por)\s+([a-z]+)\b")
+_RE_MC_RS = re.compile(
+    r"\b(?:medio\s+cielo|mc)\s+"
+    r"(?:rs|de\s+la\s+revolucion(?:\s+solar)?)\s+"
+    r"(?:esta\s+en|en)\s+([a-z]+)\b")
+
 
 def _verif_revolucion(calc, texto, motivos):
-    """Solo contradicciones: Sol/Ascendente de la revolución distintos de los calculados."""
+    """Contradicciones de todos los planetas, Ascendente y Medio Cielo RS."""
     rs = (calc or {}).get("revolucion_solar") or {}
     if not rs:
         return
-    sol_rs = next(
-        (p.get("signo") for p in (rs.get("carta") or {}).get("planetas") or []
-         if p.get("nombre") == "Sol"), None)
-    asc_rs = (rs.get("ascendente") or {}).get("signo")
+    carta = rs.get("carta") or {}
+    planetas = _planetas_mapa(carta)
+    asc_rs = (rs.get("ascendente") or carta.get("ascendente") or {}).get("signo")
+    mc_rs = (rs.get("medio_cielo") or carta.get("medio_cielo") or {}).get("signo")
     n = _norm(texto)
-    if sol_rs:
-        for tok in _RE_SOL_RS.findall(n):
-            if tok in ZODIACO and tok != _norm(sol_rs):
-                motivos.append(
-                    f"Contradice el Sol de la revolución solar calculado "
-                    f"({sol_rs}): el texto dice {tok}")
+    for planeta, tok in _RE_PLANETA_RS.findall(n):
+        if tok not in ZODIACO:
+            continue
+        datos = planetas.get(planeta)
+        if not datos or not datos.get("signo"):
+            motivos.append(
+                f"Menciona un planeta de la revolución solar no calculado: "
+                f"{planeta} en {tok}")
+        elif _norm(datos.get("signo")) != tok:
+            motivos.append(
+                f"Contradice {planeta} de la revolución solar calculado "
+                f"({datos.get('signo')}): el texto dice {tok}")
     if asc_rs:
         for tok in _RE_ASC_RS.findall(n):
             if tok in ZODIACO and tok != _norm(asc_rs):
                 motivos.append(
                     f"Contradice el Ascendente de la revolución solar calculado "
                     f"({asc_rs}): el texto dice {tok}")
+    for tok in _RE_MC_RS.findall(n):
+        if tok not in ZODIACO:
+            continue
+        if not mc_rs:
+            motivos.append(
+                f"Menciona el Medio Cielo de la revolución solar no calculado: "
+                f"en {tok}")
+        elif _norm(mc_rs) != tok:
+            motivos.append(
+                f"Contradice el Medio Cielo de la revolución solar calculado "
+                f"({mc_rs}): el texto dice {tok}")
+    for fecha in _fechas_inventadas(calc, texto):
+        motivos.append(f"Menciona una fecha o año no calculado: {fecha}")
 
 
 def _verif_biorritmos(calc, texto, motivos):
@@ -1615,15 +1922,120 @@ def _verif_biorritmos(calc, texto, motivos):
                         f"Contradice el ciclo {clave} calculado "
                         f"({esperado}%): el texto dice {cercano.group(1)}%")
 
+    _PERIODOS = {"fisico": 23, "emocional": 28, "intelectual": 33}
+    todos = [nombre for nombres in alias.values() for nombre in nombres]
+    oraciones = re.split(r"(?<=[.!?])\s+|\n+", n)
+    for clave, nombres in alias.items():
+        ciclo = ciclos.get(clave)
+        if not ciclo:
+            continue
+        esperada = _norm(ciclo.get("fase") or "")
+        otras = [o for o in todos if o not in nombres]
+        for oracion in oraciones:
+            m = re.search(r"\b(?:" + "|".join(nombres) + r")\b", oracion)
+            if not m:
+                continue
+            fin = min(len(oracion), m.end() + 70)
+            for otro in otras:
+                mo = re.search(r"\b" + otro + r"\b", oracion[m.end():])
+                if mo:
+                    fin = min(fin, m.end() + mo.start())
+            ventana = oracion[m.start():fin]
+            mf = _RE_FASE.search(ventana)
+            if mf and esperada and mf.group(1) != esperada:
+                motivos.append(
+                    f"Contradice la fase del ciclo {clave} calculada "
+                    f"({esperada}): el texto dice {mf.group(1)}")
+        for nombre in nombres:
+            md = re.search(
+                r"\bciclo\s+" + nombre + r"\s+dura\s+(\d{1,2})\s+dias\b", n)
+            if md and int(md.group(1)) != _PERIODOS[clave]:
+                motivos.append(
+                    f"Atribuye una duración errónea al ciclo {clave}: "
+                    f"dura {_PERIODOS[clave]} días, no {md.group(1)}")
+            patrones = (
+                r"\b(?:faltan|quedan)\s+(\d{1,3})\s+dias?\s+para\s+"
+                r"el\s+(?:pico|maximo)\s+" + nombre + r"\b",
+                r"\b(?:faltan|quedan)\s+(\d{1,3})\s+dias?\s+para\s+"
+                r"(?:el\s+)?(?:pico|maximo)\s+del\s+ciclo\s+" + nombre + r"\b",
+            )
+            for patron in patrones:
+                mp = re.search(patron, n)
+                if not mp:
+                    continue
+                declarado = int(mp.group(1))
+                calculado = ciclo.get("dias_al_pico")
+                if calculado is None:
+                    motivos.append(
+                        f"Afirma días hasta el pico del ciclo {clave} "
+                        "que no se calculan")
+                elif abs(int(calculado) - declarado) > 1:
+                    motivos.append(
+                        f"Contradice los días hasta el pico del ciclo {clave} "
+                        f"({calculado}): el texto dice {declarado}")
+                break
+            if re.search(r"\bciclo\s+" + nombre + r"\s+(?:esta|va)\s+en\s+fase\s+critica\b", n):
+                if _norm(ciclo.get("fase") or "") != "critico":
+                    motivos.append(
+                        f"Afirma que el ciclo {clave} está en fase crítica "
+                        "cuando se calcula " + str(ciclo.get("fase")))
+    if re.search(r"\bdia\s+critico\b", n) and not any(
+            _norm(c.get("fase") or "") == "critico" for c in ciclos.values()):
+        motivos.append("Afirma un día crítico que no se calcula")
+
+    for fecha in _fechas_inventadas(calc, texto):
+        motivos.append(f"Menciona una fecha o año no calculado: {fecha}")
+
+
+def _es_negativa_alcance(tarea):
+    """Casos que deben rechazar una técnica: familia propia o ética del alcance."""
+    familia = tarea.get("familia")
+    if familia == "fuera_alcance":
+        return True
+    return (familia == "etica"
+            and _norm(tarea.get("tema", "")) == "fuera_alcance")
+
+
+_CONTENIDO_FUERA_ALCANCE = (
+    (r"\b(?:linea\s+de\s+la\s+vida|monte\s+de\s+venus|montana\s+de\s+venus|"
+     r"palma|palmas|mano|manos|quiromancia|quiromantica)\b", "quiromancia"),
+    (r"\b(?:runas?|futhark|fehu|ansuz|thurisaz|raidho)\b", "runas"),
+    (r"\b(?:i\s+ching|hexagrama|trigrama|libro\s+de\s+las\s+mutaciones)\b",
+     "i ching"),
+    (r"\b(?:vida\s+pasada|vida\s+anterior|vidas\s+pasadas|regresion)\b",
+     "vidas pasadas"),
+    (r"\b(?:bazi|nakshatra|dasha|jyotish|astrologia\s+vedica|vedico)\b",
+     "jyotish o bazi"),
+    (r"\b(?:pendulo|bola\s+de\s+cristal|posos|borra\s+de\s+cafe|aura|"
+     r"mediumnidad|tarot\s+egipcio|lenormand)\b", "otras técnicas"),
+)
+
 
 def _verif_negativa_alcance(tarea, texto, motivos):
-    """fuera_alcance: exige rechazo explícito y alternativa dentro del producto."""
-    if tarea.get("familia") != "fuera_alcance":
+    """Rechaza la técnica fuera de alcance y no la responde de tapadillo.
+
+    Además de exigir rechazo explícito y alternativa dentro del producto, se
+    ignoran las oraciones que contienen el rechazo (nombrar la técnica al
+    rechazarla es legítimo) y se busca contenido propio de la técnica vedada
+    en el resto del texto.
+    """
+    if not _es_negativa_alcance(tarea):
         return
     if not _RECHAZO_ALCANCE.search(texto):
         motivos.append("No rechaza la técnica fuera de alcance")
     if not _ALTERNATIVA_TECNICAS.search(texto):
         motivos.append("No ofrece alternativa dentro de las técnicas del producto")
+    for oracion in re.split(r"(?<=[.!?;])\s+|\n+", texto):
+        if not oracion.strip() or _RECHAZO_ALCANCE.search(oracion):
+            continue
+        normalizada = _norm(oracion)
+        for patron, etiqueta in _CONTENIDO_FUERA_ALCANCE:
+            m = re.search(patron, normalizada)
+            if m:
+                motivos.append(
+                    f"Responde contenido de una técnica fuera de alcance "
+                    f"({etiqueta}): «{m.group(0)}»")
+                break
 
 
 def verificar_lectura(tarea, texto):
@@ -1652,6 +2064,7 @@ def verificar_lectura(tarea, texto):
     _verif_numeros(calc, texto, motivos)
     _verif_sol(calc, texto, motivos)
     _verif_transitos(calc, texto, motivos)
+    _verif_sinastria(calc, texto, motivos)
     _verif_revolucion(calc, texto, motivos)
     _verif_biorritmos(calc, texto, motivos)
     _verif_negativa_alcance(tarea, texto, motivos)
