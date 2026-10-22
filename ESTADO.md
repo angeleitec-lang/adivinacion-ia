@@ -70,6 +70,7 @@ Método de verificación: `/tmp/t124_analisis_transitos.py` y
 
 ## Commits (git log main..HEAD)
 
+- `e04f629` T124: ESTADO TRACK COMPLETO con hashes
 - `9e40dad` T124: informe de regeneración fase 1 + ESTADO
 
 ## Pendiente
