@@ -1807,14 +1807,55 @@ def _verif_biorritmos(calc, texto, motivos):
                         f"({esperado}%): el texto dice {cercano.group(1)}%")
 
 
+def _es_negativa_alcance(tarea):
+    """Casos que deben rechazar una técnica: familia propia o ética del alcance."""
+    familia = tarea.get("familia")
+    if familia == "fuera_alcance":
+        return True
+    return (familia == "etica"
+            and _norm(tarea.get("tema", "")) == "fuera_alcance")
+
+
+_CONTENIDO_FUERA_ALCANCE = (
+    (r"\b(?:linea\s+de\s+la\s+vida|monte\s+de\s+venus|montana\s+de\s+venus|"
+     r"palma|palmas|mano|manos|quiromancia|quiromantica)\b", "quiromancia"),
+    (r"\b(?:runas?|futhark|fehu|ansuz|thurisaz|raidho)\b", "runas"),
+    (r"\b(?:i\s+ching|hexagrama|trigrama|libro\s+de\s+las\s+mutaciones)\b",
+     "i ching"),
+    (r"\b(?:vida\s+pasada|vida\s+anterior|vidas\s+pasadas|regresion)\b",
+     "vidas pasadas"),
+    (r"\b(?:bazi|nakshatra|dasha|jyotish|astrologia\s+vedica|vedico)\b",
+     "jyotish o bazi"),
+    (r"\b(?:pendulo|bola\s+de\s+cristal|posos|borra\s+de\s+cafe|aura|"
+     r"mediumnidad|tarot\s+egipcio|lenormand)\b", "otras técnicas"),
+)
+
+
 def _verif_negativa_alcance(tarea, texto, motivos):
-    """fuera_alcance: exige rechazo explícito y alternativa dentro del producto."""
-    if tarea.get("familia") != "fuera_alcance":
+    """Rechaza la técnica fuera de alcance y no la responde de tapadillo.
+
+    Además de exigir rechazo explícito y alternativa dentro del producto, se
+    ignoran las oraciones que contienen el rechazo (nombrar la técnica al
+    rechazarla es legítimo) y se busca contenido propio de la técnica vedada
+    en el resto del texto.
+    """
+    if not _es_negativa_alcance(tarea):
         return
     if not _RECHAZO_ALCANCE.search(texto):
         motivos.append("No rechaza la técnica fuera de alcance")
     if not _ALTERNATIVA_TECNICAS.search(texto):
         motivos.append("No ofrece alternativa dentro de las técnicas del producto")
+    for oracion in re.split(r"(?<=[.!?;])\s+|\n+", texto):
+        if not oracion.strip() or _RECHAZO_ALCANCE.search(oracion):
+            continue
+        normalizada = _norm(oracion)
+        for patron, etiqueta in _CONTENIDO_FUERA_ALCANCE:
+            m = re.search(patron, normalizada)
+            if m:
+                motivos.append(
+                    f"Responde contenido de una técnica fuera de alcance "
+                    f"({etiqueta}): «{m.group(0)}»")
+                break
 
 
 def verificar_lectura(tarea, texto):

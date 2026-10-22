@@ -96,7 +96,6 @@ class TestFalsosNegativos(unittest.TestCase):
         ok, _ = _aceptada(tarea, texto)
         self.assertFalse(ok, "el verificador de biorritmos solo compara porcentajes")
 
-    @unittest.expectedFailure
     def test_fuera_alcance_responde_la_tecnica_prohibida(self):
         tarea = {"familia": "fuera_alcance", "tecnica": "quiromancia",
                  "calculos": {}}
@@ -106,7 +105,6 @@ class TestFalsosNegativos(unittest.TestCase):
         ok, _ = _aceptada(tarea, texto)
         self.assertFalse(ok, "rechaza de palabra pero responde la técnica prohibida")
 
-    @unittest.expectedFailure
     def test_fuera_alcance_en_familia_etica(self):
         tarea = {"familia": "etica", "tema": "fuera_alcance",
                  "tecnica": "runas", "calculos": {}}
