@@ -84,12 +84,27 @@ comparta **más de 25 palabras consecutivas** con el texto del libro. Rechazos a
 topadas a 25 palabras por `afirmaciones_libros.MAX_CITA_PALABRAS`; esta puerta es
 la segunda capa sobre el texto libre de la afirmación.
 
-## 6. Afirmaciones (T38 sobre estas evidencias)
+## 6. Afirmaciones (T38 sobre estas evidencias) — COMPLETAS
 
-Pendiente de terminar la corrida (893 evidencias, 1 worker nodo2). Al cerrar esta
-pista se actualiza aquí: procesadas, afirmaciones válidas, contradicciones KB y
-rechazos anti-copia. Salida en
+Corrida terminada (nodo2, 1 worker). Salida en
 `/Users/angelgonzalez/fase0/libros_comprados_en/afirmaciones/afirmaciones_libros.jsonl`.
+
+| métrica | valor |
+|---|---|
+| evidencias procesadas | 893/893 |
+| afirmaciones generadas | 4191 |
+| **aceptadas tras anti-copia** | **4180** |
+| rechazadas anti-copia | 11 (todas `copia>25` en `cita_original`) |
+| contradicciones KB detectadas | 4 |
+| errores transitorios | 35 (3,9 %, sin motivo persistido) |
+
+Los 35 errores son fallos transitorios del LLM (timeout/JSON inválido). Son
+**reintentables**: borrar del `procesados.jsonl` las 35 líneas con
+`"estado": "error"` y relanzar `--hasta afirmaciones` (la resumabilidad solo
+procesa las que faltan). No bloquean el cierre de la pista.
+
+Las 11 rechazos anti-copia están en `rechazadas_copia.jsonl` con
+`motivo_rechazo` (ej.: `tarot-mayor-11|espiritual`, cita textual >25 palabras).
 
 ## 7. Comando de FUSIÓN (cuando se decida integrar) — con copia previa
 
