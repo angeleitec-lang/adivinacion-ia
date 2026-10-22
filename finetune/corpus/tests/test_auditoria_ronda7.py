@@ -60,7 +60,6 @@ class TestFalsosNegativos(unittest.TestCase):
         ok, _ = _aceptada(tarea, texto)
         self.assertFalse(ok, "el verificador acepta posiciones y fecha no calculadas")
 
-    @unittest.expectedFailure
     def test_revolucion_luna_y_medio_cielo_inventados(self):
         tarea = {
             "familia": "revolucion_solar",

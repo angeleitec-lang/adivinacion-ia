@@ -1743,28 +1743,57 @@ def _verif_transitos(calc, texto, motivos):
                 f"{t} hace {a} a su {npl} natal")
 
 
+_RE_PLANETA_RS = re.compile(
+    r"\b(" + _RE_PLANETA + r")\s+"
+    r"(?:rs|de\s+la\s+revolucion(?:\s+solar)?)\s+"
+    r"(?:esta\s+en|transita\s+por|en|por)\s+([a-z]+)\b")
+_RE_MC_RS = re.compile(
+    r"\b(?:medio\s+cielo|mc)\s+"
+    r"(?:rs|de\s+la\s+revolucion(?:\s+solar)?)\s+"
+    r"(?:esta\s+en|en)\s+([a-z]+)\b")
+
+
 def _verif_revolucion(calc, texto, motivos):
-    """Solo contradicciones: Sol/Ascendente de la revolución distintos de los calculados."""
+    """Contradicciones de todos los planetas, Ascendente y Medio Cielo RS."""
     rs = (calc or {}).get("revolucion_solar") or {}
     if not rs:
         return
-    sol_rs = next(
-        (p.get("signo") for p in (rs.get("carta") or {}).get("planetas") or []
-         if p.get("nombre") == "Sol"), None)
-    asc_rs = (rs.get("ascendente") or {}).get("signo")
+    carta = rs.get("carta") or {}
+    planetas = _planetas_mapa(carta)
+    asc_rs = (rs.get("ascendente") or carta.get("ascendente") or {}).get("signo")
+    mc_rs = (rs.get("medio_cielo") or carta.get("medio_cielo") or {}).get("signo")
     n = _norm(texto)
-    if sol_rs:
-        for tok in _RE_SOL_RS.findall(n):
-            if tok in ZODIACO and tok != _norm(sol_rs):
-                motivos.append(
-                    f"Contradice el Sol de la revolución solar calculado "
-                    f"({sol_rs}): el texto dice {tok}")
+    for planeta, tok in _RE_PLANETA_RS.findall(n):
+        if tok not in ZODIACO:
+            continue
+        datos = planetas.get(planeta)
+        if not datos or not datos.get("signo"):
+            motivos.append(
+                f"Menciona un planeta de la revolución solar no calculado: "
+                f"{planeta} en {tok}")
+        elif _norm(datos.get("signo")) != tok:
+            motivos.append(
+                f"Contradice {planeta} de la revolución solar calculado "
+                f"({datos.get('signo')}): el texto dice {tok}")
     if asc_rs:
         for tok in _RE_ASC_RS.findall(n):
             if tok in ZODIACO and tok != _norm(asc_rs):
                 motivos.append(
                     f"Contradice el Ascendente de la revolución solar calculado "
                     f"({asc_rs}): el texto dice {tok}")
+    for tok in _RE_MC_RS.findall(n):
+        if tok not in ZODIACO:
+            continue
+        if not mc_rs:
+            motivos.append(
+                f"Menciona el Medio Cielo de la revolución solar no calculado: "
+                f"en {tok}")
+        elif _norm(mc_rs) != tok:
+            motivos.append(
+                f"Contradice el Medio Cielo de la revolución solar calculado "
+                f"({mc_rs}): el texto dice {tok}")
+    for fecha in _fechas_inventadas(calc, texto):
+        motivos.append(f"Menciona una fecha o año no calculado: {fecha}")
 
 
 def _verif_biorritmos(calc, texto, motivos):
