@@ -69,3 +69,12 @@ Ver el apartado «Estado final de la noche» al final de este fichero (lo rellen
 - Generadores viejos (PID 66101/66396) NO reanudar. Copia de `jobs.db` antes de `--replace-pending` (hay `jobs.db.antes-t80`).
 - No usar LM Studio personal del iMac; usuario no quiere explicaciones de las tareas (solo estado y el prompt).
 - Las posiciones Y de la barra lateral de Warp cambian al cambiar los títulos de las pestañas: **verificar el título** antes de enviar (`scratchpad/ia_send.sh` lo imprime).
+
+## Estado final de la noche y mañana del 2026-10-22 (actualizado 10:15)
+
+- **Integrado desde la noche:** T112 (dataset v1b), T113 (generación complementaria: 2.242 lecturas válidas de sinastría, tránsitos, revolución solar, biorritmos, fuera_alcance + 65 astro_natal regeneradas; arreglo del signo en biorritmos verificado con casos propios), T116 (traductor EN→ES con glosario y verificador), T117 (dataset **v1c**: 12.796 filas, train 11.563 / val 609 / test 624, 20 bloques, QA verde; 0 solapes, 0 fugas).
+- **Hallazgos abiertos:** transitos retiene 208/400 en v1c (el filtro de fugas por n-gramas descarta 139; T124 lo analiza y genera ≥300 nuevas); `fuera_alcance` tiene 120/400 preguntas basura (solo contadas; decisión del usuario); T107 no se aplicó a la jobs.db real (superado por la salida de T113).
+- **Libros comprados** (uso interno, copyright, en `fase0/libros_comprados/`; el PDF de Sasportas está incompleto: 63 hojas ≈ 126 de ≈300 páginas): Nichols (T114), Pollack y Greer (T115), Arroyo y Sasportas (T118 prepara texto; T119 evidencias). Traducción de afirmaciones EN→ES: T125.
+- **Modelo nuevo en nodo1** (kingjones777 ROCmFP4 imatrix, instalado y verificado, **sin probar**): `~/iniciar-qwen38-kj.sh` (entrada K del menú de `~/iniciar-servidor.sh`; plantilla parcheada `~/qwen38-kj-system-ok.jinja`; puerto 8003) y entrada opencode `Qwen38-KJ-nodo1`. Nodo1 sigue reservado por el usuario.
+- **Plan del día:** `docs/PLAN_DIA_2026-10-22.md` (cola por IA hasta las 20:00). Pistas preparadas: T118, T119, T121, T123, T124, T125, T126.
+- **Incidencias de operación:** pantalla bloqueada ≈10:01 (peekaboo imposible; no insistir; hay un sondeo cada 10 min); una IA editó `armar_dataset_v1.py` en `main` en vez de su worktree (copia del parche en el scratchpad; revertido); pestaña 7 sin IA hasta nueva orden (aparece una sesión `opencode -c` ajena: no tocar).
