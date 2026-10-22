@@ -150,7 +150,6 @@ class TestFalsosPositivos(unittest.TestCase):
 
 
 class TestFugas(unittest.TestCase):
-    @unittest.expectedFailure
     def test_reordenacion_evade_fugas_eval(self):
         casos = ec.generar_casos(560056)
         caso = max(casos, key=lambda c: len(str(c.get("user", ""))))
@@ -163,7 +162,6 @@ class TestFugas(unittest.TestCase):
         self.assertTrue(res["hallazgos"],
                         "la puerta QA depende de n-gramas literales y no ve la reordenación")
 
-    @unittest.expectedFailure
     def test_merge_no_excluye_variante_sin_tildes(self):
         caso = ec.generar_casos(560056)[0]
         original = caso["user"]

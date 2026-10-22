@@ -299,8 +299,11 @@ def lang_counts(rows: list[dict]) -> dict[str, int]:
 
 
 def _norm(text: str) -> str:
-    return unicodedata.normalize(
-        "NFC", re.sub(r"\s+", " ", text or "").strip().lower())
+    """Normaliza para comparar contenido: sin tildes ni puntuación."""
+    t = unicodedata.normalize("NFKD", text or "")
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    t = re.sub(r"[^0-9a-z]+", " ", t.lower())
+    return re.sub(r"\s+", " ", t).strip()
 
 
 def _clave_respuestas(row: dict) -> str:
