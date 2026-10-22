@@ -470,6 +470,8 @@ def heading_candidate(line: str, running_heads: frozenset) -> bool:
         return False
     if NUM_ONLY_RE.match(s) or re.search(r"\d", s):
         return False
+    if len(toks[-1]) <= 1:
+        return False
     if norm_head(s) in running_heads:
         return False
     if s.upper() == s:
@@ -813,7 +815,7 @@ def make_report(arroyo, sas, vocab: frozenset, psm_chosen, sample_table) -> str:
         for j, p in enumerate(sample_paragraphs(arroyo["text"]), 1):
             out.append(f"{j}. «{p[:400]}»")
         out += ["", "### Marcas de estructura detectadas", ""]
-        for rec, line in _heading_lines(arroyo["text"])[:40]:
+        for rec, line in _heading_lines(arroyo)[:40]:
             out.append(f"- hoja {rec['sheet']} {rec['side']} (pág. {rec['label']}): {line[:80]}")
         out.append("")
     if sas:
@@ -876,7 +878,7 @@ def make_report(arroyo, sas, vocab: frozenset, psm_chosen, sample_table) -> str:
         for name, ok in parts.items():
             out.append(f"- {'SÍ' if ok else 'NO'}: {name}")
         out += ["", "### Marcas de estructura detectadas", ""]
-        for rec, line in _heading_lines(sas["text"])[:40]:
+        for rec, line in _heading_lines(sas)[:40]:
             out.append(f"- hoja {rec['sheet']} {rec['side']} (pág. {rec['label']}): {line[:80]}")
         out += ["", "### 5 párrafos de muestra (texto limpio)", ""]
         for j, p in enumerate(sample_paragraphs(sas["text"]), 1):

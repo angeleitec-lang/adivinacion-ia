@@ -253,5 +253,22 @@ class TestMuestras(unittest.TestCase):
         self.assertTrue(all(not p.startswith("#") for p in picks))
 
 
+class TestHeadingCandidate(unittest.TestCase):
+    def test_normal(self):
+        self.assertTrue(lcp.heading_candidate("The Element Fire", frozenset()))
+        self.assertTrue(lcp.heading_candidate("FIRE SIGNS KEY CONCEPT", frozenset()))
+
+    def test_truncado_por_capa(self):
+        # «...Their K»: último token de una letra → línea cortada por la capa de texto
+        self.assertFalse(
+            lcp.heading_candidate("The Elements of the Zodiacal Signs & Their K",
+                                  frozenset()))
+
+    def test_rubrica_recurrente_excluida(self):
+        self.assertFalse(
+            lcp.heading_candidate("Universal Principles",
+                                  frozenset({"universal principles"})))
+
+
 if __name__ == "__main__":
     unittest.main()
