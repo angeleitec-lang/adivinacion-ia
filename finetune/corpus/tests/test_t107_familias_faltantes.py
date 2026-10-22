@@ -148,6 +148,32 @@ class TestTildes(unittest.TestCase):
                               f"prompt sin tildes en {f}: {prompt[:120]}")
 
 
+class TestVerifBiorritmosPorcentaje(unittest.TestCase):
+    """El verificador de biorritmos compara % con signo cuando el texto lo trae
+    y por magnitud cuando no (regresión de falsos positivos en muestra T113)."""
+
+    def _motivos(self, texto, esperado):
+        calc = {"biorritmos": {"ciclos": {"fisico": {"porcentaje": esperado}}}}
+        mot = []
+        fp._verif_biorritmos(calc, texto, mot)
+        return mot
+
+    def test_negativo_con_signo_pasa(self):
+        self.assertEqual(self._motivos("Tu ciclo físico está en -63%.", -63), [])
+
+    def test_positivo_con_signo_contradice(self):
+        mot = self._motivos("Tu ciclo físico está en +63%.", -63)
+        self.assertEqual(len(mot), 1)
+        self.assertIn("Contradice", mot[0])
+
+    def test_sin_signo_pasa_por_magnitud(self):
+        self.assertEqual(self._motivos("Tu ciclo físico está en 63%.", -63), [])
+
+    def test_diferencia_grande_sin_signo_contradice(self):
+        mot = self._motivos("Tu ciclo físico está en 90%.", -63)
+        self.assertEqual(len(mot), 1)
+
+
 class TestFabricarTarea(unittest.TestCase):
     def test_smoke_cuatro_familias(self):
         kb = fp._cargar_kb_real()

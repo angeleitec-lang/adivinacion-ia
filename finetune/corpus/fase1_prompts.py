@@ -1498,7 +1498,27 @@ _RE_SOL_RS = re.compile(r"\bsol\s+(?:rs|de la revolucion)\s+(?:en\s+)?([a-z]+)\b
 
 _RE_ASC_RS = re.compile(r"\bascendente\s+(?:rs|de la revolucion)\s+(?:en\s+)?([a-z]+)\b")
 
-_RE_PCT = re.compile(r"(\d{1,3})\s*%")
+_RE_PCT = re.compile(r"([+\-−–]?\d{1,3})\s*%")
+
+
+def _pct_con_signo(m):
+    """Devuelve (valor:int, tiene_signo:bool) del match de _RE_PCT."""
+    s = m.group(1)
+    if s[0] in "+-−–":
+        return int(s[1:]) * (-1 if s[0] in "-−–" else 1), True
+    return int(s), False
+
+
+def _pct_contradice(c, esperado):
+    """True si el % citado contradice el calculado (>5 de diferencia).
+
+    Si el texto trae signo se compara con signo; si no lo trae, se compara la
+    magnitud (p.ej. "-63%" contra -63 no contradice, y "63%" contra -63 tampoco).
+    """
+    valor, con_signo = _pct_con_signo(c)
+    if con_signo:
+        return abs(valor - int(esperado)) > 5
+    return abs(valor - abs(int(esperado))) > 5
 
 _RECHAZO_ALCANCE = re.compile(
     r"no puedo|no voy a|no es posible|no estoy (para|en condiciones)|no forma parte|"
@@ -1590,8 +1610,7 @@ def _verif_biorritmos(calc, texto, motivos):
                 despues = [c for c in candidatos
                           if inicio + c.start() >= m.end()]
                 elegidos = [despues[0], cercano] if despues else [cercano]
-                if all(abs(int(c.group(1)) - int(esperado)) > 5
-                       for c in elegidos):
+                if all(_pct_contradice(c, esperado) for c in elegidos):
                     motivos.append(
                         f"Contradice el ciclo {clave} calculado "
                         f"({esperado}%): el texto dice {cercano.group(1)}%")
