@@ -274,8 +274,10 @@ def verificar_traduccion(original: str, traducida_bruta: str,
     for d in digitos_o:
         if d not in digitos_t:
             return None, f"falta la cifra {d}"
-    for w in _TOKEN_RE.findall(sin_alias):
-        w = w.lower()
+    for m in _TOKEN_RE.finditer(sin_alias):
+        w = m.group(0).lower()
+        if w == "one" and re.match(r"\s*['’]s\b", sin_alias[m.end():]):
+            continue  # "one's" es pronombre, no el numero 1
         formas = _NUM_ES.get(w)
         if formas and not (tokens_set & set(formas)):
             return None, f"falta el número «{w}» en español"

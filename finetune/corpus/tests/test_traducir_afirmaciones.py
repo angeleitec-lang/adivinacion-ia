@@ -129,6 +129,12 @@ class TestVerificador(unittest.TestCase):
         self.assert_rechazo("It takes three cards in this spread.",
                             "Se necesitan cartas en esta tirada.", "three")
 
+    def test_one_pronombre_no_es_cifra(self):
+        # "one's" es posesivo, no el numero 1: no puede exigir "uno".
+        self.assert_ok(
+            "Money should come from one's own storehouse.",
+            "El dinero debe venir del propio almacén interior.")
+
     def test_upright_conservado(self):
         self.assert_ok("The Sun upright brings clarity.",
                        "El Sol al derecho aporta claridad.")
