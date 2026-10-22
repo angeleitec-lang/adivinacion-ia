@@ -1533,6 +1533,197 @@ _ALTERNATIVA_TECNICAS = re.compile(
     r"revoluci[oó]n\s+solar|biorritmo", re.IGNORECASE)
 
 
+_PLANETAS_ASTRO = ("sol", "luna", "mercurio", "venus", "marte", "jupiter",
+                   "saturno", "urano", "neptuno", "pluton")
+_RE_PLANETA = r"(?:" + "|".join(_PLANETAS_ASTRO) + r")"
+
+_ANGULOS_ASPECTO = (
+    (0, "conjuncion", 6), (30, "semisextil", 3), (60, "sextil", 5),
+    (90, "cuadratura", 6), (120, "trigono", 6), (150, "quincuncio", 3),
+    (180, "oposicion", 7),
+)
+_NOMBRES_ASPECTO = {
+    "conjuncion": "conjuncion", "conjunto": "conjuncion",
+    "semisextil": "semisextil", "sextil": "sextil",
+    "cuadratura": "cuadratura", "cuadro": "cuadratura",
+    "trigono": "trigono", "quincuncio": "quincuncio", "quincunce": "quincuncio",
+    "oposicion": "oposicion", "opuesto": "oposicion", "opuesta": "oposicion",
+}
+
+_MESES_NUM = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+    "noviembre": 11, "diciembre": 12,
+}
+
+
+def _planetas_mapa(carta):
+    """Mapa nombre normalizado -> datos, acepte planetas en dict o en lista."""
+    planetas = (carta or {}).get("planetas") or {}
+    mapa = {}
+    if isinstance(planetas, dict):
+        for nombre, datos in planetas.items():
+            if isinstance(datos, dict):
+                mapa[_norm(nombre)] = datos
+        return mapa
+    for datos in planetas:
+        if isinstance(datos, dict):
+            mapa[_norm(datos.get("nombre", ""))] = datos
+    return mapa
+
+
+def _lon_de(datos):
+    """Longitud eclíptica de un planeta, o None si no está calculada."""
+    if not isinstance(datos, dict):
+        return None
+    lon = datos.get("lon")
+    if isinstance(lon, (int, float)):
+        return float(lon) % 360
+    signo = _norm(datos.get("signo", ""))
+    if signo in ZODIACO:
+        grados = datos.get("grados", datos.get("grado", 0)) or 0
+        try:
+            return (_signo_base(signo) + float(grados)) % 360
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _signo_base(signo):
+    orden = ("aries", "tauro", "gemini", "cancer", "leo", "virgo", "libra",
+             "escorpio", "sagitario", "capricornio", "acuario", "piscis")
+    signo = "gemini" if signo == "geminis" else signo
+    return orden.index(signo) * 30 if signo in orden else 0
+
+
+def _aspecto_entre(lon_a, lon_b):
+    """Aspecto que forma el par de longitudes (con orbe), o None."""
+    if lon_a is None or lon_b is None:
+        return None
+    diferencia = abs((lon_a - lon_b) % 360)
+    diferencia = min(diferencia, 360 - diferencia)
+    for angulo, nombre, orbe in _ANGULOS_ASPECTO:
+        if abs(diferencia - angulo) <= orbe:
+            return nombre
+    return None
+
+
+def _fechas_texto(texto):
+    """Fechas ISO y años de 4 cifras mencionados en el texto."""
+    n = _norm(texto)
+    fechas, anios = set(), set()
+    for m in re.finditer(
+            r"\b(\d{1,2})\s+de\s+([a-z]+)\s+(?:de\s+|del\s+)?(\d{4})\b", n):
+        mes = _MESES_NUM.get(m.group(2))
+        if mes and 1 <= int(m.group(1)) <= 31:
+            fechas.add(f"{int(m.group(3)):04d}-{mes:02d}-{int(m.group(1)):02d}")
+    for m in re.finditer(r"\b(\d{4})-(\d{2})-(\d{2})\b", n):
+        fechas.add(m.group(0))
+    for m in re.finditer(r"\b(?:19|20)\d{2}\b", n):
+        anios.add(int(m.group(0)))
+    return fechas, anios
+
+
+def _fechas_calculo(calc):
+    """Fechas ISO y años presentes en cualquier cadena del cálculo."""
+    fechas, anios = set(), set()
+
+    def recorrer(valor):
+        if isinstance(valor, dict):
+            for hijo in valor.values():
+                recorrer(hijo)
+        elif isinstance(valor, (list, tuple)):
+            for hijo in valor:
+                recorrer(hijo)
+        elif isinstance(valor, str):
+            for m in re.finditer(r"\b\d{4}-\d{2}-\d{2}\b", valor):
+                fechas.add(m.group(0))
+                anios.add(int(m.group(0)[:4]))
+            for m in re.finditer(r"\b(?:19|20)\d{2}\b", valor):
+                anios.add(int(m.group(0)))
+
+    recorrer(calc)
+    return fechas, anios
+
+
+def _fechas_inventadas(calc, texto):
+    """Fechas o años citados que no constan en el cálculo (no verificables)."""
+    fechas, anios = _fechas_texto(texto)
+    fechas_calc, anios_calc = _fechas_calculo(calc)
+    malas = []
+    for fecha in sorted(fechas):
+        if fechas_calc:
+            if fecha not in fechas_calc:
+                malas.append(fecha)
+        elif anios_calc:
+            if int(fecha[:4]) not in anios_calc:
+                malas.append(fecha)
+        else:
+            malas.append(fecha)
+    for anio in sorted(anios):
+        if anios_calc and anio not in anios_calc:
+            malas.append(str(anio))
+        elif not anios_calc:
+            malas.append(str(anio))
+    return malas
+
+
+_RE_SIN_ASTRO_DE = re.compile(
+    r"\b(" + _RE_PLANETA + r")\s+de\s+([ab])\s+"
+    r"(?:hace|forma)\s+([a-z]+)\s+(?:con|a|de)\s+"
+    r"(" + _RE_PLANETA + r")\s+de\s+([ab])\b")
+_RE_SIN_POSICION = re.compile(
+    r"\b(" + _RE_PLANETA + r")\s+de\s+([ab])\s+"
+    r"(?:esta\s+en|transita\s+por|en|por)\s+([a-z]+)\b")
+
+
+def _verif_sinastria(calc, texto, motivos):
+    """Sinastría: aspectos cruzados y posiciones deben salir del cálculo."""
+    calc = calc or {}
+    carta_a, carta_b = calc.get("carta_a"), calc.get("carta_b")
+    if not carta_a or not carta_b:
+        return
+    mapas = {"a": _planetas_mapa(carta_a), "b": _planetas_mapa(carta_b)}
+    n = _norm(texto)
+    for pl_a, lado_a, aspecto, pl_b, lado_b in _RE_SIN_ASTRO_DE.findall(n):
+        if lado_a == lado_b:
+            continue
+        datos_a = mapas[lado_a].get(pl_a)
+        datos_b = mapas[lado_b].get(pl_b)
+        if datos_a is None or datos_b is None:
+            motivos.append(
+                f"Menciona un aspecto cruzado con un planeta no calculado: "
+                f"{pl_a} de {lado_a.upper()} con {pl_b} de {lado_b.upper()}")
+            continue
+        esperado = _aspecto_entre(_lon_de(datos_a), _lon_de(datos_b))
+        pedido = _NOMBRES_ASPECTO.get(aspecto, aspecto)
+        if esperado is None:
+            motivos.append(
+                f"No se puede verificar el aspecto cruzado "
+                f"{pl_a} de {lado_a.upper()} con {pl_b} de {lado_b.upper()}: "
+                f"faltan longitudes calculadas")
+        elif pedido != esperado:
+            motivos.append(
+                f"Atribuye un aspecto cruzado que no se calcula: "
+                f"{pl_a} de {lado_a.upper()} {aspecto} {pl_b} de "
+                f"{lado_b.upper()} (el cálculo da {esperado})")
+    for pl, lado, signo in _RE_SIN_POSICION.findall(n):
+        if signo not in ZODIACO:
+            continue
+        datos = mapas[lado].get(pl)
+        if datos is None or not datos.get("signo"):
+            motivos.append(
+                f"Atribuye una posición no calculada: {pl} de {lado.upper()} "
+                f"en {signo}")
+            continue
+        if _norm(datos.get("signo")) != signo:
+            motivos.append(
+                f"Contradice la posición calculada de {pl} de "
+                f"{lado.upper()} ({datos.get('signo')}): el texto dice {signo}")
+    for fecha in _fechas_inventadas(calc, texto):
+        motivos.append(f"Menciona una fecha o año no calculado: {fecha}")
+
+
 def _verif_transitos(calc, texto, motivos):
     """Solo contradicciones: triples 'X hace Y a su Z natal' no calculados."""
     trans = (calc or {}).get("transitos") or {}
@@ -1652,6 +1843,7 @@ def verificar_lectura(tarea, texto):
     _verif_numeros(calc, texto, motivos)
     _verif_sol(calc, texto, motivos)
     _verif_transitos(calc, texto, motivos)
+    _verif_sinastria(calc, texto, motivos)
     _verif_revolucion(calc, texto, motivos)
     _verif_biorritmos(calc, texto, motivos)
     _verif_negativa_alcance(tarea, texto, motivos)

@@ -115,7 +115,6 @@ class TestFalsosNegativos(unittest.TestCase):
         ok, _ = _aceptada(tarea, texto)
         self.assertFalse(ok, "la verificación de alcance solo se aplica a familia fuera_alcance")
 
-    @unittest.expectedFailure
     def test_sinastria_aspecto_cruzado_inventado(self):
         tarea = {
             "familia": "sinastria",
