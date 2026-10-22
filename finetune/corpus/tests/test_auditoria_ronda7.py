@@ -218,7 +218,6 @@ class TestTraduccion(unittest.TestCase):
     def setUpClass(cls):
         cls.indice = ta.IndiceCartas(ta.cargar_glosario())
 
-    @unittest.expectedFailure
     def test_segunda_orientacion_invertida(self):
         original = ("Two of Swords reversed and Three of Cups reversed mark a "
                     "tense moment that softens.")
@@ -227,7 +226,6 @@ class TestTraduccion(unittest.TestCase):
         limpio, _ = ta.verificar_traduccion(original, traduccion, self.indice)
         self.assertIsNone(limpio, "no detecta la segunda orientación invertida")
 
-    @unittest.expectedFailure
     def test_marcador_portugues_con_tilde(self):
         original = "Two of Swords reversed signals a difficult choice."
         traduccion = "Dos de Espadas invertida não señala una elección difícil."
