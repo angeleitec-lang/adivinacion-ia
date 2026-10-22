@@ -1726,8 +1726,25 @@ def _verif_sinastria(calc, texto, motivos):
         motivos.append(f"Menciona una fecha o año no calculado: {fecha}")
 
 
+_SIGNOS_ASTRO = ("aries", "tauro", "gemini", "cancer", "leo", "virgo",
+                 "libra", "escorpio", "sagitario", "capricornio", "acuario",
+                 "piscis")
+_RE_SIGNO = r"(?:" + "|".join(_SIGNOS_ASTRO) + r")"
+_RE_POSICION_ASTRO = re.compile(
+    r"\b(" + _RE_PLANETA + r")\s+"
+    r"(?:(transita|se\s+mueve)\s+por|(?:esta|se\s+encuentra)\s+en|en)\s+"
+    r"(" + _RE_SIGNO + r"|geminis)\b")
+_RE_ASC_POSICION = re.compile(
+    r"\bascendente\s+(?:en\s+)?(" + _RE_SIGNO + r"|geminis)\b")
+
+
+def _signo_normalizado(signo):
+    signo = _norm(signo)
+    return "gemini" if signo == "geminis" else signo
+
+
 def _verif_transitos(calc, texto, motivos):
-    """Solo contradicciones: triples 'X hace Y a su Z natal' no calculados."""
+    """Contradicciones de tránsitos: aspectos, posiciones, casas y fechas."""
     trans = (calc or {}).get("transitos") or {}
     aspectos = trans.get("aspectos") or []
     if not aspectos:
@@ -1743,6 +1760,73 @@ def _verif_transitos(calc, texto, motivos):
             motivos.append(
                 f"Menciona un tránsito que no está entre los calculados: "
                 f"{t} hace {a} a su {npl} natal")
+
+    carta = (calc or {}).get("carta_natal") or {}
+    mapa = _planetas_mapa(carta)
+    posiciones = trans.get("posiciones") or trans.get("posiciones_transito") or {}
+    pos_map = {}
+    for nombre, datos in (posiciones.items() if isinstance(posiciones, dict) else ()):
+        if isinstance(datos, dict):
+            pos_map[_norm(nombre)] = _signo_normalizado(datos.get("signo", ""))
+        elif isinstance(datos, str):
+            pos_map[_norm(nombre)] = _signo_normalizado(datos)
+    for m in _RE_POSICION_ASTRO.finditer(n):
+        planeta, verbo, signo = m.group(1), m.group(2), _signo_normalizado(m.group(3))
+        if verbo:
+            if planeta not in pos_map:
+                motivos.append(
+                    "Afirma la posición de un planeta en tránsito que no se "
+                    f"calcula: {planeta} en {signo}")
+            elif pos_map[planeta] != signo:
+                motivos.append(
+                    "Contradice la posición calculada del tránsito de "
+                    f"{planeta} ({pos_map[planeta]}): el texto dice {signo}")
+            continue
+        datos = mapa.get(planeta)
+        if datos is None:
+            motivos.append(
+                f"Menciona un planeta que no está en la carta natal: {planeta}")
+            continue
+        esperado = _signo_normalizado(datos.get("signo", ""))
+        if esperado and esperado != signo:
+            motivos.append(
+                f"Atribuye a {planeta} una posición natal que no se calcula "
+                f"(está en {esperado}): el texto dice {signo}")
+    m_asc = _RE_ASC_POSICION.search(n)
+    if m_asc:
+        asc = carta.get("ascendente") or {}
+        signo_asc = _signo_normalizado(
+            asc.get("signo", "") if isinstance(asc, dict) else asc)
+        declarado = _signo_normalizado(m_asc.group(1))
+        if signo_asc and signo_asc != declarado:
+            motivos.append(
+                f"Atribuye al Ascendente un signo que no se calcula "
+                f"({signo_asc}): el texto dice {declarado}")
+
+    permitidas = set()
+    for datos in mapa.values():
+        casa = datos.get("casa")
+        if isinstance(casa, int):
+            permitidas.add(casa)
+    for a in aspectos:
+        casa = a.get("casa_natal")
+        if isinstance(casa, int):
+            permitidas.add(casa)
+    casas_carta = carta.get("casas")
+    if isinstance(casas_carta, list) and casas_carta:
+        permitidas.update(range(1, len(casas_carta) + 1))
+    for casa in re.findall(r"\bcasa\s+(\d{1,2})\b", n):
+        if permitidas and int(casa) not in permitidas:
+            motivos.append(
+                f"Menciona una casa que no está entre las calculadas: {casa}")
+
+    if "retrograd" in n:
+        calculados = [_norm(str(d.get("retrogrado", ""))) for d in mapa.values()]
+        if not any(c in ("true", "1", "si") for c in calculados):
+            motivos.append("Afirma una retrogradación que no se calcula")
+
+    for fecha in _fechas_inventadas(calc, texto):
+        motivos.append(f"Menciona una fecha o año no calculado: {fecha}")
 
 
 _RE_PLANETA_RS = re.compile(

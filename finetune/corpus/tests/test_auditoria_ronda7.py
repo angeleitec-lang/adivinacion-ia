@@ -40,7 +40,6 @@ def _aceptada(tarea, texto):
 
 
 class TestFalsosNegativos(unittest.TestCase):
-    @unittest.expectedFailure
     def test_transitos_posicion_y_fecha_inventadas(self):
         tarea = {
             "familia": "transitos",
