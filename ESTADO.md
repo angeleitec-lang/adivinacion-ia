@@ -4,8 +4,8 @@
 
 Commits locales (git log main..HEAD, sin push):
 
-- `<$HASH1>` — armar_dataset_v1.py: soporte multi-fuente (`--fuente` repetible, snapshot fusionado, huella multi-fuente); humano/resto completo soporta formato plano (prompt_user/respuesta) y ShareGPT; merge_final.py: split_agrupado agrupa por situación Y prompt idéntico (union-find), puerta real case-insensitive; qa_dataset.py: contar_preguntas_basura + test nuevo T117
-- `<$HASH2>` — informe docs/ARMAR_DATASET_V1C.md + ESTADO.md
+- `e0cd311` — armar_dataset_v1.py: soporte multi-fuente (`--fuente` repetible, snapshot fusionado, huella multi-fuente); humano/resto completo soporta formato plano (prompt_user/respuesta) y ShareGPT; merge_final.py: split_agrupado agrupa por situación Y prompt idéntico (union-find), puerta real case-insensitive; qa_dataset.py: contar_preguntas_basura + test nuevo T117
+- `1d48b53` — informe docs/ARMAR_DATASET_V1C.md + ESTADO.md
 
 Verificación: suite completa **2493 tests OK** (skipped 1); `./finetune/scripts/check.sh` → **CHECK OK**.
 
