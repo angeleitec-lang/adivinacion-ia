@@ -1,78 +1,105 @@
-# ESTADO — T124 Regenerar lecturas más flojas con Mercury
+# ESTADO — T119 Evidencias y afirmaciones de libros de astrología comprados (Arroyo, Sasportas)
 
-Rama: `track/t124-regenerar-lecturas`. Worktree:
-`/Users/angelgonzalez/adivinacion-ia/.worktrees/t124-regenerar-lecturas`.
+Rama: `track/t119-evidencias-libros-astro`. Worktree:
+`/Users/angelgonzalez/adivinacion-ia/.worktrees/t119-evidencias-libros-astro`.
 
 ## Estado: TRACK COMPLETO
 
-Muestra de 40 → 40/40 aceptadas (100 %). Calidad antes/después (35 pares
-localizados): lecturas con ≥1 defecto 97 % → 46 %; defectos totales 139 → 44.
-apertura_formula 68,6 % → 0 %; frase_plantilla 20 % → 0 %; muletilla 42,9 %
-→ 2,9 %; genero_asumido 40 % → 11,4 %. Criterio de lanzamiento cumplido
-(aprobación verificador 100 % ≥ 90 % y mejora) → pasada completa lanzada.
+Dos libros comprados por el usuario procesados hacia el work-dir **nuevo**
+`/Users/angelgonzalez/fase0/libros_comprados_astro/`, **sin** fusionar con
+`libros/evidencias/evidencias.jsonl` ni tocar la matriz v3 real.
 
-Pasada completa finalizada: 3.782 procesadas → 3.742 aceptadas (98,9 %), 40
-rechazadas (1,1 %), 0 errores de red. Reverificación: 3.742 válidas · 0
-inválidas · 0 fugas de evaluación. Salida `fase0/fase1_mercury_c/`
-(aceptadas.reverificadas.jsonl). Informe `docs/REGENERACION_FASE1.md`.
-`./finetune/scripts/check.sh` → **CHECK OK**.
+- **Arroyo** *Astrology, Psychology and the Four Elements* (1982), escaneo COMPLETO.
+- **Sasportas** *The Twelve Houses* (1985), escaneo INCOMPLETO (falta final cap. 15
+  y posterior a pág. 131, apéndices, glosario, bibliografía, índice).
 
-## AJUSTE paso 1 — Análisis transitos descartados (COMPLETADO)
+Ficha de procedencia (`origen=comprado_por_usuario`,
+`licencia_hint=libro con copyright, uso interno`) en
+`fase0/libros_comprados_astro/knowledge/fuentes_libros_comprados.jsonl`.
 
-Reproducido el filtro exacto de T112 (`filtrar_fugas_eval` sobre
-`01_reverificadas/validas.jsonl`, 12883 filas): 12438 mantenidas, 445
-descartes, boiler 2037. transitos descartados = **138** (no 139), todos
-`fuga_evaluacion_ngramas` (5–13 n-gramas compartidos con casos eval-transitos-*).
+## Alcance decidido (vinculante, usuario)
 
-Hallazgo clave: los n-gramas compartidos son **frases fijas del esqueleto del
-prompt de transitos** (no fugas de contenido real). Ejemplos legibles:
-«en tránsito hace cuadratura a su neptuno natal casa 9 orbe 0», «0 3 saturno
-en tránsito hace sextil a su júpiter natal casa». El prompt de transitos las
-enumera en «Posiciones:», y los casos de evaluación usan el mismo generador y
-la misma redacción → falsos positivos estructurales. El filtro de boiler
-(df ≥ BOILERPLATE_DF) no las elimina porque cada combinación concreta de
-aspecto figura en <20 filas, aunque todas comparten el mismo patrón de frase.
+**Solo celdas existentes** en el catálogo: `signo`, `planeta_en_signo`,
+`planeta_en_casa`, `aspecto`. **No** se crean `casa-N` / `elemento` / `modalidad`
+ni se toca el catálogo compartido. En Sasportas, `planeta_en_casa` solo cuando el
+capítulo de casa nombra explícitamente un planeta en esa casa. El hueco de
+contenido sin celda destino se documenta en el `.md` (§5) con propuesta de pista
+aparte.
 
-Conclusión / propuesta para el informe (decisión posterior, fuera de T124):
-los descartes de transitos son **falsos positivos por plantilla del prompt**,
-no por solape con respuestas de evaluación. No relajar el filtro global; la
-vía limpia sería añadir los n-gramas de esqueleto del prompt de transitos a
-`boiler_extra` en `fugas_eval` (ya soportado), o aplicar el umbral por familia.
-Los 138 no se recuperan en T124.
+## Resultados (números reales)
 
-Método de verificación: `/tmp/t124_analisis_transitos.py` y
-`/tmp/t124_gramas_compartidos.py`.
+- **Juez** (nodo2, 2 workers, reanudable): 93 secciones juzgadas (90 + 3
+  reaprovechadas), **325 evidencias**, 0 errores, 0 sin candidatos.
+  - Por libro: Arroyo 187 / Sasportas 138.
+  - Por tipo: `planeta_en_signo` 160, `signo` 106, `planeta_en_casa` 32, `aspecto` 27.
+  - Celdas únicas: `planeta_en_signo` 44, `signo` 6, `aspecto` 14, `planeta_en_casa` 15.
+  - Calidad: 321×4, 3×5, 1×3. Periodo `moderna`, idioma `en`.
+- **Afirmaciones**: 325 evidencias procesadas → **723 afirmaciones**, 0 rechazos
+  por copia literal, 0 errores.
+  - Por tipo: `planeta_en_signo` 340, `signo` 244, `aspecto` 76, `planeta_en_casa` 63.
+  - Por libro: Arroyo 432 / Sasportas 291.
+  - Afirmaciones en **español** + cita verbatim en **inglés** (igual precedente T115;
+    la evidencia lleva `idioma=en`). Ver caveat §6 del `.md` para reconciliar con T125.
+- **Puerta anti-copia** (>25 palabras consecutivas) verificada operativa: copia
+  literal de 30 palabras → rechazada; paráfrasis → aceptada.
 
-## Construcción del conjunto de tareas (pasos 1 y AJUSTE 2)
+## Delta de fusión (medido sobre copia, matriz real intacta)
 
-- Selección: `seleccionar_regenerar.py --in <snapshot> --umbral 2 --fraccion 0.30`
-  sobre `/tmp/aceptadas_snapshot_v1c.jsonl` (mercury 11851 + mercury_b 2242).
-  Nota: `cargar_lecturas` solo lee filas ShareGPT, así que la selección cubre
-  las 11851 de fase1_mercury (mercury_b planas quedan fuera). Propuesta: 3382
-  lecturas (14 familias).
-- `jobs.db` maestra copiada → `/tmp/jobs_t124.db`; las 3382 candidatas ya
-  estaban `pending` (la maestra nunca se ejecutó para ellas).
-- transitos NUEVOS: `generate_tasks.py --db /tmp/jobs_t124.db --seed 2026
-  --only transitos` → 400 (0 duplicados con las 387 aceptadas de mercury_b,
-  verificado por prompt normalizado).
-- BD final de pasada: `/tmp/jobs_t124_final.db` = 3382 candidatas + 400
-  transitos = **3782** jobs, todos pending.
-- Muestra de 40 (8 familias, incl. 5 transitos nuevos):
-  `/tmp/jobs_t124_muestra.db` → salida `fase0/fase1_mercury_c/muestra/`
-  (40/40 aceptadas).
+`cobertura_v3.py` con/sin las 325 evidencias astro, en `fusion/base/` y
+`fusion/con_astro/`:
 
-## Pasada completa (COMPLETADA)
+| Tipo | Completas base → con astro | Celdas que ganan +1 fuente |
+|---|---|---|
+| `planeta_en_signo` | 30 → 33 (**+3 completas nuevas**) | 104 |
+| `planeta_en_casa` | 0 → 0 | 31 |
+| `aspecto` | 0 → 0 | 23 |
+| `signo` | 57 → 57 | 30 |
 
-- BD `/tmp/jobs_t124_final.db` (3782), backend mercury, `--estilo auto`,
-  `--workers 3`, salida `fase0/fase1_mercury_c/`.
-- Resultado: 3782 procesadas → 3742 aceptadas, 40 rechazadas, 0 errores de
-  red. Reverificación 3742 válidas / 0 inválidas / 0 fugas.
+Aportan densidad/diversidad y +3 completas en `planeta_en_signo`. No completan
+casa/aspecto por sí solas (exigen ≥5 fuentes + clásica + 2 modernas + 1 es).
+
+## Ficheros entregados (solo los míos)
+
+- `finetune/corpus/libros_comprados_astro.py` (722 líneas) — detector EN→ES,
+  segmentación por párrafos con `entidad_id` explícito, reusa juez +
+  `afirmaciones_libros` + puerta anti-copia de nichols. LLM solo nodo2 (≤2 workers),
+  work-dir nuevo, reanudable.
+- `finetune/corpus/tests/test_libros_comprados_astro.py` — 25 tests, **25/25 OK**.
+- `finetune/knowledge/libros_comprados_astro_evidencias.md` — ficha, cobertura,
+  HUECO (casas/elementos/modalidades sin celda), caveats y comando de fusión con
+  copia previa.
+
+## Verificación
+
+- Tests pista: `cd finetune/corpus && $PY -m unittest tests.test_libros_comprados_astro` → OK (25).
+- Global: `./finetune/scripts/check.sh` → **CHECK OK** (2585 tests, sk=1), antes y
+  después del merge de main.
 
 ## Commits (git log main..HEAD)
 
-- `e04f629` T124: ESTADO TRACK COMPLETO con hashes
-- `9e40dad` T124: informe de regeneración fase 1 + ESTADO
+- `1a5427a` T119: evidencias y afirmaciones de libros astro comprados (Arroyo, Sasportas)
+- `a012cd0` Merge main en track/t119 (trae auditoria_ronda7; ficheros disjuntos con T119)
+
+HEAD = `a012cd0`. `git diff --stat main..HEAD` = solo los 3 ficheros de T119
+(1110 inserciones). El merge de main se hizo para que el diff quede limpio (la
+rama se basó en `3cfb196` y main había avanzado con `auditoria_ronda7`, ficheros
+disjuntos; el merge no toca main).
+
+## Limpieza
+
+- El módulo se había escrito por error en el repo raíz
+  (`/Users/angelgonzalez/adivinacion-ia/finetune/corpus/libros_comprados_astro.py`,
+  untracked). **Eliminado** del raíz tras copiarlo al worktree. El raíz solo
+  conserva `finetune/corpus/salud_datos.md` (ajeno, NO tocado).
+
+## NUNCA
+
+- NUNCA push (git solo local).
+- NUNCA tocar `fase0/libros` (real) ni `fase0/libros_comprados_astro/work/` (temp T118).
+- NUNCA nodo1 (10.0.0.3, reservado). LLM solo nodo2 (10.0.0.4).
 
 ## Pendiente
 
-Ninguno. TRACK COMPLETO.
+Ninguno para T119. TRACK COMPLETO. (La propuesta de añadir `casa-N`/`elemento`/
+`modalidad` para aprovechar el núcleo de Sasportas queda como pista aparte, fuera
+del alcance de esta.)
