@@ -537,6 +537,35 @@ def contar_filas(filas: list) -> dict:
             "por_generador": dict(gener), "total": sum(c.values())}
 
 
+RE_PREGUNTA_BASURA = re.compile(r"^\d+\s*(?:A ver|Mira|Es que|Nada|Pues|Tengo curiosidad)[,\.:]?$", re.IGNORECASE)
+
+
+def es_pregunta_basura(pregunta: str) -> bool:
+    """True si la pregunta es basura (p. ej. «124 A ver,»).
+
+    Solo informativo: estas preguntas no se eliminan, solo se cuentan (T117).
+    """
+    p = pregunta.strip()
+    if not p:
+        return True
+    return bool(RE_PREGUNTA_BASURA.search(p))
+
+
+def contar_preguntas_basura(filas: list) -> dict:
+    """Cuenta preguntas basura por bloque y en total (sin eliminar nada)."""
+    por_bloque: dict[str, int] = {}
+    total = 0
+    for f in filas:
+        h = humano_de(f)
+        m = RE_PREGUNTA.search(h)
+        pregunta = (m.group(1).strip() if m else sin_plantilla(h))
+        if es_pregunta_basura(pregunta):
+            b = f.get("bloque") or "sin_bloque"
+            por_bloque[b] = por_bloque.get(b, 0) + 1
+            total += 1
+    return {"total": total, "por_bloque": por_bloque}
+
+
 def run_qa(dataset_dir: Path, out_dir=None, eval_dir=None,
            semilla: int = 42, muestras: int = 15,
            min_compartidos: int = 1, boiler_extra=frozenset()) -> dict:

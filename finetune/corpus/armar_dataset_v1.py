@@ -100,13 +100,19 @@ def turnos_gpt(fila: dict) -> int:
 
 
 def respuesta_completa(fila: dict) -> str:
-    return "\n".join(c.get("value", "") for c in fila.get("conversations", [])
-                    if isinstance(c, dict) and c.get("from") == "gpt")
+    conv = fila.get("conversations")
+    if isinstance(conv, list):
+        return "\n".join(c.get("value", "") for c in conv
+                        if isinstance(c, dict) and c.get("from") == "gpt")
+    return nfc(fila.get("respuesta", ""))
 
 
 def humano_completo(fila: dict) -> str:
-    return "\n".join(c.get("value", "") for c in fila.get("conversations", [])
-                    if isinstance(c, dict) and c.get("from") == "human")
+    conv = fila.get("conversations")
+    if isinstance(conv, list):
+        return "\n".join(c.get("value", "") for c in conv
+                        if isinstance(c, dict) and c.get("from") == "human")
+    return nfc(fila.get("prompt_user", ""))
 
 
 def prompt_de(fila: dict) -> str:
@@ -205,13 +211,16 @@ def filtrar_fugas_eval(filas: list[dict],
 class Tuberia:
     """Cadena completa reanudable hacia dataset_fase1_v1."""
 
-    def __init__(self, entrada, salida_dir, semilla: int = 42,
+    def __init__(self, entrada=None, salida_dir=None, semilla: int = 42,
                  real_raw=None, manifest=None, min_chars: int = 400,
                  max_chars: int = 12000, max_repetition: float = 0.12,
                  train_ratio: float = 0.8, val_ratio: float = 0.1,
                  formato: str = "chatml", puerta_real: bool = True,
-                 min_real_filas: int = 200):
-        self.entrada = Path(entrada)
+                 min_real_filas: int = 200, fuentes=None):
+        if fuentes is None:
+            fuentes = [entrada] if entrada else [ENTRADA_POR_DEFECTO]
+        self.fuentes = [Path(f) for f in fuentes]
+        self.entrada = self.fuentes[0]
         self.salida = Path(salida_dir)
         self.semilla = semilla
         self.real_raw = Path(real_raw) if real_raw else Path(RAW_REAL_POR_DEFECTO)
@@ -268,16 +277,24 @@ class Tuberia:
 
     # -- etapas ------------------------------------------------------------
     def etapa_snapshot(self) -> dict:
-        if not self.entrada.exists():
-            raise FileNotFoundError(self.entrada)
-        sha = sha256_archivo(self.entrada)
+        for f in self.fuentes:
+            if not f.exists():
+                raise FileNotFoundError(f)
         destino = self._p("00_snapshot", "aceptadas.jsonl")
         destino.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(self.entrada, destino)
+        filas: list[dict] = []
+        por_fuente: dict[str, int] = {}
+        for f in self.fuentes:
+            filas_fuente = merge_final.load_jsonl(f)
+            por_fuente[str(f)] = len(filas_fuente)
+            filas += filas_fuente
+        merge_final.write_jsonl(destino, filas)
+        sha = sha256_archivo(destino)
         (destino.with_name("aceptadas.sha256")).write_text(sha + "\n",
                                                          encoding="utf-8")
-        filas = sum(1 for _ in destino.open(encoding="utf-8"))
-        return {"origen": str(self.entrada), "sha256": sha, "filas": filas}
+        return {"origen": " + ".join(str(f) for f in self.fuentes),
+                "por_fuente": por_fuente,
+                "sha256": sha, "filas": len(filas)}
 
     def etapa_eval(self) -> dict:
         """Genera (una vez, congelados) los casos de las 3 semillas reservadas
@@ -537,7 +554,8 @@ class Tuberia:
     def _definicion_etapas(self):
         snap = self._p("00_snapshot", "aceptadas.jsonl")
         return [
-            ("snapshot", lambda: _huella(self.entrada), self.etapa_snapshot),
+            ("snapshot", lambda: _huella(*[str(f) for f in self.fuentes]),
+             self.etapa_snapshot),
             # Huella solo por semillas: los ficheros que esta etapa crea no deben
             # alterar su propia huella (si no, nunca se reanudaria).
             ("eval", lambda: _huella(
@@ -817,8 +835,14 @@ class Tuberia:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Arma dataset_fase1_v1 desde las lecturas de Mercury (T103).")
-    ap.add_argument("--entrada", default=ENTRADA_POR_DEFECTO,
-                    help="aceptadas.jsonl de la generación Mercury")
+    ap.add_argument("--entrada", default=None,
+                    help="aceptadas.jsonl de la generación Mercury (legado: "
+                         "equivalente a un único --fuente)")
+    ap.add_argument("--fuente", action="append", dest="fuentes",
+                    default=None,
+                    help="fuente de lecturas repetible (varias se fusionan en "
+                         "el snapshot); por defecto usa --entrada o la ruta "
+                         "por defecto del proyecto")
     ap.add_argument("--salida", default=SALIDA_POR_DEFECTO,
                     help="directorio de salida (dataset_fase1_v1)")
     ap.add_argument("--real-raw", default=RAW_REAL_POR_DEFECTO,
@@ -835,13 +859,17 @@ def main(argv=None) -> int:
     ap.add_argument("--sin-puerta-real", action="store_true",
                     help="no aplicar la puerta de calidad al corpus real")
     args = ap.parse_args(argv)
+    fuentes = args.fuentes
+    if fuentes is None:
+        fuentes = [args.entrada] if args.entrada else [ENTRADA_POR_DEFECTO]
     tub = Tuberia(
-        entrada=args.entrada, salida_dir=args.salida, semilla=args.semilla,
+        salida_dir=args.salida, semilla=args.semilla,
         real_raw=args.real_raw, manifest=args.manifest,
         min_chars=args.min_chars, max_chars=args.max_chars,
         max_repetition=args.max_repetition,
         train_ratio=args.train_ratio, val_ratio=args.val_ratio,
         puerta_real=not args.sin_puerta_real, min_real_filas=args.min_real,
+        fuentes=fuentes,
     )
     return tub.ejecutar()
 
