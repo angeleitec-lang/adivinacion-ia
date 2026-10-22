@@ -236,7 +236,9 @@ class TestCobertura(unittest.TestCase):
         self.assertEqual(res[12]["first_line"], None)
 
     def test_partes(self):
-        text = "See the appendix and the glossary. The Planets, the signs and aspects.\nBibliography follows the Index."
+        text = ("The Planets, the signs and aspects appear in the body.\n\n"
+                "APPENDIX\nHouse tables\n\n"
+                "BIBLIOGRAPHY\n\nINDEX\n")
         partes = lcp.detect_part_presence(text)
         self.assertTrue(partes["apéndice/glosario"])
         self.assertTrue(partes["los planetas"])
@@ -251,6 +253,22 @@ class TestMuestras(unittest.TestCase):
         self.assertLessEqual(len(picks), 5)
         self.assertTrue(all(len(p.split()) >= 40 for p in picks))
         self.assertTrue(all(not p.startswith("#") for p in picks))
+
+
+class TestDetectPartPresence(unittest.TestCase):
+    def test_apendice_solo_como_rubrica(self):
+        menciona = "the question is included in Appendix 2.\nmore body text"
+        self.assertFalse(lcp.detect_part_presence(menciona)["apéndice/glosario"])
+        rubrica = "some text\n\nAPPENDIX 2\nHouse Division tables\n"
+        self.assertTrue(lcp.detect_part_presence(rubrica)["apéndice/glosario"])
+
+    def test_partes_cuerpo(self):
+        t = "the planets and the signs interact through aspects"
+        d = lcp.detect_part_presence(t)
+        self.assertTrue(d["los planetas"])
+        self.assertTrue(d["los signos"])
+        self.assertTrue(d["aspectos"])
+        self.assertFalse(d["introducción/prefacio"])
 
 
 class TestHeadingCandidate(unittest.TestCase):

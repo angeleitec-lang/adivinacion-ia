@@ -571,9 +571,22 @@ PART_MARKERS = {
 }
 
 
+PART_MARKERS_HEAD_ONLY = {"apéndice/glosario", "bibliografía", "índice"}
+
+
 def detect_part_presence(text: str) -> dict:
+    """Marcadores de secciones. Los finales de libro (apéndice, bibliografía,
+    índice) solo cuentan como rúbrica al principio de línea: las menciones en
+    el cuerpo («included in Appendix 2») no prueban que la sección esté."""
     low = text.lower()
-    return {name: bool(re.search(pat, low)) for name, pat in PART_MARKERS.items()}
+    lines = [l.strip(" |\u00b7\t") for l in low.splitlines()]
+    out = {}
+    for name, pat in PART_MARKERS.items():
+        if name in PART_MARKERS_HEAD_ONLY:
+            out[name] = any(re.match(pat, l) for l in lines)
+        else:
+            out[name] = bool(re.search(pat, low))
+    return out
 
 # --------------------------------------------------------------------------
 # Pipeline Arroyo
@@ -822,7 +835,7 @@ def make_report(arroyo, sas, vocab: frozenset, psm_chosen, sample_table) -> str:
         before = quality_metrics(sas["before_text"], vocab)
         after = quality_metrics(sas["text"], vocab)
         out += [
-            "## Sasportas — Liz Greene & Howard Sasportas (?) — The Twelve Houses (1985)",
+            "## Sasportas — Howard Sasportas (prefacio de Liz Greene) — The Twelve Houses (1985)",
             "",
             f"- OCR re-hecho a {OCR_DPI} dpi, tesseract `-l eng --psm {psm_chosen}` (separando las dos medias hojas).",
             f"- Medias páginas con texto: {sas['n_raw_pages']}; páginas al documento final: {len(sas['records'])}",
@@ -884,20 +897,29 @@ def make_report(arroyo, sas, vocab: frozenset, psm_chosen, sample_table) -> str:
         for j, p in enumerate(sample_paragraphs(sas["text"]), 1):
             out.append(f"{j}. «{p[:400]}»")
         out.append("")
+    if sas:
+        _labs = [int(r["label"]) for r in sas["records"] if (r["label"] or "").isdigit()]
+        last_lab = max(_labs) if _labs else "?"
+    else:
+        last_lab = "?"
     out += [
         "## Problemas que quedan",
         "",
         "- Arroyo: la tipografía decorativa de las portadillas («Astro logy & P syc ho [ogy») llega "
         "con espacios dentro de las palabras desde la capa de texto del PDF; no es recuperable sin OCR.",
         "- Arroyo: el sumario (tabla de contenido) se conserva tal cual, con líneas de puntos y números "
-        "sustos que la limpieza general no distingue de texto normal.",
+        "sueltos que la limpieza general no distingue de texto normal.",
         "- Sasportas: fracciones del tipo «2½ days» salen como «2% days»; no se han corregido para no "
         "introducir cambios de texto no verificables.",
         "- Sasportas: las figuras/diagramas quedan como líneas sueltas sin texto alternativo.",
         "- Las marcas `#`/`##` son heurísticas (frecuencia de rúbricas + líneas cortas sueltas); T119 debe "
         "revisarlas antes de usarlas como segmentación.",
-        "- El PDF de Sasportas está INCOMPLETO (63 de ~150 hojas): ver la tabla de cobertura; T119 solo "
-        "podrá atribuir evidencias a lo presente.",
+        f"- El PDF de Sasportas está INCOMPLETO: el escaneo llega como máximo hasta la página impresa "
+        f"{last_lab} y se corta a mediados del capítulo 15 (Grouping the Houses; según el sumario empieza "
+        "en p. 108). No están en el archivo: el final del capítulo 15, los apéndices citados en el cuerpo "
+        "(entre ellos el de la división de las casas), glosario, bibliografía ni índice. Las dos últimas "
+        "hojas pierden caracteres por el borde izquierdo (defecto del escaneo físico). Ver la tabla de "
+        "cobertura; T119 solo podrá atribuir evidencias a lo presente.",
     ]
     return "\n".join(out) + "\n"
 
