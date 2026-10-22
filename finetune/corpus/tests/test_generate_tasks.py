@@ -313,6 +313,33 @@ class TestEtica(unittest.TestCase):
         self.assertEqual(len(set(primeros)), len(primeros))
 
 
+class TestFueraAlcance(unittest.TestCase):
+    def _jobs(self, n=10, semilla=5):
+        kb_tarot, kb_astro, kb_num = kbs_para_test()
+        b = gt.Builder(random.Random(semilla), kb_tarot, kb_astro, kb_num)
+        return b.fuera_alcance(n)
+
+    def test_payload_incluye_tecnica_y_pregunta(self):
+        for _bloque, _system, prompt, payload, _mt in self._jobs():
+            datos = json.loads(payload)
+            self.assertIn("tecnica", datos)
+            self.assertIn("pregunta", datos)
+            self.assertTrue(datos["pregunta"])
+            self.assertIn(datos["pregunta"], prompt)
+
+    def test_arranque_es_texto_y_no_indice(self):
+        # Regresión: zip(..., range(n)) metía el índice como arranque y la
+        # pregunta empezaba por un número.
+        for _bloque, _system, _prompt, payload, _mt in self._jobs():
+            datos = json.loads(payload)
+            self.assertFalse(datos["pregunta"][0].isdigit(), datos["pregunta"])
+
+    def test_pares_distintos_sin_repetir(self):
+        preguntas = [json.loads(payload)["pregunta"]
+                     for _bloque, _system, _prompt, payload, _mt in self._jobs(10)]
+        self.assertEqual(len(set(preguntas)), len(preguntas))
+
+
 class TestReferenciaSinDoblePunto(unittest.TestCase):
     def _lineas_referencia(self, prompt):
         en_referencia = False
