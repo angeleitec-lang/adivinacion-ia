@@ -1524,14 +1524,15 @@ def _pct_contradice(c, esperado):
 
 _RECHAZO_ALCANCE = re.compile(
     r"no puedo|no voy a|no es posible|no estoy (para|en condiciones)|no forma parte|"
-    r"no entra dentro|queda fuera de mi alcance|no sustituye|no reemplaza|"
+    r"no entra dentro|queda fuera de (?:mi alcance|lo que (?:trabajo|hago|ofrezco))|"
+    r"no sustituye|no reemplaza|"
     r"no soy (?:m[ée]dico|profesional|sanador)|no doy|no hago|me niego|"
     r"no está en mi (?:alcance|mano)|no tengo (?:acceso|datos|forma)|no dispongo|"
     r"no es mi cometido|no corresponde|no puedo (?:garantizar|predecir|diagnosticar|asegurar|darte)",
     re.IGNORECASE)
 
 _ALTERNATIVA_TECNICAS = re.compile(
-    r"tarot|baraja|astrolog|numerolog|carta\s+natal|tr[aá]nsito|"
+    r"tarot|baraja|astrolog|numerol[oó]g|carta\s+natal|tr[aá]nsito|"
     r"revoluci[oó]n\s+solar|biorritmo", re.IGNORECASE)
 
 

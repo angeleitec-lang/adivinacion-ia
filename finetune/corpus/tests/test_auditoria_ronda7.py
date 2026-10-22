@@ -130,7 +130,6 @@ class TestFalsosNegativos(unittest.TestCase):
 
 
 class TestFalsosPositivos(unittest.TestCase):
-    @unittest.expectedFailure
     def test_rechazo_valido_queda_fuera_de_lo_que_trabajo(self):
         tarea = {"familia": "fuera_alcance", "tecnica": "I Ching",
                  "calculos": {}}
@@ -139,7 +138,6 @@ class TestFalsosPositivos(unittest.TestCase):
         ok, motivos = _aceptada(tarea, texto)
         self.assertTrue(ok, f"rechazo válido rechazado: {motivos}")
 
-    @unittest.expectedFailure
     def test_alternativa_numerologica_con_tilde(self):
         tarea = {"familia": "fuera_alcance", "tecnica": "quiromancia",
                  "calculos": {}}
