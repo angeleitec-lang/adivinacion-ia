@@ -68,13 +68,10 @@ Método de verificación: `/tmp/t124_analisis_transitos.py` y
 - Resultado: 3782 procesadas → 3742 aceptadas, 40 rechazadas, 0 errores de
   red. Reverificación 3742 válidas / 0 inválidas / 0 fugas.
 
-## Pendiente
-
-- ~~Reverificar salida~~ (hecho) y ~~redactar `docs/REGENERACION_FASE1.md`~~
-  (hecho).
-- ~~unittest~~ (no hubo cambios de código fuente; check.sh CHECK OK).
-- Commits locales por task; `TRACK COMPLETO` con hashes (`git log main..HEAD`).
-
 ## Commits (git log main..HEAD)
 
-(pendiente)
+- `9e40dad` T124: informe de regeneración fase 1 + ESTADO
+
+## Pendiente
+
+Ninguno. TRACK COMPLETO.
