@@ -35,6 +35,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import sqlite3
 import sys
 import unicodedata
 from collections import Counter, defaultdict
@@ -172,6 +173,101 @@ class Registro:
             fh.write(json.dumps(entrada, ensure_ascii=False) + "\n")
 
 
+def clave_fila(fila: dict):
+    """Clave (bloque, id) normalizada de una fila, para reemplazos T126."""
+    return (str(fila.get("bloque")), str(fila.get("id")))
+
+
+def mapear_reemplazos(fuente_nueva, db_tareas, db_maestra):
+    """Une filas regeneradas con las originales que sustituyen (T126).
+
+    Recorrido: fila nueva (id=job de la pasada de regeneracion) -> prompt del
+    job en `db_tareas` -> ids del maestro (`db_maestra`) con EXACTAMENTE ese
+    (bloque, prompt). Las tareas cuyo prompt no esta en el maestro son nuevas
+    de verdad (p. ej. transitos de la semilla 2026) y no reemplazan nada.
+
+    Devuelve (entries, resumen); cada entry es
+    {"nuevo": {"id", "bloque"}, "originales": [{"id", "bloque"}, ...]}.
+    """
+    filas = merge_final.load_jsonl(Path(fuente_nueva))
+    con_t = sqlite3.connect(f"file:{Path(db_tareas)}?mode=ro", uri=True)
+    jobs_t = {str(r[0]): (str(r[1]), r[2])
+              for r in con_t.execute("select id, bloque, prompt from jobs")}
+    con_t.close()
+    con_m = sqlite3.connect(f"file:{Path(db_maestra)}?mode=ro", uri=True)
+    por_prompt: dict[tuple, list] = {}
+    for mid, mb, mp in con_m.execute("select id, bloque, prompt from jobs"):
+        por_prompt.setdefault((str(mb), mp), []).append(mid)
+    con_m.close()
+
+    entries: list[dict] = []
+    solo_nuevas = sin_job = 0
+    for f in filas:
+        if not isinstance(f, dict):
+            continue
+        clave = (str(f.get("bloque")), str(f.get("id")))
+        job = jobs_t.get(clave[1])
+        if not job or job[0] != clave[0]:
+            sin_job += 1
+            continue
+        masters = por_prompt.get((clave[0], job[1]))
+        if not masters:
+            solo_nuevas += 1
+            continue
+        entries.append({
+            "nuevo": {"id": f.get("id"), "bloque": f.get("bloque")},
+            "originales": [{"id": m, "bloque": f.get("bloque")}
+                           for m in sorted(masters)],
+        })
+    resumen = {
+        "filas": len(filas),
+        "reemplazos": len(entries),
+        "originales": sum(len(e["originales"]) for e in entries),
+        "solo_nuevas": solo_nuevas,
+        "sin_job": sin_job,
+    }
+    return entries, resumen
+
+
+def _aplicar_reemplazos(filas: list[dict], mapa: list[dict]) -> tuple[list, dict]:
+    """Elimina de `filas` los originales que sustituye una regenerada (T126).
+
+    Una fila se elimina si su (bloque, id) figura como original del mapa y no
+    es a la vez clave de alguna fila nueva; asi el reemplazo nunca se borra a
+    si mismo ni borra por colision de ids entre familias distintas. Falla si
+    el mapa no cuadra con las fuentes (falta un original o falta una nueva).
+    """
+    nuevas = {clave_fila(e["nuevo"]) for e in mapa}
+    originales: dict = {}
+    for e in mapa:
+        for o in e.get("originales", []):
+            originales.setdefault(clave_fila(o), e["nuevo"])
+    vistos = {clave_fila(f) for f in filas if isinstance(f, dict)}
+    faltan_nuevas = sorted(nuevas - vistos)
+    if faltan_nuevas:
+        raise ValueError(f"mapa de reemplazos: filas nuevas ausentes: "
+                         f"{faltan_nuevas[:5]}")
+    faltan_orig = sorted(k for k in originales if k not in vistos)
+    if faltan_orig:
+        raise ValueError(f"mapa de reemplazos: originales ausentes: "
+                         f"{faltan_orig[:5]}")
+    conservadas = []
+    eliminadas = 0
+    for f in filas:
+        if not isinstance(f, dict):
+            conservadas.append(f)
+            continue
+        k = clave_fila(f)
+        if k in nuevas:
+            conservadas.append(f)
+        elif k in originales:
+            eliminadas += 1
+        else:
+            conservadas.append(f)
+    stats = {"nuevos": len(nuevas), "originales_eliminados": eliminadas}
+    return conservadas, stats
+
+
 def filtrar_fugas_eval(filas: list[dict],
                        casos_eval: dict) -> tuple[list[dict], list[dict],
                                                    set]:
@@ -216,10 +312,11 @@ class Tuberia:
                  max_chars: int = 12000, max_repetition: float = 0.12,
                  train_ratio: float = 0.8, val_ratio: float = 0.1,
                  formato: str = "chatml", puerta_real: bool = True,
-                 min_real_filas: int = 200, fuentes=None):
+                 min_real_filas: int = 200, fuentes=None, reemplazos=None):
         if fuentes is None:
             fuentes = [entrada] if entrada else [ENTRADA_POR_DEFECTO]
         self.fuentes = [Path(f) for f in fuentes]
+        self.reemplazos = Path(reemplazos) if reemplazos else None
         self.entrada = self.fuentes[0]
         self.salida = Path(salida_dir)
         self.semilla = semilla
@@ -288,13 +385,18 @@ class Tuberia:
             filas_fuente = merge_final.load_jsonl(f)
             por_fuente[str(f)] = len(filas_fuente)
             filas += filas_fuente
+        stats_extra: dict = {}
+        if self.reemplazos is not None:
+            mapa = merge_final.load_jsonl(self.reemplazos)
+            filas, stats_extra["reemplazos"] = _aplicar_reemplazos(filas, mapa)
+            stats_extra["reemplazos"]["mapa"] = str(self.reemplazos)
         merge_final.write_jsonl(destino, filas)
         sha = sha256_archivo(destino)
         (destino.with_name("aceptadas.sha256")).write_text(sha + "\n",
                                                          encoding="utf-8")
         return {"origen": " + ".join(str(f) for f in self.fuentes),
                 "por_fuente": por_fuente,
-                "sha256": sha, "filas": len(filas)}
+                "sha256": sha, "filas": len(filas), **stats_extra}
 
     def etapa_eval(self) -> dict:
         """Genera (una vez, congelados) los casos de las 3 semillas reservadas
@@ -554,7 +656,10 @@ class Tuberia:
     def _definicion_etapas(self):
         snap = self._p("00_snapshot", "aceptadas.jsonl")
         return [
-            ("snapshot", lambda: _huella(*[str(f) for f in self.fuentes]),
+            ("snapshot", lambda: _huella(
+                *[str(f) for f in self.fuentes],
+                *([str(self.reemplazos)] if self.reemplazos is not None
+                  else [])),
              self.etapa_snapshot),
             # Huella solo por semillas: los ficheros que esta etapa crea no deben
             # alterar su propia huella (si no, nunca se reanudaria).
@@ -858,7 +963,37 @@ def main(argv=None) -> int:
                     help="filas reales minimas para conservar el bloque real")
     ap.add_argument("--sin-puerta-real", action="store_true",
                     help="no aplicar la puerta de calidad al corpus real")
+    ap.add_argument("--reemplazos",
+                    help="mapa JSONL de reemplazos T126 (nuevo -> originales) "
+                         "aplicado en el snapshot")
+    ap.add_argument("--mapear-regeneradas", action="store_true",
+                    help="modo auxiliar T126: genera el mapa de reemplazos "
+                         "sin ejecutar la cadena")
+    ap.add_argument("--fuente-nueva",
+                    help="JSONL de las filas regeneradas (p. ej. aceptadas."
+                         "reverificadas de fase1_mercury_c)")
+    ap.add_argument("--db-tareas",
+                    help="jobs.db de la pasada de regeneracion (id = job)")
+    ap.add_argument("--db-maestra", default=str(CORPUS_DIR / "jobs.db"),
+                    help="jobs.db maestro (id = id de las filas originales)")
+    ap.add_argument("--mapa-salida",
+                    help="ruta donde escribir el mapa de reemplazos")
     args = ap.parse_args(argv)
+    if args.mapear_regeneradas:
+        faltan = [n for n, v in (("--fuente-nueva", args.fuente_nueva),
+                                 ("--db-tareas", args.db_tareas),
+                                 ("--mapa-salida", args.mapa_salida))
+                  if not v]
+        if faltan:
+            ap.error(f"--mapear-regeneradas requiere: {', '.join(faltan)}")
+        entries, resumen = mapear_reemplazos(
+            args.fuente_nueva, args.db_tareas, args.db_maestra)
+        destino = Path(args.mapa_salida)
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        merge_final.write_jsonl(destino, entries)
+        print(json.dumps({**resumen, "salida": str(destino)},
+                         ensure_ascii=False))
+        return 0
     fuentes = args.fuentes
     if fuentes is None:
         fuentes = [args.entrada] if args.entrada else [ENTRADA_POR_DEFECTO]
@@ -869,7 +1004,7 @@ def main(argv=None) -> int:
         max_repetition=args.max_repetition,
         train_ratio=args.train_ratio, val_ratio=args.val_ratio,
         puerta_real=not args.sin_puerta_real, min_real_filas=args.min_real,
-        fuentes=fuentes,
+        fuentes=fuentes, reemplazos=args.reemplazos,
     )
     return tub.ejecutar()
 
