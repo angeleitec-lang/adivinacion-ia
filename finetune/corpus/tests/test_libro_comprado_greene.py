@@ -166,6 +166,57 @@ class TestSegmentar(unittest.TestCase):
         self.assertGreaterEqual(informe["trozos_sin_celda"], 1)
 
 
+class TestInferir(unittest.TestCase):
+    def test_planeta_por_frecuencia(self):
+        t = ("Saturn meets Mars in a hard angle; Mars drives the square; the "
+             "Venus note appears once only.")
+        self.assertEqual(greene.inferir_planeta(t), "mars")
+
+    def test_sin_planetas_devuelve_none(self):
+        self.assertIsNone(greene.inferir_planeta("nothing of the sort here"))
+
+    def test_aspecto_sin_to_the_infiere(self):
+        texto = "\n".join([
+            "5 aspects on the",
+            "birth chart",
+            "",
+            "Saturn in aspect",
+            "",
+            ("Saturn-Mars contacts cut the appetite for ease; the Mars-Saturn "
+             "square forces endurance, and every Mars encounter with Saturn "
+             "demands long discipline before any reward arrives. ") * 8,
+        ])
+        secciones, _ = greene.segmentar(texto)
+        eids = {s["entidad_id"] for s in secciones}
+        self.assertIn("marte|cuadratura|saturno|aspecto", eids)
+        self.assertNotIn("luna|conjuncion|saturno|aspecto", eids)
+
+
+class TestMarcadoresHueco(unittest.TestCase):
+    def test_sinastria_filtra_aspectos(self):
+        p1 = ("Having made a closer observation of Saturn on the individual "
+              "chart we now watch it between two people: Saturn conjunct his "
+              "Moon in the partner makes duty feel like love, and Saturn "
+              "square her Sun binds them through fear. ") * 8
+        p2 = ("Saturn in Aries between the charts keeps the spark under "
+              "control and teaches both partners patience over the years. ") * 3
+        secciones, informe = greene.segmentar(p1 + "\n\n" + p2)
+        eids = {s["entidad_id"] for s in secciones}
+        self.assertFalse([e for e in eids if e.endswith("|aspecto")])
+        self.assertIn("saturno|aries|planeta_en_signo", eids)
+        self.assertGreaterEqual(informe["trozos_sin_celda"], 1)
+
+    def test_conclusion_filtra_aspectos(self):
+        parrafo = ("The science of psychology is a relatively new one, and "
+                   "astrology older still; Saturn square the Sun in this "
+                   "final chapter summarizes the discipline of time and "
+                   "patience. ") * 8
+        secciones, informe = greene.segmentar(parrafo)
+        self.assertEqual(secciones, [])
+        self.assertGreaterEqual(informe["trozos_sin_celda"], 1)
+        self.assertIn("conclusion", informe["sin_celda_por_capitulo"])
+
+
 class TestAntiCopia(unittest.TestCase):
     def test_afirmacion_literal_rechazada(self):
         indice = astro.construir_indice_copia(

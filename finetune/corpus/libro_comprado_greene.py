@@ -122,6 +122,21 @@ RE_ASPECTO_TIPO = {
     "oposicion": re.compile(r"\bopposit(?:e|ion)(?:s)?\b"),
 }
 
+# El OCR suele fundir la cabecera «Saturn in aspect» con el cuerpo y perder la
+# linea «to the X»: se infiere el planeta por frecuencia en el trozo.
+RE_PLANETA_WORD = re.compile(
+    r"\b(" + astro._alternancia(astro.PLANETAS_EN2ES) + r")\b")
+
+# Los capitulos 6 (sinastria) y 7 (conclusion) no dejan cabecera OCR
+# superviviente: se abren por marcador de primera frase. En ellos NO se
+# admiten celdas de aspecto (el lenguaje es natal/sinastrico mixto y las
+# cabeceras interiores («Pluto-Saturn contacts») no son secciones de Greene).
+MARCADORES_CAPITULO = (
+    ("having made a closer observation", "sinastria"),
+    ("the science of psychology is a relatively new one", "conclusion"),
+)
+HUECOS_SIN_ASPECTO = {"sinastria", "conclusion"}
+
 
 def _clave_capitulo(g1):
     """Clave normalizada de capitulo a partir del grupo capturado."""
@@ -253,6 +268,23 @@ def trocear(texto, target=CHUNK_TARGET, chunk_min=CHUNK_MIN):
     return trozos
 
 
+def inferir_planeta(texto):
+    """Planeta (clave EN) mas mencionado en un trozo, excluido saturn."""
+    conteo = {}
+    orden = []
+    for m in RE_PLANETA_WORD.finditer(astro.norm(texto)):
+        p = m.group(1)
+        if p == "saturn":
+            continue
+        if p not in conteo:
+            conteo[p] = 0
+            orden.append(p)
+        conteo[p] += 1
+    if not conteo:
+        return None
+    return max(orden, key=lambda p: conteo[p])
+
+
 def _nuevo_contexto(capitulo="inicio"):
     return {"capitulo": capitulo, "tipo": None, "eids": [], "planeta": None}
 
@@ -299,7 +331,14 @@ def segmentar(texto_limpio):
 
     def registrar(trozo):
         informe["trozos"] += 1
+        if contexto["tipo"] == "aspecto" and not contexto["planeta"]:
+            p = inferir_planeta(trozo)
+            if p:
+                contexto["planeta"] = p
+                contexto["capitulo"] = "aspectos:%s" % p
         ids = [e for e in eids_para_trozo(trozo, contexto) if e in validos]
+        if contexto["capitulo"] in HUECOS_SIN_ASPECTO:
+            ids = [e for e in ids if not e.endswith("|aspecto")]
         if not ids:
             informe["trozos_sin_celda"] += 1
             clave = contexto["capitulo"]
@@ -345,9 +384,25 @@ def segmentar(texto_limpio):
         if not linea.strip():
             vaciar()
             continue
+        s = linea.strip()
+        nl = astro.norm(s)
+        marcador = None
+        for pref, clave_m in MARCADORES_CAPITULO:
+            if nl.startswith(pref):
+                marcador = clave_m
+                break
+        if marcador is not None:
+            if contexto["capitulo"] != marcador:
+                vaciar()
+                contexto = _nuevo_contexto(marcador)
+            buffer.append(s)
+            continue
         cab = detectar_cabecera(linea)
         if cab is None:
-            buffer.append(linea.strip())
+            buffer.append(s)
+            continue
+        if cab[0] != "capitulo" and contexto["capitulo"] in HUECOS_SIN_ASPECTO:
+            buffer.append(s)
             continue
         tipo, g1, g2 = cab
         if tipo == "signo":
