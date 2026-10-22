@@ -1,78 +1,62 @@
-# ESTADO — T124 Regenerar lecturas más flojas con Mercury
+# ESTADO — T126 dataset v1d (track/t126-dataset-v1d)
 
-Rama: `track/t124-regenerar-lecturas`. Worktree:
-`/Users/angelgonzalez/adivinacion-ia/.worktrees/t124-regenerar-lecturas`.
+## TRACK COMPLETO
 
-## Estado: TRACK COMPLETO
+Commits en la rama (`git log --oneline main..HEAD`, hashes reales):
 
-Muestra de 40 → 40/40 aceptadas (100 %). Calidad antes/después (35 pares
-localizados): lecturas con ≥1 defecto 97 % → 46 %; defectos totales 139 → 44.
-apertura_formula 68,6 % → 0 %; frase_plantilla 20 % → 0 %; muletilla 42,9 %
-→ 2,9 %; genero_asumido 40 % → 11,4 %. Criterio de lanzamiento cumplido
-(aprobación verificador 100 % ≥ 90 % y mejora) → pasada completa lanzada.
+- `21f2bbb357542ccd2e4f0c0d95f0cf3dfbcc6472` — T126: reemplazo de originales
+  por regeneradas en el snapshot (--reemplazos, --mapear-regeneradas)
+  (armar_dataset_v1.py + tests/test_armar_t126.py, 12 tests nuevos).
+- `a9b902013fc435bd166a68576878e20aa79bffaa` — T126: informe
+  ARMAR_DATASET_V1D (v1d 13290 filas, QA verde, transitos 454).
 
-Pasada completa finalizada: 3.782 procesadas → 3.742 aceptadas (98,9 %), 40
-rechazadas (1,1 %), 0 errores de red. Reverificación: 3.742 válidas · 0
-inválidas · 0 fugas de evaluación. Salida `fase0/fase1_mercury_c/`
-(aceptadas.reverificadas.jsonl). Informe `docs/REGENERACION_FASE1.md`.
-`./finetune/scripts/check.sh` → **CHECK OK**.
+Base de la rama: a2ce9b9 (main, incluye T124 y T123; tras fast-forward desde
+a42687b). Ningún push; todo local.
 
-## AJUSTE paso 1 — Análisis transitos descartados (COMPLETADO)
+## Qué se hizo
 
-Reproducido el filtro exacto de T112 (`filtrar_fugas_eval` sobre
-`01_reverificadas/validas.jsonl`, 12883 filas): 12438 mantenidas, 445
-descartes, boiler 2037. transitos descartados = **138** (no 139), todos
-`fuga_evaluacion_ngramas` (5–13 n-gramas compartidos con casos eval-transitos-*).
+1. **Reemplazo por tarea/id**: `--reemplazos` aplica un mapa JSONL
+   {nuevo(bloque,id) → originales(bloque,id)} en la etapa snapshot; el
+   original se elimina y solo queda la regenerada (orden de fuentes
+   conservado, colisiones (bloque,id) imposibles). Mapa derivado con
+   `--mapear-regeneradas` (fuente nueva → jobs.db de la pasada T124 →
+   jobs.db maestro por (bloque, prompt) exacto). Mapa real generado:
+   `fase0/t126_reemplazos.jsonl` — 3348 reemplazos, 3442 originales
+   eliminados (139 ids extra por prompts maestros duplicados), 394 solo
+   nuevas (transitos 2026), 0 sin job. Las 40 rechazadas de T124 no están
+   en la fuente de aceptadas → sus originales se conservan, como pedía
+   SIGUIENTE.
+2. **v1d construido** con puerta QA completa en
+   `/Users/angelgonzalez/fase0/dataset_fase1_v1d/` (log:
+   /tmp/t126_pipeline.log). **13290 filas** (train 11986 / val 648 / test
+   656) vs 12796 en v1c (+494). transitos **454 ≥ 300** ✓. Preparar y QA:
+   **semáforo verde** (0 fugas, 0 solapes, 0 casi idénticos, 0 buckets
+   solapados; 4 hallazgos de formato: 2 restos_plantilla preexistentes +
+   2 id_repetido benignos — ids 342/361 repetidos entre bloques distintos,
+   clave (bloque,id) única). Basura fuera_alcance contada: 120/398.
+3. **Comparación v1c→v1d** (diversidad_dataset.py y calidad_lecturas.py
+   sobre train; artefactos en /tmp/t126_cmp/): mejora en los tres defectos
+   pedidos — frase_plantilla 42.1→21.9 %, apertura_formula 30.6→13.2 %,
+   cierre_formula 16.8→10.0 %; TTR 0.0045→0.0048, únicas 6g 0.806→0.824,
+   muletillas 6g 16→4. Empeoran levemente esquema_incumplido y
+   placeholder_prompt (<2,5 pt). Tablas por bloque en el informe.
+4. **Tokens/horas (T111)**: train 22.741.075 tokens; p99 3993 → max_seq_len
+   4096 sigue válido (trunca 81 filas, 0,121 % tokens). 7B 3 épocas
+   ≈25–48 h; 14B 3 épocas ≈54–105 h.
+5. **Informe** `docs/ARMAR_DATASET_V1D.md` con comandos exactos (mapeo y
+   cadena).
+6. **Verificación**: suites armar 43 OK; `./finetune/scripts/check.sh` →
+   **CHECK OK**.
 
-Hallazgo clave: los n-gramas compartidos son **frases fijas del esqueleto del
-prompt de transitos** (no fugas de contenido real). Ejemplos legibles:
-«en tránsito hace cuadratura a su neptuno natal casa 9 orbe 0», «0 3 saturno
-en tránsito hace sextil a su júpiter natal casa». El prompt de transitos las
-enumera en «Posiciones:», y los casos de evaluación usan el mismo generador y
-la misma redacción → falsos positivos estructurales. El filtro de boiler
-(df ≥ BOILERPLATE_DF) no las elimina porque cada combinación concreta de
-aspecto figura en <20 filas, aunque todas comparten el mismo patrón de frase.
+## Notas para la coordinadora
 
-Conclusión / propuesta para el informe (decisión posterior, fuera de T124):
-los descartes de transitos son **falsos positivos por plantilla del prompt**,
-no por solape con respuestas de evaluación. No relajar el filtro global; la
-vía limpia sería añadir los n-gramas de esqueleto del prompt de transitos a
-`boiler_extra` en `fugas_eval` (ya soportado), o aplicar el umbral por familia.
-Los 138 no se recuperan en T124.
-
-Método de verificación: `/tmp/t124_analisis_transitos.py` y
-`/tmp/t124_gramas_compartidos.py`.
-
-## Construcción del conjunto de tareas (pasos 1 y AJUSTE 2)
-
-- Selección: `seleccionar_regenerar.py --in <snapshot> --umbral 2 --fraccion 0.30`
-  sobre `/tmp/aceptadas_snapshot_v1c.jsonl` (mercury 11851 + mercury_b 2242).
-  Nota: `cargar_lecturas` solo lee filas ShareGPT, así que la selección cubre
-  las 11851 de fase1_mercury (mercury_b planas quedan fuera). Propuesta: 3382
-  lecturas (14 familias).
-- `jobs.db` maestra copiada → `/tmp/jobs_t124.db`; las 3382 candidatas ya
-  estaban `pending` (la maestra nunca se ejecutó para ellas).
-- transitos NUEVOS: `generate_tasks.py --db /tmp/jobs_t124.db --seed 2026
-  --only transitos` → 400 (0 duplicados con las 387 aceptadas de mercury_b,
-  verificado por prompt normalizado).
-- BD final de pasada: `/tmp/jobs_t124_final.db` = 3382 candidatas + 400
-  transitos = **3782** jobs, todos pending.
-- Muestra de 40 (8 familias, incl. 5 transitos nuevos):
-  `/tmp/jobs_t124_muestra.db` → salida `fase0/fase1_mercury_c/muestra/`
-  (40/40 aceptadas).
-
-## Pasada completa (COMPLETADA)
-
-- BD `/tmp/jobs_t124_final.db` (3782), backend mercury, `--estilo auto`,
-  `--workers 3`, salida `fase0/fase1_mercury_c/`.
-- Resultado: 3782 procesadas → 3742 aceptadas, 40 rechazadas, 0 errores de
-  red. Reverificación 3742 válidas / 0 inválidas / 0 fugas.
-
-## Commits (git log main..HEAD)
-
-- `e04f629` T124: ESTADO TRACK COMPLETO con hashes
-- `9e40dad` T124: informe de regeneración fase 1 + ESTADO
-
-## Pendiente
-
-Ninguno. TRACK COMPLETO.
+- Ficheros tocados: `finetune/corpus/armar_dataset_v1.py`,
+  `finetune/corpus/tests/test_armar_t126.py` (nuevo),
+  `docs/ARMAR_DATASET_V1D.md` (nuevo). No se tocaron qa_dataset.py,
+  merge_final.py ni las fuentes/datasets anteriores (solo lectura).
+- Dependencia externa: el mapa usa `/tmp/jobs_t124_final.db` (BD de tareas
+  de la pasada T124). Si se pierde, rehacerla antes de re-mapear (nota en
+  el informe §7).
+- mercury_c son filas planas re-renderizadas con plantilla nueva: el prompt
+  NUNCA coincide literalmente con el de mercury (maestro); el emparejamiento
+  va por job→maestro, no por texto — por eso existe `--mapear-regeneradas`.
