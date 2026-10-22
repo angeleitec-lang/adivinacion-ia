@@ -10,6 +10,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -297,11 +298,26 @@ class TestEtapasLocales(unittest.TestCase):
         rc = greene.main(["--dry-run", "--work-dir", self.tmp])
         self.assertEqual(rc, 0)
 
-    def test_main_bloquea_llm(self):
+    def test_main_despacha_etapas_llm(self):
         greene.preparar(self.tmp)
-        self.assertEqual(greene.main(["--juez", "--work-dir", self.tmp]), 3)
-        self.assertEqual(
-            greene.main(["--afirmaciones", "--work-dir", self.tmp]), 3)
+        with mock.patch.object(greene.astro, "construir_cliente_endpoints",
+                             return_value=object()) as cli, \
+             mock.patch.object(greene, "procesar_juez_greene",
+                             return_value={"juzgadas": 1}) as pj:
+            rc = greene.main(["--juez", "--work-dir", self.tmp,
+                             "--endpoints", "http://10.0.0.4:8000/v1"])
+            self.assertEqual(rc, 0)
+            pj.assert_called_once()
+            cli.assert_called_once()
+        with mock.patch.object(greene.astro, "construir_cliente_endpoints",
+                             return_value=object()) as cli, \
+             mock.patch.object(greene, "procesar_afirmaciones_greene",
+                             return_value={"procesadas": 1}) as pa:
+            rc = greene.main(["--afirmaciones", "--work-dir", self.tmp,
+                             "--endpoints", "http://10.0.0.4:8000/v1"])
+            self.assertEqual(rc, 0)
+            pa.assert_called_once()
+            cli.assert_called_once()
 
     def test_main_rechaza_work_dir_real(self):
         self.assertEqual(
