@@ -192,7 +192,7 @@ def fallos_puerta_calidad(fila: dict, max_repetition: float = 0.12) -> list[str]
             fallos.append("respuesta_truncada")
         if len(g) >= 160 and not qa.TILDE_RE.search(g):
             fallos.append("sin_tildes")
-        restos = [p for p in qa.PLANTILLA_PATRONES if p in g]
+        restos = [p for p in qa.PLANTILLA_PATRONES if p in g.lower()]
         if restos:
             fallos.append("restos_plantilla:" + restos[0])
         marcas = [p for p in qa.MARCAS_WEB if p in g.lower()]
@@ -203,16 +203,61 @@ def fallos_puerta_calidad(fila: dict, max_repetition: float = 0.12) -> list[str]
     return fallos
 
 
+def _situacion_o_prompt_identico(items: list[tuple]):
+    """Claves de agrupación: situación (T112) y prompt humano idéntico (T117).
+
+    Un mismo prompt (normalizado sin plantilla) DEBE ir al mismo split aunque su
+    clave de situación difiera (p. ej. por un error de extracción o por venir
+    de bloques distintos), porque si no una fila idéntica escaparía a otro split
+    y la puerta QA la detectaría. Devolvemos los dos índices por fila para que
+    el union-find pueda unir grupos que compartan cualquiera de las dos claves.
+    """
+    por_situacion: dict[str, int] = {}
+    por_prompt: dict[str, int] = {}
+    uf = list(range(len(items)))
+
+    def find(x):
+        while uf[x] != x:
+            uf[x] = uf[uf[x]]
+            x = uf[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            uf[rb] = ra
+
+    for i, (fila, _bl) in enumerate(items):
+        sit = qa.clave_situacion(fila)
+        if sit in por_situacion:
+            union(i, por_situacion[sit])
+        else:
+            por_situacion[sit] = i
+        propio = qa.propio_normalizado(fila)
+        if propio:
+            if propio in por_prompt:
+                union(i, por_prompt[propio])
+            else:
+                por_prompt[propio] = i
+    return find
+
+
 def split_agrupado(items: list[tuple], seed: int, r_train: float, r_val: float):
     """Reparte (fila, bloque) por GRUPOS de situación (T112), determinista con semilla.
 
     Una misma situación (qa.clave_situacion: cartas+orientación, fecha de
     nacimiento y pregunta, sin importar el bloque) va entera al mismo split,
     con cuotas globales ~ratios y de bloque, eligiendo el split menos saturado.
+
+    T117: además, dos filas con el MISMO prompt humano normalizado van siempre
+    al mismo split (union-find sobre situación y prompt idéntico), para que la
+    garantía de «sin solapes» cubra también prompts idénticos que la clave de
+    situación no agrupe.
     """
-    grupos: dict[str, list[tuple]] = defaultdict(list)
-    for it in items:
-        grupos[qa.clave_situacion(it[0])].append(it)
+    raiz = _situacion_o_prompt_identico(items)
+    grupos: dict[int, list[tuple]] = defaultdict(list)
+    for it, r in zip(items, (raiz(i) for i in range(len(items)))):
+        grupos[r].append(it)
     n = len(items)
     n_train, n_val = int(n * r_train), int(n * r_val)
     q = {"train": n_train, "val": n_val, "test": max(n - n_train - n_val, 0)}
