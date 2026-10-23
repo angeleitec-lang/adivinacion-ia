@@ -92,7 +92,7 @@ _ENCABEZADO_RE = re.compile(
 _ENCABEZADO_MAYUS_RE = re.compile(
     r"^(%s)\s+DE\s+(%s)$" % (_RANGO_RE.upper(), _PALO_RE.upper()))
 _DERECHO_RE = re.compile(r"\b(al\s*derecho|alderecho)\b\s*[,:.]?", re.IGNORECASE)
-_REVES_RE = re.compile(r"\b(al\s*rev[eé]s|alreves)\b\s*[,:.]?", re.IGNORECASE)
+_REVES_RE = re.compile(r"\b(?:al\s*rev[eé]s|alreves)\b\s*[,:.]?", re.IGNORECASE)
 _PAGINA_RE = re.compile(r"^\s*\d{1,3}\s*$")
 
 

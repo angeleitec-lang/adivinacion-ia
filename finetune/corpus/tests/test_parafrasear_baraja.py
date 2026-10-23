@@ -16,11 +16,16 @@ import parafrasear_baraja as pa  # noqa: E402
 from llm_client import LLMClient  # noqa: E402
 
 
+_CITA_DEFECTO = ("Felicidad, prosperidad y triunfo en los asuntos materiales. "
+                 "Riqueza y buen augurio para la persona consultante.")
+
+
 def fila(entidad="naipe-oros-01", faceta="significado_general", texto=None,
          orient="derecho", cita=None, fuente="libro_salas_baraja"):
     return {"entidad_id": entidad, "faceta": faceta, "fuente_id": fuente,
             "dominio": fuente, "periodo": "moderna", "calidad": 3,
-            "afirmacion": texto or "", "cita_original": cita or "",
+            "afirmacion": texto or "",
+            "cita_original": _CITA_DEFECTO if cita is None else cita,
             "contradice_kb": False, "orientacion": orient}
 
 
@@ -108,6 +113,40 @@ class TestVerificador(unittest.TestCase):
 
     def test_respuesta_vacia(self):
         self.assert_rechazo(fila(), "", "vacía")
+
+    def test_cita_sin_contenido_rechazada(self):
+        # Regresión T134: citas del tipo «Al revés» no deben parafrasearse.
+        f = fila(orient="reves", cita="Al revés")
+        self.assert_rechazo(
+            f, "El As de Oros al revés indica una inversión o alteración "
+                "del significado habitual de la carta.", "cita sin contenido")
+
+    def test_cita_menos_de_40_rechazada(self):
+        f = fila(cita="Felicidad. Prosperidad.")  # <40 caracteres
+        self.assert_rechazo(f, "El As de Oros al derecho señala felicidad.",
+                            "cita sin contenido")
+
+    def test_formula_generica_rechazada(self):
+        # Regresión T134: paráfrasis inventadas con fórmula vacía de reversa.
+        for entidad, paraf in (
+            ("naipe-oros-02",
+             "El Dos de Oros al revés señala una inversión o alteración en el "
+             "equilibrio material."),
+            ("naipe-oros-01",
+             "En su posición invertida, el As de Oros se asocia con una energía "
+             "bloqueada o una pérdida de valor material."),
+            ("naipe-oros-10",
+             "El Rey de Oros al revés indica una inversión o bloqueo en la "
+             "energía asociada a esta figura."),
+        ):
+            f = fila(entidad=entidad, orient="reves", cita=_CITA_DEFECTO)
+            self.assert_rechazo(f, paraf, "genérica")
+
+    def test_formula_generica_no_rechaza_contenido_real(self):
+        f = fila(orient="reves", cita=_CITA_DEFECTO)
+        self.assert_ok(
+            f, "El As de Oros al revés indica problemas de dinero, demoras "
+                "en los pagos y dificultades económicas para la persona.")
 
 
 class TestPrompt(unittest.TestCase):

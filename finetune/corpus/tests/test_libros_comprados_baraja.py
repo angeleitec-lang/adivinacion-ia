@@ -105,6 +105,23 @@ class TestTiradas(unittest.TestCase):
         secciones, _, _ = mod.segmentar_tiradas(texto)
         self.assertEqual(len(secciones), 10)
 
+    def test_reves_captura_texto_completo(self):
+        # Regresión: el grupo capturador de _REVES_RE hacía que split()
+        # devolviera el delimitador ("Al revés") como partes[1], perdiendo el
+        # contenido real. El texto al revés debe capturarse completo.
+        texto = TIRADAS + (
+            "\nSota de Bastos\n"
+            "Al derecho, símbolo de actividad y esfuerzo.\n"
+            "Al revés, persona débil y depresiva, emocionalmente enferma.\n")
+        secciones, _, inc = mod.segmentar_tiradas(texto)
+        self.assertEqual(inc, [])
+        reves = [s for s in secciones
+                 if s["orientacion"] == "reves" and s["rango"] == "sota"]
+        self.assertEqual(len(reves), 1)
+        self.assertNotEqual(reves[0]["texto"].strip(), "Al revés")
+        self.assertIn("débil", reves[0]["texto"])
+        self.assertIn("depresiva", reves[0]["texto"])
+
 
 class TestAntiCopia(unittest.TestCase):
     def test_detecta_26_palabras(self):
