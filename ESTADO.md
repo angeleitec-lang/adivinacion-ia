@@ -1,55 +1,68 @@
-# ESTADO — T127 Arreglos de la auditoría ronda 7
+# ESTADO — T121 Cierre final de la recopilación
 
-Rama: `track/t127-arreglos-ronda7`. Worktree:
-`/Users/angelgonzalez/adivinacion-ia/.worktrees/t127-arreglos-ronda7`.
+Rama: `track/t121-cierre-final`. Worktree:
+`/Users/angelgonzalez/adivinacion-ia/.worktrees/t121-cierre-final`.
 
 ## Estado: TRACK COMPLETO
 
-Los 10 puntos de la lista priorizada de `docs/AUDITORIA_RONDA7.md` están
-resueltos salvo el 10 (LEVE), que se deja fuera conscientemente. Los 12
-`expectedFailure` de `finetune/corpus/tests/test_auditoria_ronda7.py` pasan
-como tests normales (0 expected failures) y no se ha aflojado ningún
-verificador: los datos no calculados se siguen rechazando.
+Informe completo en `docs/CIERRE_FINAL.md`.
 
-## Puntos y commits (hashes reales)
+## Commits (hashes reales, `git log main..HEAD`)
 
-- Punto 2 — `18b12fb` — `_verif_sinastria`: aspectos cruzados por longitud,
-  posiciones A/B, casas y fechas.
-- Punto 3 — `8c1468b` — `_verif_negativa_alcance`: aplica también en
-  `familia="etica"` con `tema="fuera_alcance"` y detecta que el texto
-  responde la técnica prohibida aunque la nombre solo para rechazarla.
-- Punto 4 — `28c4f4e` — `_verif_revolucion`: todos los planetas RS,
-  Medio Cielo, Ascendente y fechas/años.
-- Punto 5 — `fae66d5` — `_verif_biorritmos`: fases por ciclo, día crítico,
-  días hasta el pico, duraciones (23/28/33) y fechas.
-- Punto 6 — `5dc58a0` — `_verif_transitos`: posiciones natales y de tránsito,
-  casas, retrogradación y fechas; rechaza lo no calculado.
-- Punto 7 — `b5584ab` — `merge_final._norm` sin tildes ni puntuación y
-  detección de fugas de evaluación reordenadas por oraciones en
-  `qa_dataset.fugas_eval`.
-- Punto 8 — `eb75b5e` — falsos positivos de fuera de alcance:
-  «queda fuera de lo que trabajo» y «numerológica» con tilde.
-- Punto 9 — `4bc7f14` — T116: orientación comprobada carta a carta y
-  tokenizador con diacríticos portugueses.
-- Punto 1 — `541c62c` — `generate_tasks.fuera_alcance`: `islice` en lugar de
-  `zip(..., range(n))` (el arranque era el índice) y `pregunta` en el
-  payload. Sin regenerar datos; test de regresión en
-  `test_generate_tasks.TestFueraAlcance`.
+- `65063cc` T121: desbloquear etapas LLM de Greene (dispatch --juez/--afirmaciones, patrón astro)
+- `98e0deb` T121: actualizar test de Greene al dispatch LLM (bloquea_llm -> despacha_etapas_llm)
+- (pendiente en este commit) T121: docs/CIERRE_FINAL.md + ESTADO de cierre
 
-## Punto 10 (no hecho)
+## Qué se hizo
 
-LEVE: unificar el tipo de `payload`/`calculos` y documentar el contrato.
-Se deja fuera para no tocar la forma de la carta (dict en payload, lista en
-`calculos.astro`) sin un consumidor que lo exija; queda anotado como
-pendiente menor.
+1. **Copias de seguridad** en `/Users/angelgonzalez/fase0/_backup_t121_20261022_2249/`
+   (consenso_kb, kb_v2, libros_evidencias, cobertura_v3, afirmaciones_libros).
+2. **AJUSTE 2 aplicado**: la paráfrasis de baraja NO es de T121 (es de T131).
+   No se usó `afirmaciones_baraja.jsonl` (cita recortada).
+3. **Revisión manual** de las 40 líneas de `filtro_atribucion/muestra_revision.jsonl`:
+   39/40 correctas, 1 dudosa → aprobadas las 40 (diseño por sección). Sin exclusiones extra.
+4. **Greene (T130)**: desbloqueado el guardón, dispatch `--juez`/`--afirmaciones`
+   patrón astro. Juez COMPLETO (208 secciones, 617 evidencias, 0 errores).
+   Afirmaciones COMPLETO (617 pares, 2.568 afirmaciones). Test actualizado 33/33 OK.
+5. **Staging** `fase0/t121_staging/`: fusión EN+astro+nichols+T92+Greene;
+   pasos 2-3 del cierre (limpieza 16.328 conservadas / 217 retiradas;
+   filtro atribución 563 claves).
+6. **Consenso**: pass final 3 workers → 4.021 celdas (antes 3.688).
+7. **Paso 4 exclusión**: claves CORRIENTES de staging (limpieza 0 + filtro 563),
+   NO las oficiales obsoletas (1.098/1.372). 341 celdas afectadas, 2.265
+   afirmaciones excluidas.
+8. **Pasos 5-6**: kb_v2 (tarot 78, astro 424, numero 69, baraja 40) y
+   cobertura_v3 (299 completas).
+9. **Promoción a rutas oficiales** (fase0): evidencias 16.545 RAW,
+   afirmaciones 38.857, consenso 4.021, kb_v2, cobertura_v3.
+10. **check.sh = CHECK OK**.
 
-## Verificación
+## Cobertura: 304 → 299
 
-- `test_auditoria_ronda7` + `test_t107_familias_faltantes` +
-  `test_fase1_prompts`: 87 tests OK, 0 expected failures.
-- `test_generate_tasks`: 49 tests OK.
-- `test_traducir_afirmaciones`: 29 tests OK.
-- `./finetune/scripts/check.sh` → **CHECK OK** (2578 tests, 1 skipped;
-  tests del scraper OK).
++9 ganancias reales (tarot bastos-02; 3 naipes T94; 5 astro planeta_en_signo
+de libros nuevos) vs −14 pérdidas que son **corrección de contaminación
+cruzada** (libros de tarot/naipes que el baseline contaba como «clásicos» de
+astro/numerología, retirados por `familia_ajena_naipes`). Aceptado 299 como
+más exacto (calidad > plazo). Detalle en `docs/CIERRE_FINAL.md`.
 
-No se han regenerado datasets ni se ha tocado `main`. Sin push.
+## PENDIENTE para continuación (no es de T121)
+
+- **Baraja paráfrasis (T131)**: NO ejecutada (requiere Mercury /
+  `INCEPTION_API_KEY`). No existe
+  `fase0/libros_comprados_baraja/afirmaciones/afirmaciones_baraja_parafraseadas.jsonl`.
+  Cuando T131 esté COMPLETO, fusionar ese fichero al consenso con:
+  ```bash
+  PY=/Users/angelgonzalez/adivinacion-ia/finetune/.venv/bin/python
+  B=/Users/angelgonzalez/fase0
+  cd /Users/angelgonzalez/adivinacion-ia/.worktrees/t121-cierre-final/finetune/corpus
+  $PY consenso_kb.py --web-afirmaciones $B/afirmaciones_full/afirmaciones.jsonl \
+    --libros-afirmaciones $B/afirmaciones_libros/afirmaciones_libros.jsonl \
+    --extra-afirmaciones $B/libros_comprados_baraja/afirmaciones/afirmaciones_baraja_parafraseadas.jsonl \
+    --rehacer-celdas-con-extra --out-dir $B/consenso_kb --workers 3
+  ```
+  y regenerar kb_v2 + cobertura_v3.
+- **Banzhaf**: bloqueado (epub parcial), ignorado.
+
+## Estado de procesos
+
+Sin escritores vivos (nodo2 libre). Ningún proceso de T121 en ejecución.
