@@ -101,20 +101,54 @@ presupuesto de salida (suma max_tokens): 614400
 endpoint previsto: http://10.0.0.4:8000/v1 (modelo halogen-qwen3.8-flash-next, 1 worker)
 ```
 
-## Rechazos por motivo
+## Resultados de la generación (COMPLETA)
 
-**Ninguno todavía**: no se ha ejecutado la generación LLM (ver «Estado de la
-generación» en `ESTADO.md`). Al correr `--run`, `--report` agrupará los rechazos
-por el primer motivo del verificador (p. ej. «No rechaza…», «No ofrece
-alternativa…», «Responde contenido de una técnica fuera de alcance (X)»,
-«Promesa o diagnóstico vedado»).
+Generación ejecutada contra nodo2 (1 worker, ≤1 req/s) tras abrirse el gate de
+t134 (T134 integrada en `main`, merge `35c5364`).
 
-## Estado de la generación
+| Concepto | Valor |
+|---|---|
+| Jobs construidos y validados | 400 |
+| Aceptados (`fuera_alcance_v2.jsonl`) | **400** |
+| Fallidos al final | 0 |
+| Rechazos durante el primer paso (luego reintentados y aceptados) | 2 |
 
-**BLOQUEADA por el gate de t134.** La pista exige lanzar la generación solo
-cuando `t134-parafrasis-baraja-local` tenga su propio `TRACK COMPLETO`. El
-`ESTADO.md` de esa worktree muestra el reporte de **T121**, no de T134 (0 hits
-propios de T134). Por tanto **no se lanza `--run`** hasta que t134 confirme.
+El primer paso dejó 398 aceptados + 2 rechazados por contenido; el relanzamiento
+reanudable (`--run`) reintentó esos 2 con el prompt de reintento y los aceptó →
+**400/400**.
+
+### Rechazos por motivo (registro de `rechazadas.jsonl`)
+
+```
+1  Responde contenido de una técnica fuera de alcance (vidas pasadas): «vidas pasadas»
+1  Responde contenido de una técnica fuera de alcance (vidas pasadas): «vida anterior»
+```
+
+Ambos del primer paso: el modelo redactó una lectura real de «vidas pasadas» en
+lugar de declinar. El verificador canónico (`_verif_negativa_alcance`) los frenó
+correctamente; en el reintento el modelo sí declinó y se aceptaron.
+
+### Verificación manual de 30 muestras
+
+Se revisaron 30 respuestas a mano (técnica pedida + respuesta). **30/30
+correctas**: declinan la técnica pedida, nombran las cuatro propias (tarot,
+baraja española, astrología occidental, numerología), no inventan, ofrecen
+alternativa concreta, español estándar con tildes, sin predicción literal, tono
+empático. 6 muestras saltaron una bandera `PREDICCION_VEDADA` con una regex
+gruesa de control; al leer el texto completo resultaron **falsos positivos**: la
+palabra «diagnóstico» aparecía dentro de negaciones correctas («no doy
+diagnósticos médicos, legales ni financieros», «no puedo decirte cuánto
+vivirás»). El verificador canónico las aceptó bien porque sus patrones detectan
+contenido real, no la palabra suelta en negación.
+
+### Barrido automático de las 400 filas
+
+```
+total=400 corruptas=0 sin_rechazo=0 sin_alternativa=0 truncadas=0
+```
+
+Ninguna fila conserva el patrón de corrupción original; todas contienen rechazo +
+alternativa dentro de las cuatro técnicas y ninguna está truncada.
 
 ## Comandos
 
@@ -141,14 +175,16 @@ Salidas en `/Users/angelgonzalez/fase0/fuera_alcance_v2/`:
 
 ## Integración
 
-`fuera_alcance_v2.jsonl` (esquema ShareGPT de v1d) **sustituye** las 398 filas
-corruptas al armar el dataset final: los armadores/`merge_final` agrupan por
-campo `bloque`, así que basta con excluir el `fuera_alcance` de v1d e incluir el
-v2. Antes de integrar:
+`fuera_alcance_v2.jsonl` (esquema ShareGPT de v1d, **400 filas**) **sustituye**
+las 398 filas corruptas al armar el dataset final: los armadores/`merge_final`
+agrupan por campo `bloque`, así que basta con excluir el `fuera_alcance` de v1d
+e incluir el v2. Estado de los pasos de integración:
 
-1. Verificar **30 muestras a mano** (rechazo empático, sin predicción concreta,
-   alternativa dentro de las cuatro técnicas, español estándar con tildes, sin
-   contenido de la técnica pedida) y anotarlas en `ESTADO.md`.
-2. Confirmar `--report` con aceptadas ≈ objetivo y rechazos revisados.
-3. No reintroducir Mercury ni reanudar los generadores suspendidos
-   (PID 66101 nodo1, 66396 nodo2).
+1. **Hecho** — Verificadas 30 muestras a mano (rechazo empático, sin predicción
+   concreta, alternativa dentro de las cuatro técnicas, español estándar con
+   tildes, sin contenido de la técnica pedida) + barrido automático de las 400
+   (0 corruptas, 0 sin rechazo, 0 sin alternativa, 0 truncadas). Anotado arriba.
+2. **Hecho** — `--report`: 400 aceptadas, 0 fallidas; 2 rechazos del primer paso
+   revisados (contenido de «vidas pasadas») y resueltos en el reintento.
+3. **En la integración** — No reintroducir Mercury ni reanudar los generadores
+   suspendidos (PID 66101 nodo1, 66396 nodo2).

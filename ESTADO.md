@@ -3,22 +3,19 @@
 Rama: `track/t136-regenerar-fuera-alcance`. Worktree:
 `/Users/angelgonzalez/adivinacion-ia/.worktrees/t136-regenerar-fuera-alcance`.
 
-## Estado: PREPARADO — GENERACIÓN BLOQUEADA por gate t134
+TRACK COMPLETO
 
-Script + tests + dry-run listos y commiteados. **No se lanza `--run`** hasta que
-`t134-parafrasis-baraja-local` tenga su propio `TRACK COMPLETO`.
+## Estado: TRACK COMPLETO
 
-Motivo del bloqueo: el `ESTADO.md` de
-`.worktrees/t134-parafrasis-baraja-local/` contiene el reporte de **T121**
-(header `# ESTADO — T121`), no de T134 (`grep T134` = 0 hits propios). La
-condición del `SIGUIENTE` («lanzar cuando t134 tenga TRACK COMPLETO») **no se
-cumple**. Regla «desconfiar de TRACK COMPLETO» aplicada.
+Generación ejecutada y verificada. Gate de t134 abierto (T134 integrada en
+`main`, merge `35c5364`, T134 TRACK COMPLETO en `da3371d`). Informe completo en
+`docs/REGENERAR_FUERA_ALCANCE.md`.
 
 ## Commits (hashes reales, `git log main..HEAD`)
 
 - `8f51e71` T136: regenerar_fuera_alcance.py (gen nuevo v2, dry-run, reanudable, nodo2) + tests adversos
-
-(este commit añade `docs/REGENERAR_FUERA_ALCANCE.md` y el presente `ESTADO.md`)
+- `157d740` T136: docs/REGENERAR_FUERA_ALCANCE.md + ESTADO (preparado, gate t134)
+- (este commit) T136: cierre — resultados de la generación (400/400) y ESTADO COMPLETO
 
 ## Qué se hizo
 
@@ -35,48 +32,43 @@ cumple**. Regla «desconfiar de TRACK COMPLETO» aplicada.
 3. **Alcance**: el bloque corrupto es de **TÉCNICAS** fuera de alcance
    (`FUERA_ALCANCE_ENTRENAMIENTO`), no de seguridad. Las categorías de seguridad
    del `SIGUIENTE` (salud/legal/financiero/muerte/embarazo/violencia/menores)
-   son la familia `etica`, **NO corrupta** → no se toca. Se regenera el bloque
-   de técnicas, respetando «mira las categorías existentes».
+   son la familia `etica`, **NO corrupta** → no se toca.
 4. **Script** `finetune/corpus/regenerar_fuera_alcance.py`: solo importa
    `generate_tasks`/`fase1_prompts`/`ejecutor_fase1`/`llm_client` (no los
-   modifica). Genera set nuevo en `/Users/angelgonzalez/fase0/fuera_alcance_v2/`
-   (no toca v1d), esquema ShareGPT exacto de v1d. Subcomandos
-   `--dry-run`/`--prepare`/`--run`/`--report`. Valida cada job y **aborta** si
-   hay prompt mutilado. **Prohíbe nodo1** (`ValueError` si `10.0.0.3`). LLM solo
-   nodo2, 1 worker, ≤1 req/s. Reanudable (`pending→running→done/failed`).
-5. **Tests** `tests/test_regenerar_fuera_alcance.py`: 19 tests unittest, todos
-   OK. Casos adversos: prompt vacío/mutilado, sin técnica, sin encabezado, bloque
-   inesperado, respuesta con diagnóstico/predicción de muerte (rechazada), sin
-   rechazo, sin alternativa, buena aceptada, otra lengua (rechazada), truncada.
-6. **check.sh = CHECK OK** (2733 tests, skipped=1).
+   modifica). Set nuevo en `/Users/angelgonzalez/fase0/fuera_alcance_v2/` (no
+   toca v1d), esquema ShareGPT exacto de v1d. **Prohíbe nodo1** (`ValueError` si
+   `10.0.0.3`). LLM solo nodo2, 1 worker, ≤1 req/s. Reanudable.
+5. **Tests** `tests/test_regenerar_fuera_alcance.py`: 19 tests unittest, OK.
+6. **Generación** (nodo2, 1 worker): primer paso 398 aceptados + 2 rechazados
+   por contenido («vidas pasadas»/«vida anterior»); relanzamiento reanudable
+   reintentó los 2 → **400 aceptados, 0 fallidos**.
 
-## Cifras del dry-run (n=400)
+## Resultados finales
 
 ```
-jobs construidos: 400 (todos validados)
-llamadas estimadas (con 30% reintentos): 520
-tokens de prompt estimados (~4 char/token): 33210
-presupuesto de salida (suma max_tokens): 614400
-endpoint: http://10.0.0.4:8000/v1 (halogen-qwen3.8-flash-next, 1 worker)
+aceptadas (fuera_alcance_v2.jsonl): 400
+fallidas: 0
+rechazos 1er paso (reintentados y aceptados): 2
+  - Responde contenido de una técnica fuera de alcance (vidas pasadas): «vidas pasadas»
+  - Responde contenido de una técnica fuera de alcance (vidas pasadas): «vida anterior»
+barrido 400 filas: corruptas=0 sin_rechazo=0 sin_alternativa=0 truncadas=0
+check.sh: CHECK OK
 ```
 
-Rechazos por motivo: **ninguno** (no se ha ejecutado LLM).
+Verificación manual de 30 muestras: **30/30 correctas** (declinan la técnica
+pedida, nombran tarot/baraja/astrología/numerología, no inventan, alternativa
+concreta, español estándar con tildes, sin predicción literal). 6 banderas
+`PREDICCION_VEDADA` de una regex de control resultaron falsos positivos («no doy
+diagnósticos…» en negación). Detalle en `docs/REGENERAR_FUERA_ALCANCE.md`.
 
-## Para continuar (cuando abra el gate de t134)
+## Integración (pendiente, la hace la coordinadora)
 
-```bash
-PY=/Users/angelgonzalez/adivinacion-ia/finetune/.venv/bin/python
-cd /Users/angelgonzalez/adivinacion-ia/.worktrees/t136-regenerar-fuera-alcance
-$PY finetune/corpus/regenerar_fuera_alcance.py --prepare --n 400
-$PY finetune/corpus/regenerar_fuera_alcance.py --run --n 400 --workers 1
-$PY finetune/corpus/regenerar_fuera_alcance.py --report
-```
-
-Después: verificar **30 muestras a mano** y anotarlas aquí; integrar
-`fuera_alcance_v2.jsonl` sustituyendo las 398 corruptas (armadores agrupan por
-`bloque`). Ver `docs/REGENERAR_FUERA_ALCANCE.md`.
+`fuera_alcance_v2.jsonl` (400 filas, ShareGPT v1d) sustituye las 398 corruptas
+al armar el dataset final (armadores/`merge_final` agrupan por `bloque`). No
+reintroducir Mercury ni reanudar PIDs 66101/66396.
 
 ## Estado de procesos
 
-Sin procesos LLM de T136 en ejecución. No se reanudan los generadores
-suspendidos (PID 66101 nodo1, 66396 nodo2). Sin push (git solo local).
+Generación terminada (procesos PID 12385 y 67257 finalizados). Sin procesos LLM
+de T136 vivos. No se reanudan los generadores suspendidos (PID 66101 nodo1,
+66396 nodo2). Sin push (git solo local).
