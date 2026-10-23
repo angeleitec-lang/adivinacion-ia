@@ -73,17 +73,58 @@ $PY parafrasear_baraja.py --entrada /tmp/t134_reintento.jsonl \
 
 (Tabla resumida para lectura; los 320 pares completos quedan en los JSONL de `fase0`.)
 
-## Ajustes
+## AJUSTE (2026-10-23): defecto grave detectado por el usuario
 
-No fue necesario tocar `parafrasear_baraja.py` ni sus tests: el modelo
-`halogen-qwen3.8-flash-next` en nodo2 devolvió paráfrasis válidas (sin
-razonamiento pegado ni texto fuera de la frase) desde el primer lote. No hay
-commits de código en esta rama; el script ya venía de T131.
+**Defecto**: 80 de las 320 paráfrasis (todas las de orientación revés de los
+naipes 1-10 de los cuatro palos) tenían `cita_original` = «Al revés» (8
+caracteres): el libro, tal como lo extrajo T129, NO aportaba contenido y el
+modelo INVENTÓ el significado. Las rechazadas.jsonl estaban vacías y el
+verificador no lo detectaba.
+
+**Causa raíz (investigada)**: el significado al revés SÍ existe en el libro
+«Tiradas de cartas españolas» (`TiradasDeCartasEspanolas.pdf`). El bug estaba
+en `libros_comprados_baraja.py`: `_REVES_RE` tenía un GRUPO CAPTURADOR, así
+que `_REVES_RE.split(crudo, maxsplit=1)` insertaba el delimitador capturado
+«Al revés» como `partes[1]`, perdiendo el contenido real. Ejemplos reales:
+- As de Oros: «Al revés, significa problemas de dinero o problemas en el
+  trabajo. No es momento de cambiar de trabajo ni de hacer inversiones.»
+- Sota de Bastos: «persona débil, depresiva, emocionalmente enferma»
+- Siete de Bastos (reves): «obstáculos laborales, bloqueo de los asuntos
+  laborales por culpa de un señor mayor…»
+
+**Corrección 1 (parseo)**: `_REVES_RE` cambiado a grupo NO capturador. Test
+nuevo `test_reves_captura_texto_completo` (regresión). 19/19 tests OK.
+Regeneración determinista en fichero NUEVO `afirmaciones_baraja_v2.jsonl`
+(320 filas; antes 80 con «Al revés», tras el fix 0 con cita <40 caracteres) y
+`afirmaciones_reves_afectadas.jsonl` (las 80 filas afectadas).
+
+**Corrección 2 (verificador)**: `parafrasear_baraja.py` ampliado con reglas
+deterministas: rechazar si la cita tiene <40 caracteres (`CITA_MIN_CARACTERES`)
+o si la paráfrasis solo contiene fórmulas genéricas (`es_formula_generica`,
+conjunto `_FÓRMULA_GENÉRICA`). Tests adversos nuevos (casos reales). 26/26 tests OK.
+
+**Re-paráfrasis de las 80 filas afectadas** (con la cita real, nodo2, 1 worker):
+`parafrasear_baraja.py --entrada afirmaciones_reves_afectadas.jsonl
+--salida afirmaciones_reves_parafraseadas.jsonl --backend local
+--endpoint "http://10.0.0.4:8000/v1=halogen-qwen3.8-flash-next"
+--workers 1 --resume` → **80/80 aceptadas, 0 rechazadas**.
+
+**`afirmaciones_baraja_validas.jsonl`** (dataset final válido): 240 filas
+originales no afectadas + 80 re-paráfrasis = **320 filas**. Verificación con el
+verificador ampliado: 320/320 OK, 0 rechazos. Recuentos: 160 derecho / 160
+revés; libros_salas_baraja 160 / libro_tiradas_baraja_espanola 160; facetas:
+derecha_invertida 160, significado_general 80, luz_sombra 80. 0 filas sin fid/
+procedencia; 0 citas <40 caracteres. **Revisión manual**: 20 derecho + 10
+revés, todas con contenido propio, orientación conservada y español estándar.
 
 ## Commits (hashes reales, `git log main..HEAD`)
 
 - `da3371d` T134: ESTADO paráfrasis baraja 320/320 (nodo2) + TRACK COMPLETO
 - `697c0c6` T134: anotar hash real del commit de ESTADO
+- `038a333` T134: listar ambos hashes reales de la rama en ESTADO
+- (este commit) T134 AJUSTE: fix `_REVES_RE` (grupo no capturador), verificador
+  con reglas cita <40 / fórmula genérica, tests, y generación de
+  `afirmaciones_baraja_validas.jsonl` (320 válidas) + re-paráfrasis 80 revés.
 
 ## Estado
 

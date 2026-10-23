@@ -105,6 +105,92 @@ _ASISTENTE_IA_RE = re.compile(
     r"\basistente\s+de\s+ia\b|asistente|inteligencia\s+artificial", re.I)
 _TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 
+# Umbral nominal de cita para considerar que tiene contenido propio de la carta.
+CITA_MIN_CARACTERES = 40
+
+# Vocabulario de "reversa vacía": términos que, solos, solo describen que la
+# carta está invertida sin aportar significado propio (detectado en las 80
+# paráfrasis inventadas de T134). Se comparan normalizados (sin tildes).
+_FÓRMULA_GENÉRICA = set("""
+inversion inversiones alteracion alteraciones significado significados habitual habituales
+energia energias bloqueada bloqueadas bloqueado bloqueados bloqueo bloqueos
+equilibrio material materiales valor valores perdida perdidas ausencia carencia
+intercambios recursos movimiento figura cualidades cualidad positiva positivas
+actitud actitudes armonia vinculos vinculo afectivo afectivos afectos afectividad
+emocional emocionales asuntos ambito plano tirada claves propias orientacion orientaciones
+carta cartas sentido contraria contrario desequilibrada desequilibrado inmadura
+inmaduro canalizada canalizado caprichosa caprichoso sinceridad sentimientos sentimiento
+naturalidad claridad dificultad dificultades interrupcion interrupciones
+desarrollarse manifiesta fluye fluyen presentarse presenta logra logran
+asociada asociado asociadas relacionados relacionadas representados representadas
+indicada indicado indicadas representada representado representa representan señalar senalar
+señala senala indica indican apunta apuntan asocia asocian invierte invierten
+voltea voltean altera alteran bloquea bloquean obstaculiza obstaculizan
+""".split())
+
+# Conectores y verbos vacíos para quedarse con el contenido real.
+_CONECTORES_VACIOS = set("""
+la el los las de del en que o y con una un su sus por para a al esta este esto estos estas
+esas aquel aquellos se le les lo tambien asi como sobre no ya mas muy sin cuando donde cual
+cuales quien quienes entre ante tras hacia hasta desde durante mediante segun porque pues si
+pero aunque sino ni es son era eran fue fueron ser estar esta estan estaba estaban hay habia
+tiene tienen tenia tenian del ha he han hemos habia estoy estamos se asocia asociada asociado
+señala senala indica representa apunta advierte expresa evoca anuncia viene significa quiere
+habla muestra revela describe define nombra menciona aparece torna vuelve presenta refiere
+remite alude trata resalta destaca sugiere propone ofrece entrega da hace realiza simboliza
+encarna ejemplifica manifiesta expone narra cuenta explica aclara precisa detalla concreta
+enumera lista recoge resume sintetiza agrupa clasifica ordena orienta guia aconseja recomienda
+invita alienta motiva anima impulsa promueve fomenta estimula potencia intensifica fortalece
+debilita limita restringe obstaculiza bloquea frena paraliza estanca retrasa demora aplaza
+pospone suspende cancela elimina anula neutraliza contrarresta compensa equilibra corrige
+ajusta adapta transforma modifica altera cambia invierte revierte gira rota voltea tambalea
+sacude conmueve perturba afecta impacta incide influye interviene actua opera funciona
+desarrolla evoluciona progresa mejora empeora decae cae sube baja asciende desciende aumenta
+disminuye reduce incrementa multiplica divide suma resta agrega quita sustrae anade añade
+incluye excluye admite rechaza acepta niega afirma sostiene mantiene conserva protege defiende
+ataca combate pelea enfrenta desafia reta supera vence triunfa gana pierde logra consigue
+alcanza obtiene adquiere hereda recibe da dedica ofrece regala dona presta cobra paga invierte
+gasta ahorra acumula atesora despilfarra dilapida malgasta derrocha arriesga apuesta juega
+especula negocia vende compra importa exporta transporta mueve traslada desplaza viaja llega
+parte sale avanza retrocede acelera apresura adelanta anticipa preve pronostica predice augura
+vaticina presagia devela revela expone enseña aprende estudia trabaja aplica ejercita practica
+entrena prepara planifica proyecta diseña construye edifica crea inventa innova imagina sueña
+idealiza fantasea ilusiona espera desea anhela quiere ansia ambiciona codicia envidia cela teme
+duda vacila titubea hesita sospecha desconfia confia cree sabe ignora olvida recuerda evoca
+rememora añora extraña siente emociona conmueve toca remueve agita instiga provoca causa origina
+genera desata dispara lanza impulsa empuja atrae convoca invita repele ahuyenta aleja acerca
+junta une separa divide relaciona vincula conecta liga asocia combina mezcla fusiona integra
+incorpora agrega añade sustituye reemplaza cambia permuta canjea intercambia trueca comparte
+parte reparte distribuye asigna adjudica atribuye corresponde pertenece afecta incumbe importa
+interesa preocupa inquieta perturba agita alarma asusta espanta asombra sorprende maravilla
+deslumbra fascina encanta seduce cautiva atrae embelesa hipnotiza hechiza conjura invoca evoca
+llama nombra menciona cita refiere alude remite apunta senala indica muestra habla menciona
+cuenta narra relata describe retrata pinta dibuja esboza perfila delinea traza graba imprime
+marca deja estampa sella firma rubrica autentica verifica confirma valida avala ratifica
+corrobora sustenta respalda apoya ayuda asiste socorre auxilia beneficia favorece perjudica
+lastima hiere ofende agravia humilla denigra menosprecia desprecia subestima infravalora
+sobrevalora exagera minimiza resta quita limita condiciona supedita subordina depende requiere
+exige demanda pide solicita ruega implora suplica ordena manda dirije gobierna administra
+gestiona maneja opera controla domina somete subyuga oprime reprime contiene frena modera
+atenua mitiga suaviza atempera calma serena tranquiliza sosiega relaja distiende alivia
+consuela reconforta abriga protege ampara resguarda custodia vigila cuida atiende observa mira
+examina analiza estudia investiga indaga explora sondea averigua descubre halla encuentra
+localiza ubica situa coloca pone instala monta arma ensambla construye fabrica produce elabora
+manufactura transforma convierte procesa trata refina purifica depura limpia asea higieniza
+sanea desinfecta esteriliza seca humedece moja empapa remoja enjuaga lava frota talla pulimenta
+abrillanta lustra bruñe esmaltan barniza pinta colorea tiñe matiza entona afina ajusta calibra
+nivela iguala empareja completa complementa añade suplementa acrecienta aumenta refuerza concentra
+condensa espesa aglutina agrupa congrega reunne junta acumula almacena guarda conserva retiene
+mantiene sostiene aguanta soporta resiste permite tolera admite traga acepta consiente aprueba
+autoriza concede otorga da cede entrega confiere asigna delega encomienda encarga comisiona
+deposita confia encomienda lega hereda transmite comunica informa notifica avisa anuncia publica
+difunde propaga divulga extiende disemina esparce reparte distribuye comparte da dona regala
+ofrece brinda facilita permite posibilita hace coadyuva contribuye colabora coopera ayuda asiste
+apoya respalda secunda acompaña sigue persigue busca indaga rastrea persigue acecha vigila
+espía observa atiende cuida protege defiende resguarda salvaguarda preserva conserva mantiene
+sostiene apuntala apuntala apuntala apuntala apuntala apuntala apuntala apuntala
+""".split())
+
 
 class BackendFatal(Exception):
     """Error fatal de backend (auth, límite de tasa o timeout) → detener."""
@@ -193,12 +279,42 @@ def limpiar_salida(bruto: str) -> str:
 # Verificador determinista
 # ---------------------------------------------------------------------------
 
+def es_formula_generica(fila: Dict[str, Any], texto: str) -> bool:
+    """True si la paráfrasis solo describe la reversa sin contenido propio.
+
+    Se eliminan el nombre de la carta, los marcadores de orientación y los
+    conectores/verbos vacíos; si lo que queda está enteramente dentro del
+    vocabulario de reversa genérica, la paráfrasis es vacía.
+    """
+    t = norm(texto or "")
+    entidad = fila.get("entidad_id") or ""
+    nombre = NOMBRE_CARTA.get(entidad, "")
+    if nombre:
+        t = t.replace(norm(nombre), " ")
+    for frase in ("al reves", "al derecho", "posicion invertida",
+                  "invertido", "invertida"):
+        t = t.replace(frase, " ")
+    t = norm(t)
+    tokens = [w for w in t.split() if w not in _CONECTORES_VACIOS]
+    return all(w in _FÓRMULA_GENÉRICA for w in tokens)
+
+
 def verificar_parafrasis(fila: Dict[str, Any], bruto: str,
                          indice: set) -> Tuple[Optional[str], Optional[str]]:
     """Devuelve (texto_limpio, None) o (None, motivo_de_fallo)."""
     texto = limpiar_salida(bruto)
     if not texto:
         return None, "respuesta vacía"
+
+    # (e) la cita debe tener contenido propio (≥40 caracteres)
+    cita = fila.get("cita_original") or ""
+    if len(cita) < CITA_MIN_CARACTERES:
+        return None, (f"cita sin contenido propio (<{CITA_MIN_CARACTERES} "
+                       f"caracteres)")
+
+    # (f) la paráfrasis no debe ser solo una fórmula genérica de reversa
+    if es_formula_generica(fila, texto):
+        return None, "solo fórmula genérica sin contenido propio de la carta"
 
     # (a) oraciones y punto final
     if not texto.endswith("."):
