@@ -549,8 +549,8 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
             huerfano_minutos=30.0, out_dir=None, stop_event=None,
             formato="plano", backend=GENERADOR_LOCAL, reintentos_red=None,
             ventana_errores=VENTANA_ERRORES_DEFECTO,
-            umbral_error=UMBRAL_ERROR_DEFECTO, estilo=None,
-            estilo_reintento=False):
+             umbral_error=UMBRAL_ERROR_DEFECTO, estilo=None,
+             estilo_reintento=False, bloques=None):
     if backend not in (GENERADOR_LOCAL, GENERADOR_MERCURY):
         raise ValueError(
             f"backend no válido: {backend!r}; usa {GENERADOR_LOCAL!r} o "
@@ -620,10 +620,16 @@ def ejecutar(db_path, cliente, kb, workers=4, max_reintentos=2,
     try:
         with lock:
             resumen["huerfanas_recuperadas"] = recuperar_huerfanas(con, huerfano_minutos)
-            sql = "SELECT id FROM jobs WHERE status='pending' ORDER BY id"
+            sql = "SELECT id FROM jobs WHERE status='pending'"
+            params: tuple = ()
+            if bloques:
+                marcadores = ",".join("?" * len(bloques))
+                sql += f" AND bloque IN ({marcadores})"
+                params = tuple(bloques)
+            sql += " ORDER BY id"
             if limite and limite > 0:
                 sql += f" LIMIT {int(limite)}"
-            ids = [r["id"] for r in con.execute(sql)]
+            ids = [r["id"] for r in con.execute(sql, params)]
         resumen["pendientes"] = len(ids)
 
         def uno(job_id):

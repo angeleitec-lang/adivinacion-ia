@@ -978,10 +978,10 @@ def estado_bd(work_dir):
 
 def crear_cliente(endpoint=ENDPOINT_NODO2, model=MODELO_DEFECTO):
     from llm_client import LLMClient
-    if "10.0.0.3" in endpoint:
+    if "10.0.0.3" not in endpoint and "10.0.0.4" not in endpoint:
         raise ValueError(
-            "esta pista no usa nodo1 para generación de datos; "
-            f"endpoint prohibido: {endpoint}")
+            "solo se permiten los nodos locales 10.0.0.3 (nodo1) y "
+            f"10.0.0.4 (nodo2); endpoint: {endpoint}")
     return LLMClient(
         endpoints=[endpoint],
         model=model,
@@ -992,7 +992,8 @@ def crear_cliente(endpoint=ENDPOINT_NODO2, model=MODELO_DEFECTO):
 
 
 def ejecutar_generacion(work_dir, endpoint=ENDPOINT_NODO2,
-                       model=MODELO_DEFECTO, workers=1, limite=0):
+                       model=MODELO_DEFECTO, workers=1, limite=0,
+                       familias=None, salida_subdir=None):
     import ejecutor_fase1 as ex
     db = ruta_db(work_dir)
     if not db.exists():
@@ -1001,15 +1002,20 @@ def ejecutar_generacion(work_dir, endpoint=ENDPOINT_NODO2,
     kb = ex.cargar_kb()
     cliente = crear_cliente(endpoint=endpoint, model=model)
     restaurar = _instalar_parches_t142(kb)
+    out_dir = str(Path(work_dir))
+    if salida_subdir:
+        out_dir = str(Path(work_dir) / salida_subdir)
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
     try:
         resumen = ex.ejecutar(
             str(db), cliente, kb,
             workers=workers,
             limite=limite,
-            out_dir=str(Path(work_dir)),
+            out_dir=out_dir,
             formato="sharegpt",
             backend=ex.GENERADOR_LOCAL,
             estilo="auto",
+            bloques=familias,
         )
     finally:
         restaurar()
@@ -1020,8 +1026,17 @@ def ejecutar_generacion(work_dir, endpoint=ENDPOINT_NODO2,
 # Export final con filtros post-generación
 # --------------------------------------------------------------------------- #
 
+def _rutas_jsonl(work_dir, nombre):
+    w = Path(work_dir)
+    rutas = [w / nombre]
+    rutas += sorted(w.glob("*/" + nombre))
+    return [r for r in rutas if r.exists()]
+
+
 def exportar_final(work_dir, casos_eval=None):
-    aceptadas = _leer_jsonl(Path(work_dir) / "aceptadas.jsonl")
+    aceptadas = []
+    for ruta in _rutas_jsonl(work_dir, "aceptadas.jsonl"):
+        aceptadas += _leer_jsonl(ruta)
     por_id = {}
     orden = []
     for fila in aceptadas:
@@ -1051,7 +1066,9 @@ def exportar_final(work_dir, casos_eval=None):
 
 
 def rechazos_por_motivo(work_dir):
-    rechazadas = _leer_jsonl(Path(work_dir) / "rechazadas.jsonl")
+    rechazadas = []
+    for ruta in _rutas_jsonl(work_dir, "rechazadas.jsonl"):
+        rechazadas += _leer_jsonl(ruta)
     conteo = {}
     for fila in rechazadas:
         motivos = fila.get("motivos") or ["sin_motivo"]
@@ -1156,6 +1173,14 @@ def main(argv=None):
     parser.add_argument("--modelo", default=MODELO_DEFECTO)
     parser.add_argument("--dir-eval", default=EVAL_DIR_DEFECTO)
     parser.add_argument("--limite", type=int, default=0)
+    parser.add_argument("--familia", default=None,
+                       help="solo procesar estas familias (coma: espanola_1)")
+    parser.add_argument("--salida-subdir", default=None,
+                       help="subdirectorio de salida para no pisar el "
+                            "aceptadas.jsonl de otro proceso")
+    parser.add_argument("--sin-preparar", action="store_true",
+                        help="no reinsertar jobs (usar cuando hay otro "
+                             "proceso activo sobre la misma BD)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--prepare", action="store_true")
     parser.add_argument("--run", action="store_true")
@@ -1175,12 +1200,21 @@ def main(argv=None):
         return 0
 
     if args.run:
-        filas = construir_jobs(semilla=args.semilla)
-        validar_jobs(filas)
-        preparar(args.work_dir, filas)
+        if not args.sin_preparar:
+            filas = construir_jobs(semilla=args.semilla)
+            validar_jobs(filas)
+            preparar(args.work_dir, filas)
+        familias = tuple(
+            f.strip() for f in args.familia.split(",") if f.strip()
+        ) if args.familia else None
+        if familias:
+            desconocidas = [f for f in familias if f not in FAMILIAS_T142]
+            if desconocidas:
+                raise ValueError(f"familias no válidas: {desconocidas}")
         resumen = ejecutar_generacion(
             args.work_dir, endpoint=args.endpoint, model=args.modelo,
-            limite=args.limite)
+            limite=args.limite, familias=familias,
+            salida_subdir=args.salida_subdir)
         print(json.dumps(resumen, ensure_ascii=False, default=str))
         return 0
 

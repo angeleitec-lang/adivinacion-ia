@@ -279,9 +279,85 @@ class TestFugaEval(unittest.TestCase):
 
 
 class TestCliente(unittest.TestCase):
-    def test_nodo1_prohibido(self):
+    def test_nodo1_permitido(self):
+        self.assertIsNotNone(
+            re142.crear_cliente(endpoint="http://10.0.0.3:8000/v1"))
+
+    def test_nodo2_permitido(self):
+        self.assertIsNotNone(
+            re142.crear_cliente(endpoint="http://10.0.0.4:8000/v1"))
+
+    def test_endpoint_externo_prohibido(self):
         with self.assertRaises(ValueError):
-            re142.crear_cliente(endpoint="http://10.0.0.3:8000/v1")
+            re142.crear_cliente(endpoint="https://api.openai.com/v1")
+
+
+class TestRepartoNodos(unittest.TestCase):
+    def _bd_mixta(self, tmp):
+        import sqlite3
+        import generate_tasks as gt
+        db = os.path.join(tmp, "jobs_test.db")
+        con = sqlite3.connect(db)
+        gt.crear_tabla(con)
+        gt.insertar_jobs(con, [
+            ("etica", "sys",
+             'Consulta delicada.\n\nPregunta del consultante: '
+             '"¿Me van a conceder la pensión que pido?"',
+             json.dumps({"tema": "legal", "riesgo": False, "t142": True}), 700),
+            ("espanola_1", "sys",
+             'Tirada de una carta.\n\nPregunta del consultante: '
+             '"¿Qué me espera en el amor?"',
+             json.dumps({"cartas": [{"nombre": "As de Oros",
+                                    "invertida": False}],
+                         "contexto": "amor", "mazo": "espanol",
+                         "t142": True}), 700),
+        ])
+        con.commit()
+        con.close()
+        return db
+
+    def test_filtro_bloques_deja_otra_familia_pending(self):
+        import tempfile
+        import sqlite3
+        import ejecutor_fase1 as ex
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._bd_mixta(tmp)
+
+            class StubCliente:
+                def chat(self, *a, **k):
+                    return "x"
+
+            ex.ejecutar(db, StubCliente(), ex.cargar_kb(), workers=1,
+                       limite=5, out_dir=os.path.join(tmp, "salida"),
+                       formato="sharegpt", backend=ex.GENERADOR_LOCAL,
+                       bloques=("espanola_1",))
+            con = sqlite3.connect(db)
+            estados = {b: s for b, s in
+                       con.execute("SELECT bloque, status FROM jobs")}
+            con.close()
+            self.assertEqual(estados["etica"], "pending")
+            self.assertEqual(estados["espanola_1"], "failed")
+
+    def test_sin_filtro_reclama_todas(self):
+        import tempfile
+        import sqlite3
+        import ejecutor_fase1 as ex
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._bd_mixta(tmp)
+
+            class StubCliente:
+                def chat(self, *a, **k):
+                    return "x"
+
+            ex.ejecutar(db, StubCliente(), ex.cargar_kb(), workers=1,
+                       limite=5, out_dir=os.path.join(tmp, "salida"),
+                       formato="sharegpt", backend=ex.GENERADOR_LOCAL)
+            con = sqlite3.connect(db)
+            estados = {b: s for b, s in
+                       con.execute("SELECT bloque, status FROM jobs")}
+            con.close()
+            self.assertEqual(estados["etica"], "failed")
+            self.assertEqual(estados["espanola_1"], "failed")
 
 
 if __name__ == "__main__":
