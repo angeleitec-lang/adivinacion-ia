@@ -82,7 +82,7 @@ commits de código en esta rama; el script ya venía de T131.
 
 ## Commits (hashes reales, `git log main..HEAD`)
 
-_Se rellenan tras el commit de este ESTADO (circularidad)._
+- `da3371d` T134: ESTADO paráfrasis baraja 320/320 (nodo2) + TRACK COMPLETO
 
 ## Estado
 
