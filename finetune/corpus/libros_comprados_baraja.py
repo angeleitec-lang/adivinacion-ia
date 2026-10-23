@@ -31,6 +31,7 @@ import subprocess
 import sys
 import unicodedata
 from collections import defaultdict
+from urllib.parse import urlparse
 
 import afirmaciones_libros
 import cartas
@@ -70,6 +71,9 @@ PROCEDENCIA = "comprado por el usuario, uso interno, libro con copyright"
 
 NODO2_ENDPOINT = "http://10.0.0.4:8000/v1"
 NODO1_RESERVADO = "10.0.0.3"
+# Hosts locales permitidos para el LLM: nodo1 y nodo2 (autorizado por el usuario el 23/10).
+HOSTS_LOCALES_PERMITIDOS = ("10.0.0.3", "10.0.0.4")
+ENDPOINTS_POR_DEFECTO = "http://10.0.0.3:8000/v1,http://10.0.0.4:8000/v1"
 TIMEOUT = 120.0
 MAX_WORKERS = 2
 
@@ -787,11 +791,10 @@ def construir_cliente_endpoints(endpoints_csv, timeout=TIMEOUT, acotar=True):
     import llm_client
     endpoints = [e.strip() for e in (endpoints_csv or "").split(",") if e.strip()]
     if not endpoints:
-        raise ValueError("--endpoints vacío")
+        endpoints = [e.strip() for e in ENDPOINTS_POR_DEFECTO.split(",")]
     for url in endpoints:
-        if NODO1_RESERVADO in url:
-            raise ValueError("nodo1 (%s) está reservado: %r"
-                             % (NODO1_RESERVADO, url))
+        if urlparse(url).hostname not in HOSTS_LOCALES_PERMITIDOS:
+            raise ValueError("endpoint no permitido (solo nodo1 y nodo2): %r" % url)
     base = llm_client.LLMClient(endpoints=endpoints, timeout=timeout)
     return libros_pipeline._ClienteAcotado(base) if acotar else base
 
@@ -871,7 +874,7 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--juez", action="store_true")
     ap.add_argument("--afirmaciones", action="store_true")
-    ap.add_argument("--endpoints", default=NODO2_ENDPOINT)
+    ap.add_argument("--endpoints", default=ENDPOINTS_POR_DEFECTO)
     ap.add_argument("--workers", type=int, default=MAX_WORKERS)
     ap.add_argument("--limite", type=int, default=None)
     args = ap.parse_args(argv)

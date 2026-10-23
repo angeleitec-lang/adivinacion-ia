@@ -814,7 +814,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Procesa el Greene «Saturn» comprado (T130).")
     parser.add_argument("--work-dir", default=WORK_DIR)
-    parser.add_argument("--endpoints", default=NODO2_ENDPOINT,
+    parser.add_argument("--endpoints", default=astro.ENDPOINTS_POR_DEFECTO,
                         help="URLs del LLM separadas por comas (solo nodo2).")
     parser.add_argument("--workers", type=int, default=1,
                         help="hilos del LLM (max %d)" % MAX_WORKERS)

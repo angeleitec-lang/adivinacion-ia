@@ -42,10 +42,14 @@ import cobertura
 import juez
 import libros_pipeline
 import llm_client
+from urllib.parse import urlparse
 
 # --- Endpoints y limites -----------------------------------------------------
 NODO2_ENDPOINT = "http://10.0.0.4:8000/v1"
 NODO1_RESERVADO = "10.0.0.3"
+# Hosts locales permitidos para el LLM: nodo1 y nodo2 (autorizado por el usuario el 23/10).
+HOSTS_LOCALES_PERMITIDOS = ("10.0.0.3", "10.0.0.4")
+ENDPOINTS_POR_DEFECTO = "http://10.0.0.3:8000/v1,http://10.0.0.4:8000/v1"
 TIMEOUT_ASTRO = 120.0
 MAX_WORKERS = 2
 
@@ -373,12 +377,11 @@ def preparar(work_dir=WORK_DIR):
 def construir_cliente_endpoints(endpoints_csv, timeout=TIMEOUT_ASTRO, acotar=True):
     endpoints = [e.strip() for e in (endpoints_csv or "").split(",") if e.strip()]
     if not endpoints:
-        raise ValueError("--endpoints vacio")
+        endpoints = [e.strip() for e in ENDPOINTS_POR_DEFECTO.split(",")]
     for url in endpoints:
-        if NODO1_RESERVADO in url:
+        if urlparse(url).hostname not in HOSTS_LOCALES_PERMITIDOS:
             raise ValueError(
-                "nodo1 (%s) esta reservado por el usuario; no puede usarse: %r"
-                % (NODO1_RESERVADO, url))
+                "endpoint no permitido (solo nodo1 y nodo2): %r" % url)
     base = llm_client.LLMClient(endpoints=endpoints, timeout=timeout)
     if acotar:
         return libros_pipeline._ClienteAcotado(base)
@@ -640,7 +643,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Procesa los libros comprados de astrologia (T119).")
     parser.add_argument("--work-dir", default=WORK_DIR)
-    parser.add_argument("--endpoints", default=NODO2_ENDPOINT,
+    parser.add_argument("--endpoints", default=ENDPOINTS_POR_DEFECTO,
                        help="URLs del LLM separadas por comas (solo nodo2).")
     parser.add_argument("--workers", type=int, default=1,
                        help="hilos de llamada al LLM (max %d)" % MAX_WORKERS)

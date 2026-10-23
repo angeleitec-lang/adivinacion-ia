@@ -45,6 +45,9 @@ GLOSARIO_POR_DEFECTO = os.path.join(
 
 # Endpoints por defecto: NODO2. El nodo1 esta reservado para entrenamiento.
 ENDPOINT_LOCAL_POR_DEFECTO = "http://10.0.0.4:8000/v1"
+# Por defecto se reparte entre nodo1 y nodo2 (autorizado por el usuario el 23/10).
+ENDPOINTS_LOCALES_POR_DEFECTO = ("http://10.0.0.3:8000/v1",
+                                "http://10.0.0.4:8000/v1")
 MODEL_LOCAL_POR_DEFECTO = "halogen-qwen3.8-flash-next"
 MERCURY_URL = "https://api.inceptionlabs.ai/v1"
 MERCURY_MODEL = "mercury-3"
@@ -414,9 +417,9 @@ def crear_cliente(args: argparse.Namespace,
             reasoning_effort="instant",
             max_completion_tokens=MERCURY_MAX_COMPLETION_TOKENS,
         )
-    endpoints = [parse_endpoint(e) for e in args.endpoint] or [
-        ENDPOINT_LOCAL_POR_DEFECTO
-    ]
+    endpoints = [parse_endpoint(e) for e in args.endpoint] or list(
+        ENDPOINTS_LOCALES_POR_DEFECTO
+    )
     model = args.model or MODEL_LOCAL_POR_DEFECTO
     return LLMClient(
         endpoints=endpoints, model=model, timeout=args.timeout,

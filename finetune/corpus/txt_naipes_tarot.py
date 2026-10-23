@@ -652,8 +652,6 @@ def informe_cobertura(work_dir, fuente=None):
 
 
 def construir_cliente(endpoints, timeout=90.0):
-    if NODO1_RESERVADO in (endpoints or ""):
-        raise ValueError("nodo1 reservado: no se usa para LLM")
     return libros_comprados_en.construir_cliente_endpoints(endpoints, timeout)
 
 
@@ -785,7 +783,7 @@ def main(argv=None):
     parser.add_argument("--afirmaciones", action="store_true")
     parser.add_argument("--auditar", action="store_true")
     parser.add_argument("--fusionar", action="store_true")
-    parser.add_argument("--endpoints", default=NODO2_ENDPOINT)
+    parser.add_argument("--endpoints", default=libros_comprados_en.ENDPOINTS_POR_DEFECTO)
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--limite", type=int, default=0)
     parser.add_argument("--timeout", type=float, default=90.0)

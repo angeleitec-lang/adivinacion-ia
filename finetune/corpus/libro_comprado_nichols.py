@@ -38,6 +38,7 @@ import juez
 import libros_pipeline
 import libros_segmentar
 import llm_client
+from urllib.parse import urlparse
 
 ID_LIBRO = "nichols_jung_tarot_1988"
 TITULO_LIBRO = "Jung y el Tarot"
@@ -53,6 +54,9 @@ META_NOMBRE = "fuentes_libros_comprados.jsonl"
 
 NODO2_ENDPOINT = "http://10.0.0.4:8000/v1"
 NODO1_RESERVADO = "10.0.0.3"
+# Hosts locales permitidos para el LLM: nodo1 y nodo2 (autorizado por el usuario el 23/10).
+HOSTS_LOCALES_PERMITIDOS = ("10.0.0.3", "10.0.0.4")
+ENDPOINTS_POR_DEFECTO = "http://10.0.0.3:8000/v1,http://10.0.0.4:8000/v1"
 TIMEOUT_NICHOLS = 120.0
 MAX_WORKERS = 2
 
@@ -434,12 +438,11 @@ def construir_cliente_endpoints(endpoints_csv, timeout=TIMEOUT_NICHOLS,
     """
     endpoints = [e.strip() for e in (endpoints_csv or "").split(",") if e.strip()]
     if not endpoints:
-        raise ValueError("--endpoints vacio")
+        endpoints = [e.strip() for e in ENDPOINTS_POR_DEFECTO.split(",")]
     for url in endpoints:
-        if NODO1_RESERVADO in url:
+        if urlparse(url).hostname not in HOSTS_LOCALES_PERMITIDOS:
             raise ValueError(
-                "nodo1 (%s) esta reservado por el usuario; el juez no puede "
-                "usarlo: %r" % (NODO1_RESERVADO, url))
+                "endpoint no permitido (solo nodo1 y nodo2): %r" % url)
     base = llm_client.LLMClient(endpoints=endpoints, timeout=timeout)
     if acotar:
         return libros_pipeline._ClienteAcotado(base)

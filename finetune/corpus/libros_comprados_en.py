@@ -46,6 +46,7 @@ import libros_limpiar
 import libros_pipeline
 import libros_segmentar
 import llm_client
+from urllib.parse import urlparse
 
 WORK_DIR_REAL = "/Users/angelgonzalez/fase0/libros"
 WORK_DIR_DEFAULT = "/Users/angelgonzalez/fase0/libros_comprados_en"
@@ -54,6 +55,9 @@ META_NOMBRE = "fuentes_libros_comprados_en.jsonl"
 PROCEDENCIA = "comprado por el usuario, uso interno, copyright"
 NODO1_RESERVADO = "10.0.0.3"
 ENDPOINT_NODO2 = "http://10.0.0.4:8000/v1"
+# Hosts locales permitidos para el LLM: nodo1 y nodo2 (autorizado por el usuario el 23/10).
+HOSTS_LOCALES_PERMITIDOS = ("10.0.0.3", "10.0.0.4")
+ENDPOINTS_POR_DEFECTO = "http://10.0.0.3:8000/v1,http://10.0.0.4:8000/v1"
 TIMEOUT_LIBRO = 90.0
 MIN_CRUDO_BYTES = 1024
 MIN_SECCION = 400
@@ -120,12 +124,11 @@ def construir_cliente_endpoints(endpoints_csv, timeout=TIMEOUT_LIBRO):
     """
     endpoints = [e.strip() for e in (endpoints_csv or "").split(",") if e.strip()]
     if not endpoints:
-        raise ValueError("--endpoints vacio")
+        endpoints = [e.strip() for e in ENDPOINTS_POR_DEFECTO.split(",")]
     for url in endpoints:
-        if NODO1_RESERVADO in url:
+        if urlparse(url).hostname not in HOSTS_LOCALES_PERMITIDOS:
             raise ValueError(
-                "nodo1 (%s) esta reservado por el usuario; el juez no puede "
-                "usarlo: %r" % (NODO1_RESERVADO, url))
+                "endpoint no permitido (solo nodo1 y nodo2): %r" % url)
     base = llm_client.LLMClient(endpoints=endpoints, timeout=timeout)
     return libros_pipeline._ClienteAcotado(base)
 
@@ -968,7 +971,7 @@ def main(argv=None):
     parser.add_argument("--workers", type=int, default=1,
                        help="hilos de llamada al LLM (con T114 vivo: 1)")
     parser.add_argument("--timeout", type=float, default=TIMEOUT_LIBRO)
-    parser.add_argument("--endpoints", default=ENDPOINT_NODO2,
+    parser.add_argument("--endpoints", default=ENDPOINTS_POR_DEFECTO,
                        help="URLs del LLM del juez separadas por comas. "
                             "Nunca 10.0.0.3 (reservado).")
     parser.add_argument("--simulado", action="store_true",
