@@ -1,68 +1,29 @@
-# ESTADO — T121 Cierre final de la recopilación
+# ESTADO — T137 Propuesta de catálogo astrológico ampliado (casa-N, elemento, modalidad)
 
-Rama: `track/t121-cierre-final`. Worktree:
-`/Users/angelgonzalez/adivinacion-ia/.worktrees/t121-cierre-final`.
+Rama: `track/t137-catalogo-astro-casas`. Worktree:
+`/Users/angelgonzalez/adivinacion-ia/.worktrees/t137-catalogo-astro-casas`.
 
 ## Estado: TRACK COMPLETO
 
-Informe completo en `docs/CIERRE_FINAL.md`.
+Propuesta completa en `docs/PROPUESTA_CATALOGO_ASTRO.md`. Sin LLM. No se tocó `kb/*.json`, `cobertura_v3` ni ningún módulo existente. Copia de trabajo en `/Users/angelgonzalez/fase0/catalogo_astro_propuesta/`.
 
 ## Commits (hashes reales, `git log main..HEAD`)
 
-- `65063cc` T121: desbloquear etapas LLM de Greene (dispatch --juez/--afirmaciones, patrón astro)
-- `98e0deb` T121: actualizar test de Greene al dispatch LLM (bloquea_llm -> despacha_etapas_llm)
-- (pendiente en este commit) T121: docs/CIERRE_FINAL.md + ESTADO de cierre
+- `4fda4af` T137: modulo de propuesta de catalogo astro ampliado (casa-N, elemento, modalidad) con remapeo determinista y tests
+- `343a57e` T137: propuesta de catalogo astro ampliado (inventario, 19 entidades, impacto cobertura, coste, decision del usuario)
 
 ## Qué se hizo
 
-1. **Copias de seguridad** en `/Users/angelgonzalez/fase0/_backup_t121_20261022_2249/`
-   (consenso_kb, kb_v2, libros_evidencias, cobertura_v3, afirmaciones_libros).
-2. **AJUSTE 2 aplicado**: la paráfrasis de baraja NO es de T121 (es de T131).
-   No se usó `afirmaciones_baraja.jsonl` (cita recortada).
-3. **Revisión manual** de las 40 líneas de `filtro_atribucion/muestra_revision.jsonl`:
-   39/40 correctas, 1 dudosa → aprobadas las 40 (diseño por sección). Sin exclusiones extra.
-4. **Greene (T130)**: desbloqueado el guardón, dispatch `--juez`/`--afirmaciones`
-   patrón astro. Juez COMPLETO (208 secciones, 617 evidencias, 0 errores).
-   Afirmaciones COMPLETO (617 pares, 2.568 afirmaciones). Test actualizado 33/33 OK.
-5. **Staging** `fase0/t121_staging/`: fusión EN+astro+nichols+T92+Greene;
-   pasos 2-3 del cierre (limpieza 16.328 conservadas / 217 retiradas;
-   filtro atribución 563 claves).
-6. **Consenso**: pass final 3 workers → 4.021 celdas (antes 3.688).
-7. **Paso 4 exclusión**: claves CORRIENTES de staging (limpieza 0 + filtro 563),
-   NO las oficiales obsoletas (1.098/1.372). 341 celdas afectadas, 2.265
-   afirmaciones excluidas.
-8. **Pasos 5-6**: kb_v2 (tarot 78, astro 424, numero 69, baraja 40) y
-   cobertura_v3 (299 completas).
-9. **Promoción a rutas oficiales** (fase0): evidencias 16.545 RAW,
-   afirmaciones 38.857, consenso 4.021, kb_v2, cobertura_v3.
-10. **check.sh = CHECK OK**.
+1. **Inventario real**: catálogo astro 477 entidades / 5 247 celdas (signo 12, planeta_en_signo 120, planeta_en_casa 120, aspecto 225; 11 facetas). Cobertura v3 astro: 81 completas (signo 49/132, planeta_en_signo 32/1320, planeta_en_casa 0/1320, aspecto 0/2475). T119: 723 afirmaciones (Arroyo 432 / Sasportas 291): planeta_en_signo 340, signo 244, aspecto 76, planeta_en_casa 63 (casas 1,2,4,5,7,9,10,11,12; faltan 3,6,8).
+2. **Propuesta (sin aplicar)**: 19 entidades nuevas — `casa1..casa12` (tipo casa), `fuego|elemento`..`agua|elemento`, `cardinal|modalidad`..`variable|modalidad`; mismas 11 facetas. Remapeo determinista estructural (no por texto, por falsos positivos): R1 casa desde planeta_en_casa (63), R2 elemento desde signo (584), R3 modalidad desde signo (584); aspecto 76 sin remapeo; 584+63+76=723 ✓.
+3. **Script** `finetune/corpus/catalogo_astro_propuesta.py`: remapea y calcula cobertura hipotética en COPIA (`--work-dir /Users/angelgonzalez/fase0/catalogo_astro_propuesta`); protege rutas reales de fase0 (ValueError). Resultados: 209 celdas nuevas; con ≥1 fuente 88 (casa 23/132, elemento 35/44, modalidad 30/33); con ≥2 fuentes 28; completas 0 (falta clásica + español).
+4. **Calculadora** (solo lectura, ejecutada): `calculos/astro.py::carta_natal` ya da casa 1-12 por planeta, cusps, `elemento_dominante`, `modalidad_dominante` → coste en calculos/ = CERO.
+5. **Tests**: `finetune/corpus/tests/test_catalogo_astro_propuesta.py` — 34 OK. Adversos: casa 13/0/-1, ids inexistentes (quiron), signos ambiguos, claims basura, work-dir protegido, coherencia SIGNO_ELEMENTO vs KB, no colisión de ids.
+6. **check.sh**: `CHECK OK` (corpus 2 748 tests OK + scraper OK).
 
-## Cobertura: 304 → 299
+## Pendiente de decisión del usuario (ver §7 de la doc)
 
-+9 ganancias reales (tarot bastos-02; 3 naipes T94; 5 astro planeta_en_signo
-de libros nuevos) vs −14 pérdidas que son **corrección de contaminación
-cruzada** (libros de tarot/naipes que el baseline contaba como «clásicos» de
-astro/numerología, retirados por `familia_ajena_naipes`). Aceptado 299 como
-más exacto (calidad > plazo). Detalle en `docs/CIERRE_FINAL.md`.
+- A: aceptar 19 entidades (recomendado). B: solo 12 casas. C: rechazar.
+- La integración (tocar `cobertura.py` + `kb/astrologia.json` + absorción de evidencias) NO se hizo aquí por prohibición expresa de la pista; va en pista nueva si se acepta.
 
-## PENDIENTE para continuación (no es de T121)
-
-- **Baraja paráfrasis (T131)**: NO ejecutada (requiere Mercury /
-  `INCEPTION_API_KEY`). No existe
-  `fase0/libros_comprados_baraja/afirmaciones/afirmaciones_baraja_parafraseadas.jsonl`.
-  Cuando T131 esté COMPLETO, fusionar ese fichero al consenso con:
-  ```bash
-  PY=/Users/angelgonzalez/adivinacion-ia/finetune/.venv/bin/python
-  B=/Users/angelgonzalez/fase0
-  cd /Users/angelgonzalez/adivinacion-ia/.worktrees/t121-cierre-final/finetune/corpus
-  $PY consenso_kb.py --web-afirmaciones $B/afirmaciones_full/afirmaciones.jsonl \
-    --libros-afirmaciones $B/afirmaciones_libros/afirmaciones_libros.jsonl \
-    --extra-afirmaciones $B/libros_comprados_baraja/afirmaciones/afirmaciones_baraja_parafraseadas.jsonl \
-    --rehacer-celdas-con-extra --out-dir $B/consenso_kb --workers 3
-  ```
-  y regenerar kb_v2 + cobertura_v3.
-- **Banzhaf**: bloqueado (epub parcial), ignorado.
-
-## Estado de procesos
-
-Sin escritores vivos (nodo2 libre). Ningún proceso de T121 en ejecución.
+TRACK COMPLETO
