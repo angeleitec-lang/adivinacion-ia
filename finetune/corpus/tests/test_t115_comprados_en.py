@@ -224,20 +224,30 @@ class TestWorkDirYEndpoints(unittest.TestCase):
     def test_acepta_work_dir_aparte(self):
         self.assertTrue(lce.validar_work_dir(lce.WORK_DIR_DEFAULT))
 
-    def test_rechaza_nodo1(self):
-        with self.assertRaises(ValueError):
-            lce.construir_cliente_endpoints("http://10.0.0.3:8000/v1")
-        with self.assertRaises(ValueError):
-            lce.construir_cliente_endpoints(
-                "http://10.0.0.4:8000/v1,http://10.0.0.3:8000/v1")
+    def test_acepta_nodo1(self):
+        cliente = lce.construir_cliente_endpoints("http://10.0.0.3:8000/v1")
+        self.assertIsNotNone(cliente)
 
     def test_acepta_nodo2(self):
         cliente = lce.construir_cliente_endpoints(lce.ENDPOINT_NODO2)
         self.assertIsNotNone(cliente)
 
-    def test_endpoints_vacios(self):
+    def test_acepta_ambos_round_robin(self):
+        cliente = lce.construir_cliente_endpoints(
+            "http://10.0.0.3:8000/v1,http://10.0.0.4:8000/v1")
+        self.assertEqual(
+            cliente._cliente.endpoints,
+            ["http://10.0.0.3:8000/v1", "http://10.0.0.4:8000/v1"])
+
+    def test_vacio_reparte_ambos(self):
+        cliente = lce.construir_cliente_endpoints("")
+        self.assertEqual(
+            set(cliente._cliente.endpoints),
+            {"http://10.0.0.3:8000/v1", "http://10.0.0.4:8000/v1"})
+
+    def test_rechaza_host_ajeno(self):
         with self.assertRaises(ValueError):
-            lce.construir_cliente_endpoints("")
+            lce.construir_cliente_endpoints("http://example.com/v1")
 
 
 class TestClienteAfirmaciones(unittest.TestCase):

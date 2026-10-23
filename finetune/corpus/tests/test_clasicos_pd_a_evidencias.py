@@ -246,25 +246,33 @@ class TestProceso(unittest.TestCase):
 
 
 class TestConstruirClienteEndpoints(unittest.TestCase):
-    """Ajuste T92: forzar el juez a un nodo y rechazar el nodo1 reservado."""
+    """T143: nodo1 y nodo2 permitidos (autorizado el 23/10); solo esos dos hosts."""
 
-    def test_rechaza_nodo1_reservado(self):
-        with self.assertRaises(ValueError):
-            mod.construir_cliente_endpoints("http://10.0.0.3:8000/v1")
-
-    def test_rechaza_nodo1_entre_varios(self):
-        with self.assertRaises(ValueError):
-            mod.construir_cliente_endpoints(
-                "http://10.0.0.4:8000/v1,http://10.0.0.3:8000/v1")
-
-    def test_vacio_rechazado(self):
-        with self.assertRaises(ValueError):
-            mod.construir_cliente_endpoints("")
-
-    def test_acepta_nodo2_y_envuelve_acotado(self):
-        cli = mod.construir_cliente_endpoints("http://10.0.0.4:8000/v1")
+    def test_acepta_nodo1(self):
+        cli = mod.construir_cliente_endpoints("http://10.0.0.3:8000/v1")
         self.assertIsInstance(cli, libros_pipeline._ClienteAcotado)
+        self.assertEqual(cli._cliente.endpoints, ["http://10.0.0.3:8000/v1"])
+
+    def test_acepta_nodo2(self):
+        cli = mod.construir_cliente_endpoints("http://10.0.0.4:8000/v1")
         self.assertEqual(cli._cliente.endpoints, ["http://10.0.0.4:8000/v1"])
+
+    def test_acepta_ambos_round_robin(self):
+        cli = mod.construir_cliente_endpoints(
+            "http://10.0.0.3:8000/v1,http://10.0.0.4:8000/v1")
+        self.assertEqual(
+            cli._cliente.endpoints,
+            ["http://10.0.0.3:8000/v1", "http://10.0.0.4:8000/v1"])
+
+    def test_vacio_reparte_ambos(self):
+        cli = mod.construir_cliente_endpoints("")
+        self.assertEqual(
+            set(cli._cliente.endpoints),
+            {"http://10.0.0.3:8000/v1", "http://10.0.0.4:8000/v1"})
+
+    def test_rechaza_host_ajeno(self):
+        with self.assertRaises(ValueError):
+            mod.construir_cliente_endpoints("http://example.com/v1")
 
 
 class TestFichaTetrabiblosAshmand(unittest.TestCase):

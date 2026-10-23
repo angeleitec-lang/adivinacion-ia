@@ -242,13 +242,24 @@ class TestWorkDir(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(mod.validar_work_dir(tmp), os.path.realpath(tmp))
 
-    def test_rechaza_nodo1(self):
-        with self.assertRaises(ValueError):
-            mod.construir_cliente_endpoints("http://10.0.0.3:8000/v1")
+    def test_acepta_nodo1(self):
+        cliente = mod.construir_cliente_endpoints("http://10.0.0.3:8000/v1")
+        self.assertIsNotNone(cliente)
 
     def test_acepta_nodo2(self):
         cliente = mod.construir_cliente_endpoints(mod.NODO2_ENDPOINT)
         self.assertIsNotNone(cliente)
+
+    def test_vacio_reparte_ambos(self):
+        cliente = mod.construir_cliente_endpoints("")
+        base = getattr(cliente, "_cliente", cliente)
+        self.assertEqual(
+            set(base.endpoints),
+            {"http://10.0.0.3:8000/v1", "http://10.0.0.4:8000/v1"})
+
+    def test_rechaza_host_ajeno(self):
+        with self.assertRaises(ValueError):
+            mod.construir_cliente_endpoints("http://example.com/v1")
 
 
 class TestIntegracionCrudo(unittest.TestCase):
