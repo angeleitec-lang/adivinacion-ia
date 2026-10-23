@@ -13,8 +13,8 @@ estándar sin gallego ni portugués). Si falla se reintenta con el motivo; tras
 --max-intentos la fila va a <salida>.rechazadas.jsonl con el ultimo motivo.
 
 Los textos ya en español pasan sin tocarlos. Los backends:
-  - local:   endpoint OpenAI-compatible (por defecto nodo2 10.0.0.4; nodo1 esta
-             reservado para entrenamiento, no usarlo aqui).
+  - local:   endpoint OpenAI-compatible (por defecto se reparte entre nodo1
+             10.0.0.3 y nodo2 10.0.0.4; autorizado por el usuario el 23/10).
   - mercury: API de Inception Labs; la clave SOLO por variable de entorno
              INCEPTION_API_KEY (nunca por argumentos ni ficheros; nunca se
              imprime su valor).
@@ -43,8 +43,11 @@ GLOSARIO_POR_DEFECTO = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "glosario_tarot_en_es.json"
 )
 
-# Endpoints por defecto: NODO2. El nodo1 esta reservado para entrenamiento.
+# Referencia del endpoint local (nodo2); el reparto por defecto usa ambos nodos.
 ENDPOINT_LOCAL_POR_DEFECTO = "http://10.0.0.4:8000/v1"
+# Por defecto se reparte entre nodo1 y nodo2 (autorizado por el usuario el 23/10).
+ENDPOINTS_LOCALES_POR_DEFECTO = ("http://10.0.0.3:8000/v1",
+                                "http://10.0.0.4:8000/v1")
 MODEL_LOCAL_POR_DEFECTO = "halogen-qwen3.8-flash-next"
 MERCURY_URL = "https://api.inceptionlabs.ai/v1"
 MERCURY_MODEL = "mercury-3"
@@ -414,9 +417,9 @@ def crear_cliente(args: argparse.Namespace,
             reasoning_effort="instant",
             max_completion_tokens=MERCURY_MAX_COMPLETION_TOKENS,
         )
-    endpoints = [parse_endpoint(e) for e in args.endpoint] or [
-        ENDPOINT_LOCAL_POR_DEFECTO
-    ]
+    endpoints = [parse_endpoint(e) for e in args.endpoint] or list(
+        ENDPOINTS_LOCALES_POR_DEFECTO
+    )
     model = args.model or MODEL_LOCAL_POR_DEFECTO
     return LLMClient(
         endpoints=endpoints, model=model, timeout=args.timeout,

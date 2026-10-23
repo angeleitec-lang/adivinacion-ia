@@ -28,7 +28,8 @@ trozos sin celda se contabilizan en el informe.
 
 NUNCA se copia el PDF ni texto del libro al repositorio: todo el trabajo de
 datos vive en ``/Users/angelgonzalez/fase0/libros_comprados_greene/``. El LLM
-va fijado a nodo2 (nodo1 reservado). Las etapas ``--juez``/``--afirmaciones``
+se reparte entre nodo1 y nodo2 (autorizado por el usuario el 23/10). Las etapas
+``--juez``/``--afirmaciones``
 se lanzan por CLI (T121 las desbloquea): comando exacto en
 ``finetune/knowledge/libros_comprados_greene.md``.
 """
@@ -814,8 +815,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Procesa el Greene «Saturn» comprado (T130).")
     parser.add_argument("--work-dir", default=WORK_DIR)
-    parser.add_argument("--endpoints", default=NODO2_ENDPOINT,
-                        help="URLs del LLM separadas por comas (solo nodo2).")
+    parser.add_argument("--endpoints", default=astro.ENDPOINTS_POR_DEFECTO,
+                        help="URLs del LLM separadas por comas (nodo1 y nodo2 "
+                             "permitidos; autorizado por el usuario el 23/10).")
     parser.add_argument("--workers", type=int, default=1,
                         help="hilos del LLM (max %d)" % MAX_WORKERS)
     parser.add_argument("--timeout", type=float, default=TIMEOUT)

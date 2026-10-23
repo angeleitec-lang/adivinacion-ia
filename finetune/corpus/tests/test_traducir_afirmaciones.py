@@ -189,12 +189,13 @@ class TestPrompt(unittest.TestCase):
 
 
 class TestClientes(unittest.TestCase):
-    def test_local_default_es_nodo2_y_nunca_nodo1(self):
+    def test_local_default_son_ambos_nodos(self):
         args = Namespace(backend="local", endpoint=[], model=None,
                          timeout=120.0, workers=1)
         c = ta.crear_cliente(args)
-        self.assertIn("10.0.0.4", json.dumps([str(e) for e in c.endpoints]))
-        self.assertNotIn("10.0.0.3", json.dumps([str(e) for e in c.endpoints]))
+        s = json.dumps([str(e) for e in c.endpoints])
+        self.assertIn("10.0.0.4", s)
+        self.assertIn("10.0.0.3", s)
 
     def test_mercury_exige_env_sin_imprimir_clave(self):
         args = Namespace(backend="mercury", endpoint=[], model=None,

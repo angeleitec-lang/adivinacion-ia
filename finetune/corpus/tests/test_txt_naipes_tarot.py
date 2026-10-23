@@ -280,9 +280,13 @@ class TestPuertaCopia(unittest.TestCase):
 
 
 class TestEndpoints(unittest.TestCase):
-    def test_rechaza_nodo1(self):
+    def test_acepta_nodo1(self):
+        cli = mod.construir_cliente("http://10.0.0.3:8000/v1")
+        self.assertIsNotNone(cli)
+
+    def test_rechaza_host_ajeno(self):
         with self.assertRaises(ValueError):
-            mod.construir_cliente("http://10.0.0.3:8000/v1")
+            mod.construir_cliente("http://example.com/v1")
 
     def test_workers_maximos(self):
         with self.assertRaises(SystemExit):

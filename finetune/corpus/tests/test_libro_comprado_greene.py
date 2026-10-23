@@ -244,10 +244,18 @@ class TestRutas(unittest.TestCase):
         with self.assertRaises(ValueError):
             astro.validar_work_dir("/Users/angelgonzalez/fase0/libros/x")
 
-    def test_nodo1_reservado(self):
+    def test_acepta_nodo1_y_nodo2(self):
+        cli1 = astro.construir_cliente_endpoints(
+            "http://10.0.0.3:8000/v1", timeout=5.0)
+        self.assertEqual(cli1._cliente.endpoints, ["http://10.0.0.3:8000/v1"])
+        cli2 = astro.construir_cliente_endpoints(
+            "http://10.0.0.4:8000/v1", timeout=5.0)
+        self.assertEqual(cli2._cliente.endpoints, ["http://10.0.0.4:8000/v1"])
+
+    def test_rechaza_host_ajeno(self):
         with self.assertRaises(ValueError):
             astro.construir_cliente_endpoints(
-                "http://10.0.0.3:8000/v1", timeout=5.0)
+                "http://example.com/v1", timeout=5.0)
 
 
 class TestEtapasLocales(unittest.TestCase):

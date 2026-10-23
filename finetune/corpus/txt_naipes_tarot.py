@@ -21,8 +21,8 @@ Etapas (reanudables, patrón libros_comprados_en/baraja):
    baraja española de forma determinista: el juez los evalúa por cuerpo.
 3. ``--cobertura``: informe carta x faceta y llamadas LLM esperadas
    (determinista, sin LLM).
-4. ``--juez`` / ``--afirmaciones``: LLM solo en nodo2 (una etapa a la vez,
-   <= 2 workers), reutilizando ``juez.procesar_secciones`` y
+4. ``--juez`` / ``--afirmaciones``: LLM en nodo1 y nodo2 (autorizado el 23/10;
+   una etapa a la vez, <= 2 workers), reutilizando ``juez.procesar_secciones`` y
    ``afirmaciones_libros.main`` sin modificarlos.
 5. ``--auditar``: puerta anti-copia (>25 palabras consecutivas iguales al
    libro) con ``libros_comprados_en.es_copia``.
@@ -647,13 +647,11 @@ def informe_cobertura(work_dir, fuente=None):
 
 
 # ---------------------------------------------------------------------------
-# Etapas LLM (nodo2, reanudables)
+# Etapas LLM (nodo1 y nodo2, reanudables)
 # ---------------------------------------------------------------------------
 
 
 def construir_cliente(endpoints, timeout=90.0):
-    if NODO1_RESERVADO in (endpoints or ""):
-        raise ValueError("nodo1 reservado: no se usa para LLM")
     return libros_comprados_en.construir_cliente_endpoints(endpoints, timeout)
 
 
@@ -785,7 +783,7 @@ def main(argv=None):
     parser.add_argument("--afirmaciones", action="store_true")
     parser.add_argument("--auditar", action="store_true")
     parser.add_argument("--fusionar", action="store_true")
-    parser.add_argument("--endpoints", default=NODO2_ENDPOINT)
+    parser.add_argument("--endpoints", default=libros_comprados_en.ENDPOINTS_POR_DEFECTO)
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--limite", type=int, default=0)
     parser.add_argument("--timeout", type=float, default=90.0)
