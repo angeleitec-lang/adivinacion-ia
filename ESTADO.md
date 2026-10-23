@@ -73,3 +73,61 @@ y todos los «reservad» de semillas de evaluación / copyright / derechos reser
 - Se mantienen los nombres de constante (`NODO1_RESERVADO`, `NODO2_ENDPOINT`, `ENDPOINT_NODO2`)
   por compatibilidad de imports (`greene` importa de `astro`; `txt_ocultismo_numerologia` importa
   `baraja.NODO2_ENDPOINT`); solo cambian su comentario y la lógica de validación.
+
+## Tarea 2 — Lógica de clientes (commit `89fd7d1`)
+
+Patrón aplicado en cada `construir_cliente_endpoints` (o equivalente): parse CSV → si vacío,
+`endpoints = split(ENDPOINTS_POR_DEFECTO)` (ambos nodos); por cada URL,
+`if urlparse(url).hostname not in HOSTS_LOCALES_PERMITIDOS: raise ValueError("endpoint no permitido (solo nodo1 y nodo2): %r")`;
+luego `LLMClient(endpoints=endpoints, ...)` (round-robin cíclico). Nuevas constantes por fichero:
+`HOSTS_LOCALES_PERMITIDOS = ("10.0.0.3", "10.0.0.4")` y
+`ENDPOINTS_POR_DEFECTO = "http://10.0.0.3:8000/v1,http://10.0.0.4:8000/v1"`.
+
+- `clasicos_pd_a_evidencias.py`: lógica nueva + `import urlparse`; argparse `--endpoints` default `""` → ambos.
+- `libro_comprado_nichols.py`: lógica nueva (rama `acotar`); argparse default `NODO2_ENDPOINT` → `ENDPOINTS_POR_DEFECTO`.
+- `libros_comprados_baraja.py`: lógica nueva (imports internos en la función); argparse default → `ENDPOINTS_POR_DEFECTO`.
+- `libros_comprados_en.py`: lógica nueva (siempre `_ClienteAcotado`); argparse default → `ENDPOINTS_POR_DEFECTO`.
+- `libros_comprados_astro.py`: lógica nueva (rama `acotar`); argparse default → `ENDPOINTS_POR_DEFECTO`.
+- `libro_comprado_greene.py`: sin lógica propia (delega en `astro`); argparse default → `astro.ENDPOINTS_POR_DEFECTO`.
+- `txt_naipes_tarot.py`: `construir_cliente` deja de rechazar nodo1 y delega en `libros_comprados_en.construir_cliente_endpoints`; argparse default → `libros_comprados_en.ENDPOINTS_POR_DEFECTO`.
+- `traducir_afirmaciones.py`: nueva constante `ENDPOINTS_LOCALES_POR_DEFECTO = ("http://10.0.0.3:8000/v1", "http://10.0.0.4:8000/v1")`; fallback local en `crear_cliente` = ambos nodos. No se añadió rechazo duro (nunca lo tuvo y soporta specs `url=modelo`).
+
+Smoke test sin red: 7/7 OK (aceptan nodo1/nodo2/ambos; vacío → ambos; rechazan `http://example.com/v1`).
+
+## Tarea 3 — Tests (commit `6af138c`)
+
+Cada test de endpoints ahora: acepta nodo1 solo, acepta nodo2 solo, acepta ambos (round-robin,
+`endpoints == [nodo1, nodo2]`), vacío → `set == {nodo1, nodo2}`, rechaza `http://example.com/v1`.
+
+- `test_clasicos_pd_a_evidencias.py`: clase `TestConstruirClienteEndpoints` reescrita.
+- `test_libro_comprado_nichols.py`: `test_acepta_nodo1` / `test_acepta_nodo2` / `test_vacio_reparte_ambos` / `test_rechaza_host_ajeno`.
+- `test_libro_comprado_greene.py`: `test_acepta_nodo1_y_nodo2` + `test_rechaza_host_ajeno` (vía `astro`).
+- `test_t115_comprados_en.py`: acepta nodo1/nodo2/ambos/vacío + rechaza host ajeno (vía `lce`).
+- `test_traducir_afirmaciones.py`: renombrado a `test_local_default_son_ambos_nodos` (`assertIn` 10.0.0.4 Y 10.0.0.3).
+- `test_txt_naipes_tarot.py`: `test_acepta_nodo1` + `test_rechaza_host_ajeno`.
+- AÑADIDAS clases `TestConstruirClienteEndpoints` (5 tests) en `test_libros_comprados_baraja.py` y `test_libros_comprados_astro.py` (antes no tenían test de rechazo).
+- `test_linea_base.py` `test_flash_next_usa_solo_nodo2`: se MANTIENE (registro `MODELOS`, no rechazo de cliente).
+
+## Tarea 4 — Docstrings / comentarios / help (commit `6196bfb`)
+
+En los 9 ficheros se cambió «nodo1 reservado / reservado por el usuario / solo nodo2 / nunca
+10.0.0.3 / fijado a nodo2 / no usarlo aquí» por «nodo1 y nodo2 permitidos (autorizado por el
+usuario el 23/10)» o equivalente. `linea_base.py`: solo el docstring («ya no está reservado;
+este modelo sigue apuntando a nodo2»), `MODELOS` intacto. Verificado por grep: no queda ninguna
+frase de restricción antigua en los 9 ficheros objetivo.
+
+## Verificación
+
+- Suite de los 9 ficheros: `Ran 241 tests ... OK`.
+- `./finetune/scripts/check.sh` → `Ran 2913 tests ... OK (skipped=1)` + scraper `Ran 23 tests ... OK` → **CHECK OK**.
+- Los avisos LSP/pyright (unión `LLMClient|_ClienteAcotado` al leer `._cliente`, y `None`-subscriptable
+  preexistentes en baraja L281/320/345/559) NO los ejecuta `check.sh` (solo `compileall` + `unittest`); runtime correcto.
+
+## Commits (git log main..HEAD)
+
+- `dc30f69` T143-1: listado de puntos de la restricción nodo1 (grep) en ESTADO.md
+- `89fd7d1` T143-2: permitir nodo1 y nodo2 en los clientes LLM (round-robin por defecto)
+- `6af138c` T143-3: tests de endpoints aceptan nodo1/nodo2 y rechazan host ajeno
+- `6196bfb` T143-4: docstrings/comentarios/help reflejan nodo1 y nodo2 permitidos (autorizado 23/10)
+
+TRACK COMPLETO
