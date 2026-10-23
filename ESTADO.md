@@ -83,6 +83,7 @@ commits de código en esta rama; el script ya venía de T131.
 ## Commits (hashes reales, `git log main..HEAD`)
 
 - `da3371d` T134: ESTADO paráfrasis baraja 320/320 (nodo2) + TRACK COMPLETO
+- `697c0c6` T134: anotar hash real del commit de ESTADO
 
 ## Estado
 
