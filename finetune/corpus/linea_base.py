@@ -17,8 +17,9 @@ hace con ``python evaluar_modelo.py --comparar A.json B.json``.
 Modelos disponibles (registro ``MODELOS``):
 
 - ``flash-next``: halogen-qwen3.8-flash-next en el nodo2
-  (http://10.0.0.4:8000/v1). El nodo1 está reservado: no se usa. Máximo 2
-  peticiones en paralelo porque otras IAs comparten el nodo.
+  (http://10.0.0.4:8000/v1). El nodo1 ya no está reservado (autorizado por el
+  usuario el 23/10); este modelo sigue apuntando a nodo2. Máximo 2 peticiones en
+  paralelo porque otras IAs comparten el nodo.
 - ``mercury-3``: Inception Mercury 3 (reasoning_effort=instant). SOLO si la
   clave está en la variable de entorno ``INCEPTION_API_KEY``: nunca se lee
   de ficheros ni se imprime. Sin clave, el modelo se omite con un aviso.

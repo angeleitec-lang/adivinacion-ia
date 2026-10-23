@@ -21,8 +21,8 @@ Etapas (reanudables, patrón libros_comprados_en/baraja):
    baraja española de forma determinista: el juez los evalúa por cuerpo.
 3. ``--cobertura``: informe carta x faceta y llamadas LLM esperadas
    (determinista, sin LLM).
-4. ``--juez`` / ``--afirmaciones``: LLM solo en nodo2 (una etapa a la vez,
-   <= 2 workers), reutilizando ``juez.procesar_secciones`` y
+4. ``--juez`` / ``--afirmaciones``: LLM en nodo1 y nodo2 (autorizado el 23/10;
+   una etapa a la vez, <= 2 workers), reutilizando ``juez.procesar_secciones`` y
    ``afirmaciones_libros.main`` sin modificarlos.
 5. ``--auditar``: puerta anti-copia (>25 palabras consecutivas iguales al
    libro) con ``libros_comprados_en.es_copia``.
@@ -647,7 +647,7 @@ def informe_cobertura(work_dir, fuente=None):
 
 
 # ---------------------------------------------------------------------------
-# Etapas LLM (nodo2, reanudables)
+# Etapas LLM (nodo1 y nodo2, reanudables)
 # ---------------------------------------------------------------------------
 
 

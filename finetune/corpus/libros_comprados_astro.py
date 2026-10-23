@@ -24,8 +24,8 @@ tipo/calidad/facetas. Las afirmaciones reutilizan ``afirmaciones_libros`` y anad
 la puerta anti-copia de T114: una afirmacion que repita mas de 25 palabras
 consecutivas del libro se rechaza (debe ser parafasis breve, no cita literal).
 
-El LLM va fijado a nodo2 (nodo1 reservado), con reintentos bajos y corrida
-reanudable. El texto limpio lo aporta T118 en
+El LLM se reparte entre nodo1 y nodo2 (autorizado por el usuario el 23/10), con
+reintentos bajos y corrida reanudable. El texto limpio lo aporta T118 en
 ``/Users/angelgonzalez/fase0/libros_comprados_astro/limpio/``; nunca se toca el
 work-dir real de la tuberia (``/Users/angelgonzalez/fase0/libros``).
 """
@@ -644,7 +644,8 @@ def main(argv=None):
         description="Procesa los libros comprados de astrologia (T119).")
     parser.add_argument("--work-dir", default=WORK_DIR)
     parser.add_argument("--endpoints", default=ENDPOINTS_POR_DEFECTO,
-                       help="URLs del LLM separadas por comas (solo nodo2).")
+                       help="URLs del LLM separadas por comas (nodo1 y nodo2 "
+                            "permitidos; autorizado por el usuario el 23/10).")
     parser.add_argument("--workers", type=int, default=1,
                        help="hilos de llamada al LLM (max %d)" % MAX_WORKERS)
     parser.add_argument("--timeout", type=float, default=TIMEOUT_ASTRO)

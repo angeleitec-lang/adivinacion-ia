@@ -37,7 +37,7 @@ UMBRAL_LLAMADAS = 600
 PASO_LLAMADAS = 300
 TIMEOUT_CLASICO = 90.0
 MIN_CRUDO_BYTES = 1024
-# Reservado por el usuario: el juez del LLM nunca debe apuntar a nodo1.
+# Nodo1 y nodo2 permitidos para el LLM (autorizado por el usuario el 23/10).
 NODO1_RESERVADO = "10.0.0.3"
 # Hosts locales permitidos para el LLM: nodo1 y nodo2 (autorizado por el usuario el 23/10).
 HOSTS_LOCALES_PERMITIDOS = ("10.0.0.3", "10.0.0.4")
@@ -282,8 +282,8 @@ def construir_cliente_endpoints(endpoints_csv, timeout=TIMEOUT_CLASICO):
     Aplica el ajuste del usuario: permite forzar el juez a un solo nodo (p. ej.
     ``http://10.0.0.4:8000/v1``) sin tocar ``libros_pipeline``. Como
     ``_cliente_juez`` devuelve el cliente explícito tal cual, se envuelve aquí
-    en ``_ClienteAcotado`` para conservar los reintentos bajos. Rechaza el
-    nodo1 reservado (10.0.0.3) para no usarlo por descuido.
+    en ``_ClienteAcotado`` para conservar los reintentos bajos. Acepta nodo1 y
+    nodo2 (autorizado por el usuario el 23/10) y rechaza cualquier otro host.
     """
     endpoints = [e.strip() for e in (endpoints_csv or "").split(",") if e.strip()]
     if not endpoints:
@@ -415,9 +415,9 @@ def main(argv=None):
     parser.add_argument("--timeout", type=float, default=TIMEOUT_CLASICO,
                        help="timeout por petición al LLM en segundos")
     parser.add_argument("--endpoints", default="",
-                       help="URLs del LLM del juez separadas por comas; fuerza "
-                            "el nodo (p. ej. http://10.0.0.4:8000/v1). Nunca "
-                            "10.0.0.3 (reservado por el usuario).")
+                        help="URLs del LLM del juez separadas por comas; fuerza "
+                             "el nodo (p. ej. http://10.0.0.4:8000/v1). Permitidos "
+                             "nodo1 y nodo2 (autorizado por el usuario el 23/10).")
     parser.add_argument("--simulado", action="store_true",
                        help="cliente LLM simulado para el juez")
     parser.add_argument("--dry-run", action="store_true",

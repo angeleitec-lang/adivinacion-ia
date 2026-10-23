@@ -19,8 +19,8 @@ Fortuna: jSocorro!``) se detectan por repeticion y se eliminan para que no se
 confundan con contenido ni con titulos de otra carta.
 
 El juez y las evidencias reutilizan ``juez``/``libros_pipeline`` igual que
-``clasicos_pd_a_evidencias.py``, con el LLM fijado a nodo2 (nodo1 reservado) y
-reanudable. Las afirmaciones reutilizan ``afirmaciones_libros`` y anaden una
+``clasicos_pd_a_evidencias.py``, con el LLM repartido entre nodo1 y nodo2
+(autorizado por el usuario el 23/10) y reanudable. Las afirmaciones reutilizan ``afirmaciones_libros`` y anaden una
 puerta anti-copia: una afirmacion que repita mas de 25 palabras consecutivas del
 libro se marca y se rechaza (debe ser parafasis breve, no cita literal larga).
 """
@@ -431,8 +431,8 @@ def construir_cliente_endpoints(endpoints_csv, timeout=TIMEOUT_NICHOLS,
                                acotar=True):
     """Cliente fijado a los endpoints indicados.
 
-    Rechaza el nodo1 reservado (10.0.0.3). Iguales garantias que en
-    ``clasicos_pd_a_evidencias``. Con ``acotar=True`` (juez) envuelve en
+    Acepta nodo1 y nodo2 (autorizado por el usuario el 23/10) y rechaza
+    cualquier otro host. Iguales garantias que en ``clasicos_pd_a_evidencias``. Con ``acotar=True`` (juez) envuelve en
     ``_ClienteAcotado`` para reintentos bajos; con ``acotar=False``
     (afirmaciones) devuelve el ``LLMClient`` crudo, que expone ``chat_json``.
     """
@@ -712,9 +712,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Procesa el libro comprado Nichols hacia evidencias (T114).")
     parser.add_argument("--work-dir", default=WORK_DIR_NICHOLS)
-    parser.add_argument("--endpoints", default=NODO2_ENDPOINT,
+    parser.add_argument("--endpoints", default=ENDPOINTS_POR_DEFECTO,
                        help="URLs del LLM del juez separadas por comas "
-                            "(solo nodo2; nunca 10.0.0.3).")
+                            "(nodo1 y nodo2 permitidos; autorizado por el "
+                            "usuario el 23/10).")
     parser.add_argument("--workers", type=int, default=1,
                        help="hilos de llamada al LLM (max %d)" % MAX_WORKERS)
     parser.add_argument("--timeout", type=float, default=TIMEOUT_NICHOLS)

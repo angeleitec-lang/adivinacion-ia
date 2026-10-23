@@ -19,8 +19,8 @@ Segmentación propia (los libros no siguen el formato de los clásicos PD):
   «Técnica: » para que el juez no los confunda con significado de carta)
   y el apéndice de 78 cartas, una sección por carta con nombre canónico.
 
-El juez apunta SIEMPRE a nodo2 (`http://10.0.0.4:8000/v1`); nodo1
-(10.0.0.3) está reservado por el usuario. Con T114 vivo se usa 1 worker.
+El juez se reparte entre nodo1 y nodo2 (autorizado por el usuario el 23/10).
+Con T114 vivo se usa 1 worker.
 Reanudable por hash de sección, como `clasicos_pd_a_evidencias`.
 
 Tras las afirmaciones (T38) se aplica la puerta anti-copia: cualquier
@@ -119,8 +119,8 @@ def validar_work_dir(work_dir):
 def construir_cliente_endpoints(endpoints_csv, timeout=TIMEOUT_LIBRO):
     """Cliente del juez fijado a los endpoints indicados, con reintentos bajos.
 
-    Rechaza nodo1 (10.0.0.3), reservado por el usuario: el LLM de esta
-    pista solo puede correr contra nodo2.
+    Acepta nodo1 y nodo2 (autorizado por el usuario el 23/10) y rechaza
+    cualquier otro host.
     """
     endpoints = [e.strip() for e in (endpoints_csv or "").split(",") if e.strip()]
     if not endpoints:
@@ -972,8 +972,9 @@ def main(argv=None):
                        help="hilos de llamada al LLM (con T114 vivo: 1)")
     parser.add_argument("--timeout", type=float, default=TIMEOUT_LIBRO)
     parser.add_argument("--endpoints", default=ENDPOINTS_POR_DEFECTO,
-                       help="URLs del LLM del juez separadas por comas. "
-                            "Nunca 10.0.0.3 (reservado).")
+                        help="URLs del LLM del juez separadas por comas. "
+                             "Permitidos nodo1 y nodo2 (autorizado por el "
+                             "usuario el 23/10).")
     parser.add_argument("--simulado", action="store_true",
                        help="cliente LLM simulado para el juez")
     parser.add_argument("--dry-run", action="store_true",

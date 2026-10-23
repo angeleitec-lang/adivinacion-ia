@@ -786,7 +786,7 @@ def medir(work_dir: str = WORK_DIR_DEFECTO):
 # ---------------------------------------------------------------------------
 
 def construir_cliente_endpoints(endpoints_csv, timeout=TIMEOUT, acotar=True):
-    """Cliente fijado a nodo2; rechaza nodo1 (reservado)."""
+    """Cliente round-robin sobre nodo1 y nodo2 (autorizado el 23/10); rechaza otros hosts."""
     import libros_pipeline
     import llm_client
     endpoints = [e.strip() for e in (endpoints_csv or "").split(",") if e.strip()]
