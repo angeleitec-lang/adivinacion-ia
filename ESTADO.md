@@ -1,68 +1,82 @@
-# ESTADO — T121 Cierre final de la recopilación
+# ESTADO — T136 Regenerar fuera_alcance (v2)
 
-Rama: `track/t121-cierre-final`. Worktree:
-`/Users/angelgonzalez/adivinacion-ia/.worktrees/t121-cierre-final`.
+Rama: `track/t136-regenerar-fuera-alcance`. Worktree:
+`/Users/angelgonzalez/adivinacion-ia/.worktrees/t136-regenerar-fuera-alcance`.
 
-## Estado: TRACK COMPLETO
+## Estado: PREPARADO — GENERACIÓN BLOQUEADA por gate t134
 
-Informe completo en `docs/CIERRE_FINAL.md`.
+Script + tests + dry-run listos y commiteados. **No se lanza `--run`** hasta que
+`t134-parafrasis-baraja-local` tenga su propio `TRACK COMPLETO`.
+
+Motivo del bloqueo: el `ESTADO.md` de
+`.worktrees/t134-parafrasis-baraja-local/` contiene el reporte de **T121**
+(header `# ESTADO — T121`), no de T134 (`grep T134` = 0 hits propios). La
+condición del `SIGUIENTE` («lanzar cuando t134 tenga TRACK COMPLETO») **no se
+cumple**. Regla «desconfiar de TRACK COMPLETO» aplicada.
 
 ## Commits (hashes reales, `git log main..HEAD`)
 
-- `65063cc` T121: desbloquear etapas LLM de Greene (dispatch --juez/--afirmaciones, patrón astro)
-- `98e0deb` T121: actualizar test de Greene al dispatch LLM (bloquea_llm -> despacha_etapas_llm)
-- (pendiente en este commit) T121: docs/CIERRE_FINAL.md + ESTADO de cierre
+- `8f51e71` T136: regenerar_fuera_alcance.py (gen nuevo v2, dry-run, reanudable, nodo2) + tests adversos
+
+(este commit añade `docs/REGENERAR_FUERA_ALCANCE.md` y el presente `ESTADO.md`)
 
 ## Qué se hizo
 
-1. **Copias de seguridad** en `/Users/angelgonzalez/fase0/_backup_t121_20261022_2249/`
-   (consenso_kb, kb_v2, libros_evidencias, cobertura_v3, afirmaciones_libros).
-2. **AJUSTE 2 aplicado**: la paráfrasis de baraja NO es de T121 (es de T131).
-   No se usó `afirmaciones_baraja.jsonl` (cita recortada).
-3. **Revisión manual** de las 40 líneas de `filtro_atribucion/muestra_revision.jsonl`:
-   39/40 correctas, 1 dudosa → aprobadas las 40 (diseño por sección). Sin exclusiones extra.
-4. **Greene (T130)**: desbloqueado el guardón, dispatch `--juez`/`--afirmaciones`
-   patrón astro. Juez COMPLETO (208 secciones, 617 evidencias, 0 errores).
-   Afirmaciones COMPLETO (617 pares, 2.568 afirmaciones). Test actualizado 33/33 OK.
-5. **Staging** `fase0/t121_staging/`: fusión EN+astro+nichols+T92+Greene;
-   pasos 2-3 del cierre (limpieza 16.328 conservadas / 217 retiradas;
-   filtro atribución 563 claves).
-6. **Consenso**: pass final 3 workers → 4.021 celdas (antes 3.688).
-7. **Paso 4 exclusión**: claves CORRIENTES de staging (limpieza 0 + filtro 563),
-   NO las oficiales obsoletas (1.098/1.372). 341 celdas afectadas, 2.265
-   afirmaciones excluidas.
-8. **Pasos 5-6**: kb_v2 (tarot 78, astro 424, numero 69, baraja 40) y
-   cobertura_v3 (299 completas).
-9. **Promoción a rutas oficiales** (fase0): evidencias 16.545 RAW,
-   afirmaciones 38.857, consenso 4.021, kb_v2, cobertura_v3.
-10. **check.sh = CHECK OK**.
+1. **Medición de la corrupción**: 400 jobs `fuera_alcance` originales
+   (Mercury `mercury-3`); 398 filas corruptas en `fase1_v1d`
+   (train 357 / val 20 / test 21). Patrón:
+   `Pregunta del consultante: "<n> <arranque>:"` (pregunta real perdida, pero
+   recuperable en `payload["tecnica"][1]` de los jobs de
+   `/tmp/jobs_t113_final.db`). 5 ejemplos v1d: 36905, 37084, 37000, 37087,
+   36894. El `corpus/jobs.db` maestro no tiene `fuera_alcance`.
+2. **Copia de seguridad** de `corpus/jobs.db` en
+   `/Users/angelgonzalez/fase0/copias/jobs_20261023_075506.db`
+   (57.888.768 bytes) antes de tocar nada.
+3. **Alcance**: el bloque corrupto es de **TÉCNICAS** fuera de alcance
+   (`FUERA_ALCANCE_ENTRENAMIENTO`), no de seguridad. Las categorías de seguridad
+   del `SIGUIENTE` (salud/legal/financiero/muerte/embarazo/violencia/menores)
+   son la familia `etica`, **NO corrupta** → no se toca. Se regenera el bloque
+   de técnicas, respetando «mira las categorías existentes».
+4. **Script** `finetune/corpus/regenerar_fuera_alcance.py`: solo importa
+   `generate_tasks`/`fase1_prompts`/`ejecutor_fase1`/`llm_client` (no los
+   modifica). Genera set nuevo en `/Users/angelgonzalez/fase0/fuera_alcance_v2/`
+   (no toca v1d), esquema ShareGPT exacto de v1d. Subcomandos
+   `--dry-run`/`--prepare`/`--run`/`--report`. Valida cada job y **aborta** si
+   hay prompt mutilado. **Prohíbe nodo1** (`ValueError` si `10.0.0.3`). LLM solo
+   nodo2, 1 worker, ≤1 req/s. Reanudable (`pending→running→done/failed`).
+5. **Tests** `tests/test_regenerar_fuera_alcance.py`: 19 tests unittest, todos
+   OK. Casos adversos: prompt vacío/mutilado, sin técnica, sin encabezado, bloque
+   inesperado, respuesta con diagnóstico/predicción de muerte (rechazada), sin
+   rechazo, sin alternativa, buena aceptada, otra lengua (rechazada), truncada.
+6. **check.sh = CHECK OK** (2733 tests, skipped=1).
 
-## Cobertura: 304 → 299
+## Cifras del dry-run (n=400)
 
-+9 ganancias reales (tarot bastos-02; 3 naipes T94; 5 astro planeta_en_signo
-de libros nuevos) vs −14 pérdidas que son **corrección de contaminación
-cruzada** (libros de tarot/naipes que el baseline contaba como «clásicos» de
-astro/numerología, retirados por `familia_ajena_naipes`). Aceptado 299 como
-más exacto (calidad > plazo). Detalle en `docs/CIERRE_FINAL.md`.
+```
+jobs construidos: 400 (todos validados)
+llamadas estimadas (con 30% reintentos): 520
+tokens de prompt estimados (~4 char/token): 33210
+presupuesto de salida (suma max_tokens): 614400
+endpoint: http://10.0.0.4:8000/v1 (halogen-qwen3.8-flash-next, 1 worker)
+```
 
-## PENDIENTE para continuación (no es de T121)
+Rechazos por motivo: **ninguno** (no se ha ejecutado LLM).
 
-- **Baraja paráfrasis (T131)**: NO ejecutada (requiere Mercury /
-  `INCEPTION_API_KEY`). No existe
-  `fase0/libros_comprados_baraja/afirmaciones/afirmaciones_baraja_parafraseadas.jsonl`.
-  Cuando T131 esté COMPLETO, fusionar ese fichero al consenso con:
-  ```bash
-  PY=/Users/angelgonzalez/adivinacion-ia/finetune/.venv/bin/python
-  B=/Users/angelgonzalez/fase0
-  cd /Users/angelgonzalez/adivinacion-ia/.worktrees/t121-cierre-final/finetune/corpus
-  $PY consenso_kb.py --web-afirmaciones $B/afirmaciones_full/afirmaciones.jsonl \
-    --libros-afirmaciones $B/afirmaciones_libros/afirmaciones_libros.jsonl \
-    --extra-afirmaciones $B/libros_comprados_baraja/afirmaciones/afirmaciones_baraja_parafraseadas.jsonl \
-    --rehacer-celdas-con-extra --out-dir $B/consenso_kb --workers 3
-  ```
-  y regenerar kb_v2 + cobertura_v3.
-- **Banzhaf**: bloqueado (epub parcial), ignorado.
+## Para continuar (cuando abra el gate de t134)
+
+```bash
+PY=/Users/angelgonzalez/adivinacion-ia/finetune/.venv/bin/python
+cd /Users/angelgonzalez/adivinacion-ia/.worktrees/t136-regenerar-fuera-alcance
+$PY finetune/corpus/regenerar_fuera_alcance.py --prepare --n 400
+$PY finetune/corpus/regenerar_fuera_alcance.py --run --n 400 --workers 1
+$PY finetune/corpus/regenerar_fuera_alcance.py --report
+```
+
+Después: verificar **30 muestras a mano** y anotarlas aquí; integrar
+`fuera_alcance_v2.jsonl` sustituyendo las 398 corruptas (armadores agrupan por
+`bloque`). Ver `docs/REGENERAR_FUERA_ALCANCE.md`.
 
 ## Estado de procesos
 
-Sin escritores vivos (nodo2 libre). Ningún proceso de T121 en ejecución.
+Sin procesos LLM de T136 en ejecución. No se reanudan los generadores
+suspendidos (PID 66101 nodo1, 66396 nodo2). Sin push (git solo local).
