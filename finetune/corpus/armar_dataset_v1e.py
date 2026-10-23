@@ -20,7 +20,6 @@ Pasos (cada uno deja registro de ids afectados en <salida>/_cambios/<paso>.jsonl
   7  markdown: no se cambia nada; solo se informa el recuento por bloque.
 """
 import argparse
-import difflib
 import json
 import os
 import random
@@ -101,6 +100,15 @@ def capturar_flags(filas):
     return flags, corruptas
 
 
+def _idkey(i):
+    """Clave de ordenación estable para ids que pueden ser int, str o None."""
+    if isinstance(i, int):
+        return (0, i, '')
+    if i is None:
+        return (2, 0, '')
+    return (1, 0, str(i))
+
+
 def _registro(f, accion, motivo):
     return {'sid': f['sid'], 'id': f['id'], 'split': f['split'],
             'bloque': f['bloque'], 'accion': accion, 'motivo': motivo}
@@ -155,7 +163,14 @@ def paso1b_fuera_alcance_v2(filas, ruta, semilla=SEMILLA):
 # --------------------------------------------------------------- paso 2
 
 def paso2_fugas(filas):
-    """Retira de train el lado duplicado de cada fuga cross-split (prompt o respuesta)."""
+    """Retira de train el lado duplicado de cada fuga cross-split.
+
+    Tres vias: (a) prompt casi identico por similitud del detector de la
+    auditoria; (b) respuesta casi identica por similitud; (c) prompt propio
+    EXACTO compartido con val/test (el filtro boiler del detector puede
+    ocultar estas coincidencias cuando el prompt se repite >=3 veces en
+    val/test; se tratan como fuga igualmente).
+    """
     retirar = {}
     for i, j, cnt, sim in aud._pares_similares(
             filas, lambda f: aud.prompt_propio(f['humano']), aud.SIM_PROMPT_MIN):
@@ -169,6 +184,18 @@ def paso2_fugas(filas):
         for t, o in ((a, b), (b, a)):
             if t['split'] == 'train' and o['split'] in ('val', 'test'):
                 retirar.setdefault(t['sid'], 'fuga_respuesta cross-split con %s (sim %.2f)' % (o['sid'], sim))
+    hashes_valtest = set()
+    for f in filas:
+        if f['split'] in ('val', 'test'):
+            pp = aud.prompt_propio(f['humano'])
+            if len(pp) >= 40:
+                hashes_valtest.add(aud._hash_norm(pp))
+    for f in filas:
+        if f['split'] != 'train':
+            continue
+        pp = aud.prompt_propio(f['humano'])
+        if len(pp) >= 40 and aud._hash_norm(pp) in hashes_valtest:
+            retirar.setdefault(f['sid'], 'prompt propio exacto compartido con val/test')
     return _retirar(filas, retirar)
 
 
@@ -191,7 +218,7 @@ def paso3_dedupe_prompts(filas, flags):
 
         def clave(f):
             banderas = 1 if (flags.get(f['sid'], set()) & BANDERAS_EXPURGO) else 0
-            return (banderas, f['id'] if f['id'] is not None else 10 ** 12, f['sid'])
+            return (banderas, _idkey(f['id']), f['sid'])
 
         fs_orden = sorted(fs, key=clave)
         conserva = fs_orden[0]
@@ -236,47 +263,84 @@ def paso5_multiturno(filas):
 
 # --------------------------------------------------------------- paso 6
 
-def _similar(a, b, umbral=aud.SIM_PROMPT_MIN):
-    sm = difflib.SequenceMatcher(None, a[:4000], b[:4000])
-    return sm.quick_ratio() >= umbral and sm.ratio() >= umbral
+def _prompt_key(f):
+    return aud.prompt_propio(f['humano'])
 
 
 def paso6_numerologia(filas, n_test=N_TEST_NUMEROLOGIA, n_val=N_VAL_NUMEROLOGIA):
-    """Mueve numerologia de train a test/val sin crear fugas cross-split."""
+    """Mueve numerologia de train a test/val sin crear fugas cross-split.
+
+    Los prompts de numerologia comparten plantilla: el detector de la auditoria
+    (filtro boiler de n-gramas) decide que filas pueden convivir en splits
+    distintos. Se asignan los primeros candidatos y se repara en bucle: toda
+    fila movida que fugue con train o entre val/test se retira y se rellena
+    con el siguiente candidato hasta que no queden fugas.
+    """
     train_num = sorted((f for f in filas if f['split'] == 'train' and f['bloque'] == 'numerologia'),
-                      key=lambda f: (f['id'] is None, f['id'] if f['id'] is not None else 0, f['sid']))
-    valtest = [f for f in filas if f['split'] in ('val', 'test')]
-    filas2 = train_num + valtest
+                      key=lambda f: (_idkey(f['id']), f['sid']))
+    snap = [dict(f) for f in filas]
     prohibidos = set()
-    for i, j, _cnt, _sim in aud._pares_similares(
-            filas2, lambda f: aud.prompt_propio(f['humano']), aud.SIM_PROMPT_MIN):
-        a, b = filas2[i], filas2[j]
+    for i, j, _cnt, _sim in aud._pares_similares(snap, _prompt_key, aud.SIM_PROMPT_MIN):
+        a, b = snap[i], snap[j]
         t = a if a['split'] == 'train' else (b if b['split'] == 'train' else None)
         if t is not None:
             prohibidos.add(t['sid'])
-    movidos_test = []
-    movidos_val = []
-    asignadas = []
-    for f in train_num:
-        if f['sid'] in prohibidos:
-            continue
-        pp = aud.prompt_propio(f['humano'])
-        if any(_similar(pp, aud.prompt_propio(g['humano'])) for g in asignadas):
-            continue
-        if len(movidos_test) < n_test:
-            movidos_test.append(f)
-            asignadas.append(f)
-        elif len(movidos_val) < n_val:
-            movidos_val.append(f)
-            asignadas.append(f)
-        if len(movidos_test) >= n_test and len(movidos_val) >= n_val:
+    candidatos = [f for f in train_num if f['sid'] not in prohibidos]
+    mov_test = candidatos[:n_test]
+    mov_val = candidatos[n_test:n_test + n_val]
+    usados = {f['sid'] for f in mov_test} | {f['sid'] for f in mov_val}
+
+    def aplicar():
+        for f in train_num:
+            f['split'] = 'train'
+        for f in mov_test:
+            f['split'] = 'test'
+        for f in mov_val:
+            f['split'] = 'val'
+
+    def detectar_leak():
+        pares = aud._pares_similares(filas, _prompt_key, aud.SIM_PROMPT_MIN)
+        mov = {f['sid'] for f in mov_test} | {f['sid'] for f in mov_val}
+        leak = set()
+        for i, j, _cnt, _sim in pares:
+            a, b = filas[i], filas[j]
+            if a['split'] == b['split']:
+                continue
+            if a['sid'] in mov and b['split'] == 'train':
+                leak.add(a['sid'])
+            if b['sid'] in mov and a['split'] == 'train':
+                leak.add(b['sid'])
+            if {a['split'], b['split']} == {'val', 'test'} and (a['sid'] in mov or b['sid'] in mov):
+                leak.add(a['sid'] if a['sid'] in mov else b['sid'])
+        return leak
+
+    for _ in range(len(candidatos) + 1):
+        aplicar()
+        leak = detectar_leak()
+        if not leak:
             break
+        mov_test = [f for f in mov_test if f['sid'] not in leak]
+        mov_val = [f for f in mov_val if f['sid'] not in leak]
+        relleno = False
+        for f in candidatos:
+            if len(mov_test) >= n_test and len(mov_val) >= n_val:
+                break
+            if f['sid'] in usados or f['sid'] in leak:
+                continue
+            if len(mov_test) < n_test:
+                mov_test.append(f)
+            else:
+                mov_val.append(f)
+            usados.add(f['sid'])
+            relleno = True
+        if not relleno:
+            aplicar()
+            break
+    aplicar()
     reg = []
-    for f in movidos_test:
-        f['split'] = 'test'
+    for f in mov_test:
         reg.append(_registro(f, 'movido_test', 'train -> test (numerologia sin test)'))
-    for f in movidos_val:
-        f['split'] = 'val'
+    for f in mov_val:
         reg.append(_registro(f, 'movido_val', 'train -> val (numerologia sin test)'))
     return filas, reg
 
@@ -325,9 +389,9 @@ def construir(v1d_dir=V1D_DEFAULT, out_dir=OUT_DEFAULT, fuera_v2=FUERA_V2_DEFAUL
         reg1b = []
         estado1b = 'omitido: %s no existe (T136 pendiente); paso reanudable con --fuera-alcance-v2' % fuera_v2
 
-    filas, reg2 = paso2_fugas(filas)
-    _escribir_jsonl(os.path.join(cambios, 'paso2_fugas.jsonl'), reg2)
-
+    # El paso 2 (fugas) se ejecuta AL FINAL, sobre la composicion definitiva de
+    # val/test: el filtro boiler del detector depende de que filas quedan en
+    # val/test, y los pasos 4 y 6 cambian esa composicion.
     filas, reg3 = paso3_dedupe_prompts(filas, flags)
     _escribir_jsonl(os.path.join(cambios, 'paso3_dedupe_train.jsonl'), reg3)
 
@@ -340,6 +404,9 @@ def construir(v1d_dir=V1D_DEFAULT, out_dir=OUT_DEFAULT, fuera_v2=FUERA_V2_DEFAUL
 
     filas, reg6 = paso6_numerologia(filas, n_test_num, n_val_num)
     _escribir_jsonl(os.path.join(cambios, 'paso6_numerologia.jsonl'), reg6)
+
+    filas, reg2 = paso2_fugas(filas)
+    _escribir_jsonl(os.path.join(cambios, 'paso2_fugas.jsonl'), reg2)
 
     reg7 = paso7_markdown(filas)
     _escribir_jsonl(os.path.join(cambios, 'paso7_markdown.jsonl'), reg7)

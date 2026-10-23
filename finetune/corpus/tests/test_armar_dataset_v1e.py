@@ -75,6 +75,16 @@ class TestPaso2Fugas(unittest.TestCase):
         self.assertIn('test#0 id=2', {f['sid'] for f in nuevas})
         self.assertIn('fuga_respuesta', reg[0]['motivo'])
 
+    def test_prompt_exacto_compartido_con_val_retira_train(self):
+        filas = [fila('train', 0, 1, 'tarot_1', BASE_PROMPT, 'resp train'),
+                fila('val', 0, 2, 'tarot_1', BASE_PROMPT, 'resp val distinta'),
+                fila('val', 1, 3, 'tarot_1', BASE_PROMPT, 'resp val 2 distinta'),
+                fila('val', 2, 4, 'tarot_1', BASE_PROMPT, 'resp val 3 distinta')]
+        nuevas, reg = v1e.paso2_fugas(filas)
+        self.assertNotIn('train#0 id=1', {f['sid'] for f in nuevas})
+        self.assertEqual(len(nuevas), 3)
+        self.assertIn('exacto', reg[0]['motivo'])
+
     def test_par_val_test_no_se_toca(self):
         filas = [fila('val', 0, 1, 'tarot_1', BASE_PROMPT, 'a'),
                 fila('test', 0, 2, 'tarot_1', variante(BASE_PROMPT, 'sentimental'), 'b')]
