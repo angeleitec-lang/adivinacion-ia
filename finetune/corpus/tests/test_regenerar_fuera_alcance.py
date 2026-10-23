@@ -179,5 +179,95 @@ class TestClienteNodo2(unittest.TestCase):
         self.assertIn("10.0.0.4", c.endpoints[0])
 
 
+class TestDetectorVoseo(unittest.TestCase):
+    def test_contiene_voseo_true(self):
+        for t in [
+            "¿Qué querés saber?",
+            "Podés contarme lo que te pasa.",
+            "Decime qué necesitás.",
+            "Vos tenés la última palabra.",
+            "Mirá lo que encontraste.",
+            "Si preferís, contame.",
+        ]:
+            self.assertTrue(rf.contiene_voseo(t), t)
+
+    def test_contiene_voseo_false_falsos_positivos(self):
+        for t in [
+            "más o menos",
+            "además de eso",
+            "tú estás bien",
+            "que estés tranquila",
+            "detrás de ti",
+            "por interés propio",
+            "bajo estrés",
+            "a través de las cartas",
+            "después veremos",
+            "quizás mañana",
+            "vivirás tu proceso",
+            "te casarás algún día",
+            "Puedes contarme qué te preocupa; estoy aquí para escucharte.",
+        ]:
+            self.assertFalse(rf.contiene_voseo(t), t)
+
+    def test_verificar_voseo_rechaza(self):
+        ok, motivos = rf.verificar_voseo(
+            tarea_fuera(), "¿Qué querés que te diga? Contame.")
+        self.assertFalse(ok)
+        self.assertTrue(any("voseo" in m for m in motivos))
+
+    def test_verificar_voseo_acepta_tuteo(self):
+        ok, motivos = rf.verificar_voseo(
+            tarea_fuera(),
+            "Puedes contarme qué te preocupa; estoy aquí para escucharte.")
+        self.assertTrue(ok)
+        self.assertEqual(motivos, [])
+
+
+class TestParcheTuteo(unittest.TestCase):
+    def setUp(self):
+        self.kb = ex.cargar_kb()
+
+    def test_construir_prompt_inyecta_tuteo_fuera_alcance(self):
+        restaurar = rf._instalar_parches_tuteo()
+        try:
+            d = fp.construir_prompt(tarea_fuera(), self.kb)
+            self.assertIn("tuteo", d["user"])
+            self.assertIn("voseo", d["user"])
+        finally:
+            restaurar()
+
+    def test_parche_no_toca_no_fuera_alcance(self):
+        restaurar = rf._instalar_parches_tuteo()
+        try:
+            tarea = {"familia": "etica", "pregunta": "¿Me lees algo?", "calculos": {}}
+            d = fp.construir_prompt(tarea, self.kb)
+            self.assertNotIn("nunca uses voseo", d["user"])
+        finally:
+            restaurar()
+
+    def test_verificar_lectura_rechaza_voseo_fuera_alcance(self):
+        restaurar = rf._instalar_parches_tuteo()
+        try:
+            texto = (
+                "No puedo leer la quiromancia, pero podés contar con el tarot "
+                "para reflexionar; no sustituyo a un profesional."
+            )
+            ok, motivos = fp.verificar_lectura(tarea_fuera(), texto)
+            self.assertFalse(ok)
+            self.assertTrue(any("voseo" in m for m in motivos))
+        finally:
+            restaurar()
+
+    def test_parche_restaura_originales(self):
+        orig_c = fp.construir_prompt
+        orig_v = fp.verificar_lectura
+        restaurar = rf._instalar_parches_tuteo()
+        self.assertNotEqual(fp.construir_prompt, orig_c)
+        self.assertNotEqual(fp.verificar_lectura, orig_v)
+        restaurar()
+        self.assertIs(fp.construir_prompt, orig_c)
+        self.assertIs(fp.verificar_lectura, orig_v)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,8 @@ Generación ejecutada y verificada. Gate de t134 abierto (T134 integrada en
 
 - `8f51e71` T136: regenerar_fuera_alcance.py (gen nuevo v2, dry-run, reanudable, nodo2) + tests adversos
 - `157d740` T136: docs/REGENERAR_FUERA_ALCANCE.md + ESTADO (preparado, gate t134)
-- (este commit) T136: cierre — resultados de la generación (400/400) y ESTADO COMPLETO
+- `197746d` T136: cierre — resultados de la generación (400/400) y ESTADO COMPLETO
+- (este commit) T136: AJUSTE voseo — guard de tuteo + reajuste de 137 respuestas (0 restantes)
 
 ## Qué se hizo
 
@@ -60,6 +61,25 @@ pedida, nombran tarot/baraja/astrología/numerología, no inventan, alternativa
 concreta, español estándar con tildes, sin predicción literal). 6 banderas
 `PREDICCION_VEDADA` de una regex de control resultaron falsos positivos («no doy
 diagnósticos…» en negación). Detalle en `docs/REGENERAR_FUERA_ALCANCE.md`.
+
+## AJUSTE voseo (23/10, revisión de la coordinadora)
+
+**Defecto**: 137 de 400 respuestas usaban voseo («querés», «podés», «contame»,
+«decime», «mirá», «vos»…). Debe ser español estándar con tuteo. Los prompts del
+consultante sí pueden conservar voseo; las respuestas no. (La coordinadora reportó
+134; el detector `RE_VOSEO` de esta pista es algo más amplio y halló 137.)
+
+**Arreglo** (sin tocar `fase1_prompts.py`/`generate_tasks.py` en disco; solo
+*monkey-patch* en runtime acotado a `fuera_alcance`, restaurado con `try/finally`):
+`INSTRUCCION_TUTEO` se añade al `user` del prompt en `fp.construir_prompt` y
+`MOTIVO_VOSEO` rechaza respuestas con voseo en `fp.verificar_lectura`. El
+reintento del ejecutor parte del `user` ya parcheado, así que la instrucción llega
+al reintento.
+
+**Resultado** (`--reajustar-voseo`, nodo2, 1 worker): 137 detectadas → 263
+conservadas + 137 regeneradas en tuteo → **400 filas, 0 con voseo**. Backup:
+`aceptadas.jsonl.pre-voseo-20261023-173419`. Tests: 27 OK (8 nuevos de voseo).
+`check.sh` = CHECK OK.
 
 ## Integración (pendiente, la hace la coordinadora)
 

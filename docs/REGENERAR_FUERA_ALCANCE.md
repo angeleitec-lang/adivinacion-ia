@@ -188,3 +188,40 @@ e incluir el v2. Estado de los pasos de integración:
    revisados (contenido de «vidas pasadas») y resueltos en el reintento.
 3. **En la integración** — No reintroducir Mercury ni reanudar los generadores
    suspendidos (PID 66101 nodo1, 66396 nodo2).
+
+## AJUSTE voseo (23/10, revisión de la coordinadora)
+
+**Defecto**: 137 de las 400 respuestas de `aceptadas.jsonl` usaban **voseo**
+(«querés», «podés», «tenés», «contame», «decime», «mirá», «vos»…). El español
+del producto debe ser **estándar con tuteo** (tú). Los *prompts* del consultante
+pueden conservar voseo (voz del usuario); las **respuestas no**. (La coordinadora
+reportó 134; el detector `RE_VOSEO` de esta pista es algo más amplio —incluye
+«elegí», «mirá», «contate», etc.— y encontró 137.)
+
+**Cómo se corrigió** (sin tocar `fase1_prompts.py` ni `generate_tasks.py` en
+disco, solo *monkey-patch* en tiempo de ejecución acotado a `fuera_alcance`):
+
+- `INSTRUCCION_TUTEO` se añade al campo `user` del prompt en
+  `fp.construir_prompt` (solo para `fuera_alcance`): «Responde siempre en
+  español estándar con tuteo (tú); nunca uses voseo…». Como el reintento del
+  ejecutor parte del `prompt["user"]` ya parcheado, la instrucción llega también
+  al reintento.
+- `MOTIVO_VOSEO` se añade en `fp.verificar_lectura`: una respuesta con voseo se
+  **rechaza** (motivo «Respuesta con voseo (debe ser tuteo estándar)»).
+- El parche se instala y se **restaura** con `try/finally` en cada corrida; los
+  ficheros de `fase1_prompts.py`/`generate_tasks.py` no se modifican.
+
+**Resultado del reajuste** (`--reajustar-voseo`, nodo2, 1 worker):
+
+```
+voseo_detectados: 137
+aceptadas_sin_voseo (conservadas): 263
+reseteadas_a_pending (regeneradas con tuteo): 137
+filas_final: 400
+voseo_final: 0
+RESULTADO: 0 respuestas con voseo en el export final
+```
+
+Backup previo: `aceptadas.jsonl.pre-voseo-20261023-173419` (400 filas).
+Verificación independiente: `fuera_alcance_v2.jsonl` = 400 filas, 0 con voseo.
+Tests: 27 OK (8 nuevos de detección de voseo + parches). `check.sh` = CHECK OK.
