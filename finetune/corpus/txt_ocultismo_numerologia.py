@@ -4,7 +4,8 @@
 Dos fuentes: el «Diccionario de ciencias ocultas» (español, época clásica,
 atribuido a Papus/Encausse) y «Numerología fácil» (portugués, moderna).
 Segmentación determinista, filtro estricto de familias, mapeo a ids de la KB y
-etapas LLM (solo nodo2) de juez y extracción de afirmaciones, reanudables.
+etapas LLM (nodo1 y nodo2, autorizados el 23/10) de juez y extracción de
+afirmaciones, reanudables.
 El texto fuente nunca se copia al repo: vive en ``/Users/angelgonzalez/fase0``.
 
 Procedencia registrada en cada afirmación: «apuntes TXT del usuario (OCR de
@@ -17,6 +18,7 @@ import re
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -48,6 +50,9 @@ CALIDAD_NUMEROLOGIA = 4
 IDIOMA_NUMEROLOGIA = "pt"
 
 NODO2_ENDPOINT = baraja.NODO2_ENDPOINT
+NODO1_ENDPOINT = "http://10.0.0.3:8000/v1"
+# nodo1 autorizado por el usuario el 23/10 (espejo de la pista T143).
+ENDPOINTS_POR_DEFECTO = NODO1_ENDPOINT + "," + NODO2_ENDPOINT
 
 POSICIONES_NUMEROLOGIA = ("alma", "anio_personal", "camino_de_vida",
                          "destino", "mes_personal", "personalidad")
@@ -476,11 +481,24 @@ def procesar_determinista(work_dir):
 
 
 # ---------------------------------------------------------------------------
-# Etapas LLM (solo nodo2)
+# Etapas LLM (nodo1 y nodo2, autorizados el 23/10)
 # ---------------------------------------------------------------------------
 
 def _clamp_workers(workers):
     return max(1, min(int(workers or 1), MAX_WORKERS))
+
+
+def validar_endpoints(endpoints_csv):
+    """Rechaza cualquier host que no sea nodo1 o nodo2 (T147)."""
+    if not endpoints_csv:
+        return
+    for url in str(endpoints_csv).split(","):
+        url = url.strip()
+        if not url:
+            continue
+        if urlparse(url).hostname not in baraja.HOSTS_LOCALES_PERMITIDOS:
+            raise ValueError(
+                "endpoint no permitido (solo nodo1 y nodo2): %r" % url)
 
 
 def procesar_juez(work_dir, endpoints=None, workers=MAX_WORKERS, limite=None,
@@ -488,6 +506,7 @@ def procesar_juez(work_dir, endpoints=None, workers=MAX_WORKERS, limite=None,
     """Juez LLM sobre las secciones del diccionario (español, clásica)."""
     work_dir = validar_work_dir(work_dir)
     if cliente is None:
+        validar_endpoints(endpoints)
         cliente = baraja.construir_cliente_endpoints(endpoints)
     meta = {ID_DICCIONARIO: {
         "periodo": PERIODO_DICCIONARIO, "idioma": "es", "anio": 1889,
@@ -513,6 +532,7 @@ def procesar_afirmaciones(work_dir, endpoints=None, workers=MAX_WORKERS,
     """
     work_dir = validar_work_dir(work_dir)
     if cliente is None:
+        validar_endpoints(endpoints)
         cliente = baraja.construir_cliente_endpoints(endpoints, acotar=False)
     indice = afirmaciones_libros.IndiceLibros(
         os.path.join(work_dir, "secciones"))
@@ -629,7 +649,7 @@ def medir_dry(work_dir):
         "llamadas_extraccion_pendientes": len(pendientes_ev),
         "llamadas_totales_estimadas": (len(juez_pend)
                                       + len(pendientes_ev)),
-        "endpoints": NODO2_ENDPOINT,
+        "endpoints": ENDPOINTS_POR_DEFECTO,
         "workers_max": MAX_WORKERS,
     }
 
@@ -647,7 +667,7 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--juez", action="store_true")
     ap.add_argument("--afirmaciones", action="store_true")
-    ap.add_argument("--endpoints", default=NODO2_ENDPOINT)
+    ap.add_argument("--endpoints", default=ENDPOINTS_POR_DEFECTO)
     ap.add_argument("--workers", type=int, default=MAX_WORKERS)
     ap.add_argument("--limite", type=int, default=None)
     args = ap.parse_args(argv)

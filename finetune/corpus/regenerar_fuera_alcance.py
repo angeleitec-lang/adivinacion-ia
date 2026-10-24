@@ -21,8 +21,9 @@ corta por tasa de error. Las respuestas aceptadas se exportan en el esquema
 ShareGPT exacto de las filas `fuera_alcance` de v1d
 (`{conversations:[system,human,gpt], id, bloque, generador}`).
 
-Encendido del LLM: SOLO nodo2 (`http://10.0.0.4:8000/v1`), 1 worker.
-Nodo1 no se usa para generación de datos. Nunca Mercury.
+Encendido del LLM: nodo1 (`http://10.0.0.3:8000/v1`) y nodo2
+(`http://10.0.0.4:8000/v1`), autorizados por el usuario el 23/10; cualquier
+otro host se rechaza. Nunca Mercury.
 
 Subcomandos
 -----------
@@ -30,7 +31,7 @@ Subcomandos
                de llamadas/tokens. Sin efectos en disco ni red.
   --prepare    Crea la BD de trabajo e inserta los jobs como `pending`
                (idempotente: no duplica los ya `done`).
-  --run        Prepara si hace falta y ejecuta la generación contra nodo2
+  --run        Prepara si hace falta y ejecuta la generación contra nodo1/nodo2
                (1 worker). Escribe aceptadas/rechazadas y el jsonl final.
   --report     Vuelve a leer los resultados y emite el informe de cifras y
                rechazos por motivo (sin tocar el LLM).
@@ -46,6 +47,7 @@ import re
 import sys
 import unicodedata
 from pathlib import Path
+from urllib.parse import urlparse
 
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
@@ -59,6 +61,8 @@ DB_NOMBRE = "jobs_fuera_v2.db"
 JSONL_FINAL = "fuera_alcance_v2.jsonl"
 ENDPOINT_NODO2 = "http://10.0.0.4:8000/v1"
 MODELO_DEFECTO = "halogen-qwen3.8-flash-next"
+# Unicos hosts de generacion permitidos (nodo1 autorizado por el usuario el 23/10).
+HOSTS_LOCALES_PERMITIDOS = ("10.0.0.3", "10.0.0.4")
 BLOQUE = "fuera_alcance"
 
 # Estimación conservadora para el dry-run (chars/token ~4, reintentos medios).
@@ -263,13 +267,12 @@ def preparar(work_dir, filas, replace_pending=True):
 
 
 def crear_cliente(endpoint=ENDPOINT_NODO2, model=MODELO_DEFECTO):
-    """Cliente LLM apuntando SOLO a nodo2, 1 de concurrencia, ~1 req/s."""
+    """Cliente LLM apuntando a nodo1 o nodo2, 1 de concurrencia, ~1 req/s."""
     from llm_client import LLMClient
 
-    if "10.0.0.3" in endpoint:
+    if urlparse(endpoint).hostname not in HOSTS_LOCALES_PERMITIDOS:
         raise ValueError(
-            "esta pista no usa nodo1 para generación de datos; "
-            f"endpoint prohibido: {endpoint}")
+            "endpoint no permitido (solo nodo1 y nodo2): %r" % endpoint)
     return LLMClient(
         endpoints=[endpoint],
         model=model,
@@ -281,7 +284,7 @@ def crear_cliente(endpoint=ENDPOINT_NODO2, model=MODELO_DEFECTO):
 
 def ejecutar_generacion(work_dir, endpoint=ENDPOINT_NODO2, model=MODELO_DEFECTO,
                        workers=1, limite=0):
-    """Ejecuta la pasada reanudable sobre la BD de trabajo (nodo2, 1 worker)."""
+    """Ejecuta la pasada reanudable sobre la BD de trabajo (nodo1/nodo2, 1 worker)."""
     import ejecutor_fase1 as ex
 
     db = ruta_db(work_dir)
@@ -493,7 +496,7 @@ def main(argv=None):
     modo.add_argument("--prepare", action="store_true",
                       help="crea la BD e inserta jobs pendientes")
     modo.add_argument("--run", action="store_true",
-                      help="prepara y ejecuta la generación (nodo2, 1 worker)")
+                      help="prepara y ejecuta la generación (nodo1/nodo2, 1 worker)")
     modo.add_argument("--report", action="store_true",
                       help="informe de cifras y rechazos (sin LLM)")
     modo.add_argument("--reajustar-voseo", action="store_true",
