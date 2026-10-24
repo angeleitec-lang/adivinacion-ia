@@ -352,5 +352,214 @@
       "orbe": 7,
       "significado": "polaridad y confrontación; invita a integrar opuestos."
     }
+  ],
+  "entidades_ampliadas": [
+    {
+      "entidad_id": "casa1|casa",
+      "tipo": "casa",
+      "nombre": "Casa 1",
+      "numero": 1,
+      "ciclo": "angular",
+      "signo_natural": "aries",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa2|casa",
+      "tipo": "casa",
+      "nombre": "Casa 2",
+      "numero": 2,
+      "ciclo": "sucedente",
+      "signo_natural": "tauro",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa3|casa",
+      "tipo": "casa",
+      "nombre": "Casa 3",
+      "numero": 3,
+      "ciclo": "cadente",
+      "signo_natural": "geminis",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa4|casa",
+      "tipo": "casa",
+      "nombre": "Casa 4",
+      "numero": 4,
+      "ciclo": "angular",
+      "signo_natural": "cancer",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa5|casa",
+      "tipo": "casa",
+      "nombre": "Casa 5",
+      "numero": 5,
+      "ciclo": "sucedente",
+      "signo_natural": "leo",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa6|casa",
+      "tipo": "casa",
+      "nombre": "Casa 6",
+      "numero": 6,
+      "ciclo": "cadente",
+      "signo_natural": "virgo",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa7|casa",
+      "tipo": "casa",
+      "nombre": "Casa 7",
+      "numero": 7,
+      "ciclo": "angular",
+      "signo_natural": "libra",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa8|casa",
+      "tipo": "casa",
+      "nombre": "Casa 8",
+      "numero": 8,
+      "ciclo": "sucedente",
+      "signo_natural": "escorpio",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa9|casa",
+      "tipo": "casa",
+      "nombre": "Casa 9",
+      "numero": 9,
+      "ciclo": "cadente",
+      "signo_natural": "sagitario",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa10|casa",
+      "tipo": "casa",
+      "nombre": "Casa 10",
+      "numero": 10,
+      "ciclo": "angular",
+      "signo_natural": "capricornio",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa11|casa",
+      "tipo": "casa",
+      "nombre": "Casa 11",
+      "numero": 11,
+      "ciclo": "sucedente",
+      "signo_natural": "acuario",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "casa12|casa",
+      "tipo": "casa",
+      "nombre": "Casa 12",
+      "numero": 12,
+      "ciclo": "cadente",
+      "signo_natural": "piscis",
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "fuego|elemento",
+      "tipo": "elemento",
+      "nombre": "Elemento Fuego",
+      "signos": [
+        "aries",
+        "leo",
+        "sagitario"
+      ],
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "tierra|elemento",
+      "tipo": "elemento",
+      "nombre": "Elemento Tierra",
+      "signos": [
+        "tauro",
+        "virgo",
+        "capricornio"
+      ],
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "aire|elemento",
+      "tipo": "elemento",
+      "nombre": "Elemento Aire",
+      "signos": [
+        "geminis",
+        "libra",
+        "acuario"
+      ],
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "agua|elemento",
+      "tipo": "elemento",
+      "nombre": "Elemento Agua",
+      "signos": [
+        "cancer",
+        "escorpio",
+        "piscis"
+      ],
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "cardinal|modalidad",
+      "tipo": "modalidad",
+      "nombre": "Modalidad Cardinal",
+      "signos": [
+        "aries",
+        "cancer",
+        "libra",
+        "capricornio"
+      ],
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "fijo|modalidad",
+      "tipo": "modalidad",
+      "nombre": "Modalidad Fijo",
+      "signos": [
+        "tauro",
+        "leo",
+        "escorpio",
+        "acuario"
+      ],
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    },
+    {
+      "entidad_id": "variable|modalidad",
+      "tipo": "modalidad",
+      "nombre": "Modalidad Variable",
+      "signos": [
+        "geminis",
+        "virgo",
+        "sagitario",
+        "piscis"
+      ],
+      "significado": null,
+      "pendiente": "pendiente de adquisicion (T145): sin significado propio"
+    }
   ]
 }

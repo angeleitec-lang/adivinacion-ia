@@ -34,7 +34,7 @@ class CatalogoEntidades(unittest.TestCase):
         self.assertEqual(self._por_familia(), {
             "tarot": 78,
             "baraja_espanola": 40,
-            "astrologia": 477,
+            "astrologia": 496,
             "numerologia": 72,
         })
 
@@ -46,6 +46,9 @@ class CatalogoEntidades(unittest.TestCase):
             "planeta_en_signo": 120,
             "planeta_en_casa": 120,
             "aspecto": 225,
+            "casa": 12,
+            "elemento": 4,
+            "modalidad": 3,
             "numero_posicion": 72,
         })
 
@@ -285,7 +288,7 @@ class SalidaYCLI(unittest.TestCase):
         with open(self.ruta_json, encoding="utf-8") as f:
             datos = json.load(f)
         self.assertEqual(datos["resumen"]["ignoradas"], 0)
-        self.assertEqual(datos["resumen"]["total_celdas"], 7455)
+        self.assertEqual(datos["resumen"]["total_celdas"], 7664)
         self.assertEqual(datos["resumen"]["completas"], 0)
         self.assertIn("Tarot", datos["resumen"]["por_familia"])
         with open(self.ruta_md, encoding="utf-8") as f:
@@ -346,7 +349,7 @@ class SalidaYCLI(unittest.TestCase):
         cobertura.escribir_md(resultado, self.ruta_md, max_huecos=5)
         with open(self.ruta_md, encoding="utf-8") as f:
             md = f.read()
-        self.assertIn("Y 7450 celdas más bajo el mínimo", md)
+        self.assertIn("Y 7659 celdas más bajo el mínimo", md)
 
     def test_ordenacion_por_carencia(self):
         celdas = [

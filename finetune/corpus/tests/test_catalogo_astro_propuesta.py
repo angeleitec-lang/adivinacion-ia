@@ -152,12 +152,13 @@ class TestCoherenciaConKB(unittest.TestCase):
         self.assertEqual(cap.SIGNO_MODALIDAD["geminis"], "variable")
         self.assertEqual(len(cap.SIGNO_MODALIDAD), 12)
 
-    def test_ids_propuestos_no_colisionan_con_catalogo(self):
+    def test_ids_propuestos_ya_integrados_en_catalogo(self):
+        # T145 aplico la opcion A: los 19 ids propuestos ahora SON del catalogo.
         existentes = {e["entidad_id"] for e in __import__(
             "cobertura").entidades()}
         nuevos = cap.ids_propuestos()
         self.assertEqual(len(nuevos), 19)
-        self.assertEqual(nuevos & existentes, set())
+        self.assertTrue(nuevos <= existentes)
 
 
 class TestEvidenciasRemapeadas(unittest.TestCase):
