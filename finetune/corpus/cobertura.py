@@ -143,6 +143,11 @@ def entidades():
                     "subtipo": "aspecto",
                     "nombre": f"{_capital(p1)} {aspecto} {_capital(p2)}",
                 })
+    # T145: catalogo astro ampliado (12 casas + 4 elementos + 3 modalidades).
+    # Import perezoso: catalogo_astro_propuesta importa cobertura a nivel
+    # de modulo y una importacion reciproca directa seria circular.
+    from catalogo_astro_propuesta import entidades_propuestas
+    ent.extend(entidades_propuestas())
     for numero in NUMEROS:
         for posicion in POSICIONES:
             ent.append({
