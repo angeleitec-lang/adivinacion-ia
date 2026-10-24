@@ -1,4 +1,4 @@
-# Hoja de ruta y traspaso (escrita la noche del 2026-10-21; actualizar al reanudar)
+# Hoja de ruta y traspaso (histórica, 21/10; el traspaso vigente es docs/CONTINUAR.md)
 
 Leer primero esto, después `docs/ESTADO_Y_PENDIENTES.md` (sección 8h, de T104) y `docs/PIPELINE.md`.
 Rol de Claude aquí: **coordinadora** (no programa; sin subagentes `Agent`; git SOLO local; las IAs opencode de las pestañas de Warp programan en `.worktrees/<pista>`; Claude revisa con casos adversos propios, integra con `git merge --no-ff` + `./finetune/scripts/check.sh` = CHECK OK y reasigna).

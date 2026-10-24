@@ -8,7 +8,11 @@ Hoy el repo contiene sobre todo la **tubería de datos y fine-tune** (`finetune/
 
 ## Leer primero
 
-`docs/ESTADO_Y_PENDIENTES.md`: traspaso completo (decisiones, estado de cada pista, procesos suspendidos, pendientes y plan de continuación). Después, `docs/PLAN_ADQUISICION_CALIDAD.md` y `docs/INVENTARIO_FUENTES.md`.
+**Traspaso vigente (se carga solo al abrir sesión; ejecutar su sección 1 sin preguntar al usuario):**
+
+@docs/CONTINUAR.md
+
+Después, si hace falta detalle: `docs/ESTADO_Y_PENDIENTES.md`: traspaso completo (decisiones, estado de cada pista, procesos suspendidos, pendientes y plan de continuación). Después, `docs/PLAN_ADQUISICION_CALIDAD.md` y `docs/INVENTARIO_FUENTES.md`.
 
 ## Decisiones fijas del usuario (no reabrir)
 
