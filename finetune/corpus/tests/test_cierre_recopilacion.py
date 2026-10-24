@@ -110,6 +110,8 @@ class TestDryRun(unittest.TestCase):
                         [{"hash_seccion": "w1"}])
         _escribir_jsonl(os.path.join(b, "libros_limpio/claves_excluir_consenso.jsonl"),
                         [{"hash_seccion": "h1", "entidad_id": "a", "faceta": "f"}])
+        _escribir_jsonl(os.path.join(b, "libros_limpio/evidencias_limpias.jsonl"),
+                        [{"hash_seccion": "h1"}])
 
     def _argv(self):
         b = self.tmp
@@ -487,6 +489,89 @@ class TestCoberturaOmitida(unittest.TestCase):
         res = cierre.paso6_cobertura_v3({"cobertura_out": "/tmp"}, [])
         self.assertEqual(res["estado"], "omitido")
         self.assertIn("T82", res["aviso"])
+
+
+class TestPaso6CoberturaFicheroYExtra(unittest.TestCase):
+    """T147: --libros-limpio debe ser el FICHERO evidencias_limpias.jsonl y
+    hay que propagar --extra (evidencias de txt_naipes_tarot, etc.)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.dir_limpio = os.path.join(self.tmp, "libros_limpio")
+        os.makedirs(self.dir_limpio)
+        self.fichero_limpio = os.path.join(self.dir_limpio,
+                                          "evidencias_limpias.jsonl")
+        _escribir_jsonl(self.fichero_limpio, [
+            {"entidad_id": "tarot-mayor-19", "faceta": "significado_general",
+             "fuente_id": "libro-x", "texto": "sol sol"}])
+        self.extra1 = os.path.join(self.tmp, "txt_naipes_tarot", "evidencias",
+                                  "evidencias.jsonl")
+        self.extra2 = os.path.join(self.tmp, "txt_ocultismo_numerologia",
+                                  "evidencias", "evidencias.jsonl")
+        self.cobertura_out = os.path.join(self.tmp, "cobertura_out")
+        self._ejecutar_orig = cierre._ejecutar
+        self.comandos = []
+
+        def stub(cmd, log_comandos):
+            self.comandos.append(list(cmd))
+            os.makedirs(self.cobertura_out, exist_ok=True)
+            with open(os.path.join(self.cobertura_out,
+                                  "cobertura_total_v3.json"), "w",
+                      encoding="utf-8") as fh:
+                json.dump({"resumen": {"total_entidades": 78}}, fh)
+
+        cierre._ejecutar = stub
+        self.addCleanup(setattr, cierre, "_ejecutar", self._ejecutar_orig)
+
+    def _ctx(self, **extra):
+        ctx = {
+            "base": self.tmp,
+            "libros_limpio": self.dir_limpio,
+            "cobertura_out": self.cobertura_out,
+            "claves_excluir": [],
+        }
+        ctx.update(extra)
+        return ctx
+
+    def test_libros_limpio_apunta_al_fichero_no_al_directorio(self):
+        cierre.paso6_cobertura_v3(self._ctx(), [])
+        cmd = self.comandos[0]
+        i = cmd.index("--libros-limpio")
+        self.assertEqual(cmd[i + 1], self.fichero_limpio)
+        self.assertNotEqual(cmd[i + 1], self.dir_limpio)
+
+    def test_extra_propagado(self):
+        cierre.paso6_cobertura_v3(
+            self._ctx(extra_evidencias=[self.extra1, self.extra2]), [])
+        cmd = self.comandos[0]
+        self.assertIn("--extra", cmd)
+        j = cmd.index("--extra")
+        self.assertEqual(cmd[j + 1:j + 3], [self.extra1, self.extra2])
+
+    def test_sin_extra_no_aparece_flag(self):
+        cierre.paso6_cobertura_v3(self._ctx(), [])
+        self.assertNotIn("--extra", self.comandos[0])
+
+    def test_ruta_evidencias_limpias_override(self):
+        otra = os.path.join(self.tmp, "otra_evidencias.jsonl")
+        _escribir_jsonl(otra, [])
+        cierre.paso6_cobertura_v3(self._ctx(evidencias_limpias=otra), [])
+        cmd = self.comandos[0]
+        i = cmd.index("--libros-limpio")
+        self.assertEqual(cmd[i + 1], otra)
+
+    def test_construir_ctx_puebla_extra(self):
+        argv = ["--base-dir", self.tmp, "--extra", self.extra1, self.extra2]
+        args = cierre._parse_args(argv)
+        ctx = cierre.construir_ctx(args)
+        self.assertEqual(ctx["extra_evidencias"], [self.extra1, self.extra2])
+
+    def test_construir_ctx_extra_vacio(self):
+        argv = ["--base-dir", self.tmp]
+        args = cierre._parse_args(argv)
+        ctx = cierre.construir_ctx(args)
+        self.assertEqual(ctx["extra_evidencias"], [])
 
 
 def _montar_filtro(tmp):
