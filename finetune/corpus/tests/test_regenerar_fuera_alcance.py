@@ -168,15 +168,24 @@ class TestEsquemaShareGPT(unittest.TestCase):
         self.assertEqual(fila["generador"], "local")
 
 
-class TestClienteNodo2(unittest.TestCase):
-    def test_nodo1_prohibido(self):
-        with self.assertRaises(ValueError):
-            rf.crear_cliente(endpoint="http://10.0.0.3:8000/v1")
+class TestClienteNodos(unittest.TestCase):
+    """T147: nodo1 y nodo2 autorizados por el usuario el 23/10; cualquier otro
+    host se rechaza (nunca Mercury)."""
+
+    def test_nodo1_permitido(self):
+        c = rf.crear_cliente(endpoint="http://10.0.0.3:8000/v1")
+        self.assertEqual(len(c.endpoints), 1)
+        self.assertIn("10.0.0.3", c.endpoints[0])
 
     def test_nodo2_ok(self):
         c = rf.crear_cliente(endpoint="http://10.0.0.4:8000/v1")
         self.assertEqual(len(c.endpoints), 1)
         self.assertIn("10.0.0.4", c.endpoints[0])
+
+    def test_host_ajeno_prohibido(self):
+        for malo in ("http://10.0.0.9:8000/v1", "http://example.com/v1"):
+            with self.assertRaises(ValueError):
+                rf.crear_cliente(endpoint=malo)
 
 
 class TestDetectorVoseo(unittest.TestCase):

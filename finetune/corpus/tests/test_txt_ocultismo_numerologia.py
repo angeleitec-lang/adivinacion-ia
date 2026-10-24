@@ -280,5 +280,33 @@ class TestFuentesReales(unittest.TestCase):
                 self.assertIn(c["entidad_id"], entidades)
 
 
+class TestEndpoints(unittest.TestCase):
+    """T147: nodo1 y nodo2 autorizados el 23/10; el resto de hosts se rechaza."""
+
+    def test_valida_nodo1(self):
+        mod.validar_endpoints("http://10.0.0.3:8000/v1")
+
+    def test_valida_nodo2(self):
+        mod.validar_endpoints("http://10.0.0.4:8000/v1")
+
+    def test_valida_csv_ambos(self):
+        mod.validar_endpoints(
+            "http://10.0.0.3:8000/v1,http://10.0.0.4:8000/v1")
+
+    def test_rechaza_host_ajeno(self):
+        for malo in ("http://example.com/v1", "http://10.0.0.9:8000/v1"):
+            with self.assertRaises(ValueError):
+                mod.validar_endpoints(malo)
+
+    def test_rechaza_csv_con_host_ajeno(self):
+        with self.assertRaises(ValueError):
+            mod.validar_endpoints(
+                "http://10.0.0.3:8000/v1,http://example.com/v1")
+
+    def test_default_contiene_ambos_nodos(self):
+        self.assertIn("10.0.0.3", mod.ENDPOINTS_POR_DEFECTO)
+        self.assertIn("10.0.0.4", mod.ENDPOINTS_POR_DEFECTO)
+
+
 if __name__ == "__main__":
     unittest.main()

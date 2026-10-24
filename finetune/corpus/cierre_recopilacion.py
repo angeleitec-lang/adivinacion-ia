@@ -444,6 +444,13 @@ def paso5_kb_v2(ctx, log_comandos):
 # Paso 6: cobertura v3 (omitir con aviso si T82 no esta integrado)
 # ---------------------------------------------------------------------------
 
+def _ruta_evidencias_limpias(ctx):
+    """cobertura_v3 espera el FICHERO evidencias_limpias.jsonl, no el directorio
+    libros_limpio (T147)."""
+    return ctx.get("evidencias_limpias") or os.path.join(
+        ctx["libros_limpio"], "evidencias_limpias.jsonl")
+
+
 def paso6_cobertura_v3(ctx, log_comandos):
     script = os.path.join(CORPUS, "cobertura_v3.py")
     if not os.path.exists(script):
@@ -452,12 +459,15 @@ def paso6_cobertura_v3(ctx, log_comandos):
                         "ejecutar el paso cuando se integre track/t82-cobertura-v3"}
     cmd = [sys.executable, script,
            "--libros", "limpio",
-           "--libros-limpio", ctx["libros_limpio"],
+           "--libros-limpio", _ruta_evidencias_limpias(ctx),
            "--excluir-claves", ctx["claves_excluir"],
            "--out-dir", ctx["cobertura_out"]]
     for kf in _listas_claves_exclusion(ctx):
         if kf != ctx["claves_excluir"]:
             cmd += ["--excluir-claves", kf]
+    extras = list(ctx.get("extra_evidencias") or [])
+    if extras:
+        cmd += ["--extra"] + extras
     _ejecutar(cmd, log_comandos)
     salida = os.path.join(ctx["cobertura_out"], "cobertura_total_v3.json")
     doc = json.load(open(salida, encoding="utf-8"))
@@ -540,7 +550,8 @@ def _validar_entradas_paso(ctx, paso):
         4: [ctx["afirmaciones_web_file"], ctx["afirmaciones_libros_file"],
             ctx["claves_excluir"], ctx["secciones_dir"], ctx["consenso"]],
         5: [ctx["consenso"]],
-        6: [ctx["claves_excluir"], ctx["libros_limpio"]],
+        6: [ctx["claves_excluir"], _ruta_evidencias_limpias(ctx)]
+           + list(ctx.get("extra_evidencias") or []),
         7: [],
     }
     return [(r, os.path.exists(r)) for r in mapa.get(paso, [])]
@@ -602,7 +613,11 @@ def _descripcion_paso(ctx, paso):
         return "kb_v2 desde %s hacia %s" % (ctx["consenso"], ctx["kb_out"])
     if paso == 6:
         if os.path.exists(os.path.join(CORPUS, "cobertura_v3.py")):
-            return "cobertura v3 en %s" % ctx["cobertura_out"]
+            extras = list(ctx.get("extra_evidencias") or [])
+            desc = "cobertura v3 sobre %s" % _ruta_evidencias_limpias(ctx)
+            if extras:
+                desc += " mas %d fichero(s) extra" % len(extras)
+            return desc + " -> %s" % ctx["cobertura_out"]
         return "OMITIDO: cobertura_v3.py no integrado (T82)"
     return "informe de cierre en %s" % ctx["work_dir"]
 
@@ -635,6 +650,7 @@ def construir_ctx(args):
         "procesados_libros": args.procesados_libros or os.path.join(
             base, "afirmaciones_libros", "procesados.jsonl"),
         "libros_limpio": args.libros_limpio or os.path.join(base, "libros_limpio"),
+        "extra_evidencias": list(getattr(args, "extra", None) or []),
         "filtro_atribucion_out": filtro_out,
         "kb_out": args.kb_out or os.path.join(base, "kb_v2"),
         "cobertura_out": args.cobertura_out or os.path.join(base, "cobertura_v3"),
@@ -645,7 +661,7 @@ def construir_ctx(args):
     }
 
 
-def main(argv=None, procesos_fn=None):
+def _crear_parser():
     parser = argparse.ArgumentParser(
         description="Cierre de la recopilacion: dedupe, limpieza, filtro de "
                     "atribucion, consenso con exclusion, KB v2, cobertura v3 e "
@@ -683,6 +699,19 @@ def main(argv=None, procesos_fn=None):
     parser.add_argument("--cobertura-out")
     parser.add_argument("--work-dir")
     parser.add_argument("--familias-json")
+    parser.add_argument("--extra", nargs="*", default=[],
+                        help="ficheros de evidencias extra para el paso 6 "
+                             "(cobertura_v3 --extra): txt_naipes_tarot, "
+                             "txt_ocultismo_numerologia, baraja, catalogo astro")
+    return parser
+
+
+def _parse_args(argv=None):
+    return _crear_parser().parse_args(argv)
+
+
+def main(argv=None, procesos_fn=None):
+    parser = _crear_parser()
     args = parser.parse_args(argv)
 
     ctx = construir_ctx(args)
