@@ -93,5 +93,86 @@ class TestKbAstroAmpliado(unittest.TestCase):
             self.assertTrue(e.get("nombre"), ent_id)
 
 
+class TestGenerarEvidencias(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.destino = os.path.join(self.tmp.name, "ev.jsonl")
+
+    def _claim(self, entidad_id, faceta="amor", fuente="sasportas_1985"):
+        return {"entidad_id": entidad_id, "faceta": faceta,
+                "fuente_id": fuente, "dominio": "astrologia",
+                "periodo": "moderna", "idioma": "en", "calidad": 4}
+
+    def test_escribe_evidencias_remapeadas(self):
+        import aplicar_catalogo_astro as ac
+        n = ac.generar_evidencias(
+            [self._claim("sol|piscis|planeta_en_signo"),
+             self._claim("sol|casa3|planeta_en_casa")], self.destino)
+        self.assertEqual(n, 3)  # 2 (agua+variable) + 1 (casa3)
+        with open(self.destino, encoding="utf-8") as f:
+            lineas = [json.loads(l) for l in f]
+        ids = {e["entidad_id"] for e in lineas}
+        self.assertEqual(ids, {"agua|elemento", "variable|modalidad",
+                              "casa3|casa"})
+
+    def test_doble_aplicacion_idempotente(self):
+        import aplicar_catalogo_astro as ac
+        claims = [self._claim("sol|piscis|planeta_en_signo"),
+                 self._claim("luna|casa7|planeta_en_casa")]
+        ac.generar_evidencias(claims, self.destino)
+        with open(self.destino, "rb") as f:
+            primera = f.read()
+        ac.generar_evidencias(list(reversed(claims)), self.destino)
+        with open(self.destino, "rb") as f:
+            segunda = f.read()
+        self.assertEqual(primera, segunda)
+
+    def test_adverso_casa_13_0_negativa_sin_evidencia(self):
+        import aplicar_catalogo_astro as ac
+        n = ac.generar_evidencias(
+            [self._claim("sol|casa13|planeta_en_casa"),
+             self._claim("sol|casa0|planeta_en_casa"),
+             self._claim("sol|casa-1|planeta_en_casa")], self.destino)
+        self.assertEqual(n, 0)
+        with open(self.destino, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "")
+
+    def test_adverso_id_inexistente_y_signo_ambiguo(self):
+        import aplicar_catalogo_astro as ac
+        n = ac.generar_evidencias(
+            [self._claim("quiron|piscis|planeta_en_signo"),
+             self._claim("sol|ascendente|planeta_en_signo"),
+             self._claim("entidad|que|no|existe|en|el|catalogo")],
+            self.destino)
+        self.assertEqual(n, 0)
+
+    def test_adverso_evidencia_sin_faceta(self):
+        import aplicar_catalogo_astro as ac
+        c = self._claim("aries|signo")
+        c.pop("faceta")
+        n = ac.generar_evidencias([c], self.destino)
+        self.assertEqual(n, 0)
+
+
+class TestProteccionRutasReales(unittest.TestCase):
+    def test_destino_dentro_de_rutas_protegidas_se_rechaza(self):
+        import aplicar_catalogo_astro as ac
+        for protegida in (
+                "/Users/angelgonzalez/fase0/cobertura_v3/salida",
+                "/Users/angelgonzalez/fase0/libros_limpio/x.jsonl",
+                "/Users/angelgonzalez/fase0/evidencias_web/x.jsonl",
+                "/Users/angelgonzalez/fase0/libros_comprados_astro/x.jsonl"):
+            with self.assertRaises(ValueError, msg=protegida):
+                ac.generar_evidencias([], protegida)
+
+    def test_rutas_oficiales_del_modulo_no_caen_en_protegidas(self):
+        import aplicar_catalogo_astro as ac
+        self.assertIsNone(ac._ruta_protegida(ac.DESTINO))
+        self.assertIsNone(ac._ruta_protegida(ac.V3_NUEVA_DIR))
+        self.assertIsNotNone(ac._ruta_protegida(ac.V3_OFICIAL))
+
+
 if __name__ == "__main__":
     unittest.main()
