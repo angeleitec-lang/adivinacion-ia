@@ -95,7 +95,18 @@ El `--run` puede interrumpirse y relanzarse: retoma los `pending` de la BD. El
 rechazo de cada fila queda en `rechazadas.jsonl` con su motivo; lo aceptado, en
 `aceptadas.jsonl` (formato ShareGPT).
 
-## Resultados
+## Resultados (2026-10-24)
 
-Pendiente: se completará tras el `--report` (válidas por bloque, unicidad,
-rechazos por motivo y muestra revisada a mano en `ESTADO.md`).
+| Métrica | Valor |
+|---|---|
+| Generadas | 560 (280 `etica` + 280 `espanola_1`) |
+| Rechazos | 0 |
+| Copias casi idénticas descartadas | 0 |
+| Fugas de evaluación descartadas | 0 |
+| Prompts únicos `etica` | 280/280 (100 %) |
+| Prompts únicos `espanola_1` | 280/280 (100 %) |
+| Reparto | nodo2a (ética), nodo1 + nodo2b (`espanola_1`), reclamo atómico, 0 ids duplicados |
+
+Salida: `/Users/angelgonzalez/fase0/etica_espanola1_v2/etica_espanola1_v2.jsonl`
+(560 filas ShareGPT). Revisión a mano de 30 muestras (15 + 15) en `ESTADO.md`:
+aprobada.
