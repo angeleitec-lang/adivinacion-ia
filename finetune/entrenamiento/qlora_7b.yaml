@@ -1,39 +1,50 @@
-# Plantilla QLoRA 4-bit para Qwen2.5-7B-Instruct (iteración rápida).
+# Plantilla QLoRA 4-bit para Qwen2.5-7B-Instruct (piloto T148, 24/10/2026).
 #
-# NO ejecutar todavía: el dataset está pendiente de la revisión humana del 3 %
-# y de pasar preparar_entrenamiento.py con semáforo verde.
-#
-# Las claves de Soup se han contrastado con su documentación, pero la versión
-# instalada en nodo1 no se ha comprobado. Antes de entrenar:
+# Dataset v1g PREPARADO y verificado: preparar_entrenamiento.py dio SEMÁFORO
+# VERDE (12.315 filas válidas, 0 duplicados exactos). La revisión humana del 3 %
+# se hace DURANTE el entrenamiento (decisión del usuario 24/10), no bloquea el
+# lanzamiento. Antes de lanzar en nodo1, comprobar igualmente las claves de Soup:
 #   soup --help  (y el modo de prueba que documente la versión instalada)
 # Si una clave no existe, Soup debe fallar en voz alta; no la elimines a ciegas.
 #
 # Entrada: salida de
 #   python finetune/corpus/preparar_entrenamiento.py \
-#     --dataset finetune/corpus/final --formato chatml
+#     --dataset /Users/angelgonzalez/fase0/dataset_fase1_v1g \
+#     --formato chatml \
+#     --tokenizador /Users/angelgonzalez/fase0/tokenizador_qwen25_7b/tokenizer.json \
+#     --salida /Users/angelgonzalez/fase0/dataset_fase1_v1g_preparado
 #
-# Longitudes REALES del dataset v1 parcial (5.205 filas train, estimación
-# caracteres/3,5; recálculo: finetune/entrenamiento/ajuste_config.py):
-#   p50 1.510 · p95 3.233 · p99 3.869 · máx 4.166 · media 1.611 tokens.
-#   Familia más larga: astro_natal (p99 4.131, máx 4.166).
-#   Con max_length 4096 se truncan solo 10 filas (0,19 %) y se pierde <0,01 %
-#   de los tokens; con 2048 (valor anterior) se truncaría ~15 % de las filas,
-#   incluida la mediana de astro_natal. 6144/8192 no aportan nada: ninguna
-#   fila los alcanza. El solape ChatML (~15 tokens por fila de 3 turnos) deja
-#   el máximo efectivo en ~4.184: siguen siendo ~12 filas afectadas.
-#   max_seq_len = 4096 cubre ≥99,8 % sin truncar. Decisión T111.
+# Longitudes REALES del dataset v1g completo (12.315 filas), tokenizador real
+# Qwen2.5 (tokenizer.json) sobre la secuencia ChatML de entrenamiento
+# (<|im_start|>{role}\n{content}<|im_end|>\n por turno, sin generation prompt):
+#   train (10.909): media 1.977 · p50 1.701 · p95 3.463 · p99 4.063 · máx 5.243
+#                   > 4096 = 97 filas (0,89 %)
+#   val   (704):    media 1.853 · p50 1.592 · p95 3.412 · p99 4.107 · máx 4.611
+#                   > 4096 = 8 filas (1,14 %)
+#   test  (702):    media 1.880 · p50 1.605 · p95 3.383 · p99 3.928 · máx 4.961
+#                   > 4096 = 3 filas (0,43 %)
+#   TOTAL > 4096 = 108 / 12.315 = 0,88 %.
+#   El VAL supera el 1 % (1,14 %): se reporta. max_length se MANTIENE en 4096
+#   por decisión del usuario (24/10); no se cambia por esta cifra.
+#   La estimación caracteres/3,5 (74/4/1 filas > 4096) se queda CORTA frente al
+#   recuento ChatML real (infravalora ~23 en train, ~4 en val, ~2 en test).
+#   Con max_length 4096 se trunca 0,89 % del train y 1,14 % del val.
 
 base: Qwen/Qwen2.5-7B-Instruct
 
 task: sft
 
 data:
-  train: finetune/corpus/final/preparado/train.jsonl
-  # Soup puede separar validación del propio train. Si se usa el val.jsonl
-  # preparado, añadir `val:` solo después de verificar que la clave existe.
+  # Ruta de la salida preparada en el iMac. En nodo1, ajustar a la ruta de la
+  # copia (ver docs/LANZAR_PILOTO_7B.md, paso (a)).
+  train: /Users/angelgonzalez/fase0/dataset_fase1_v1g_preparado/train.jsonl
+  # El val.jsonl preparado existe (704 filas, ChatML). Se cablea con la clave
+  # `val:` SOLO después de verificar en nodo1 que esa clave existe (soup --help).
+  # Mientras no esté verificada, se deja val_split y Soup separa validación del
+  # propio train. NO inventar la clave `val:` aquí.
   format: chatml
   val_split: 0.05
-  # 4096: cubre p99 (3.869) con margen para el solape ChatML. Ver cabecera.
+  # 4096: cubre ~99 % del train; trunca 0,89 % train / 1,14 % val. Ver cabecera.
   max_length: 4096
 
 training:
